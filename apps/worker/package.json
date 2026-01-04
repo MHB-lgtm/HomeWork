@@ -1,0 +1,26 @@
+{
+  "name": "worker",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Background worker for processing grading jobs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "job:create": "ts-node src/scripts/createJob.ts",
+    "job:run-once": "ts-node src/scripts/runOnce.ts",
+    "gemini:smoke": "ts-node src/scripts/geminiSmokeTest.ts"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@hg/shared-schemas": "workspace:*",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  }
+}
+

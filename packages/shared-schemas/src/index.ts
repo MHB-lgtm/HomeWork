@@ -1,0 +1,40 @@
+import { z } from 'zod';
+
+/**
+ * Schema for a single rubric criterion evaluation
+ */
+const CriterionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  max_score: z.number(),
+  score: z.number(),
+  comment: z.string(),
+  evidence: z.string().optional(),
+});
+
+/**
+ * Main EvaluationResult schema
+ * Validates the structured output from Gemini grading
+ */
+export const EvaluationResultSchema = z.object({
+  score_total: z.number().min(0).max(100),
+  confidence: z.number().min(0).max(1),
+  summary_feedback: z.string(),
+  flags: z.array(z.string()),
+  criteria: z.array(CriterionSchema),
+});
+
+/**
+ * TypeScript type inferred from EvaluationResultSchema
+ */
+export type EvaluationResult = z.infer<typeof EvaluationResultSchema>;
+
+/**
+ * Validates and parses an unknown data object against EvaluationResultSchema
+ * @param data - The data to validate
+ * @returns The parsed and validated EvaluationResult
+ * @throws ZodError if validation fails
+ */
+export function validateEvaluationResult(data: unknown): EvaluationResult {
+  return EvaluationResultSchema.parse(data);
+}
