@@ -3,3 +3,8 @@ dist/
 .env
 data/
 
+# Env Files
+.env
+.env.local
+.env.*.local
+

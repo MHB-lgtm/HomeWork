@@ -1,4 +1,4 @@
-import { createJob } from '../storage/fileJobStore';
+import { createJob } from '@hg/local-job-store';
 
 function printUsage(): never {
   console.error('Usage: ts-node src/scripts/createJob.ts --question <path> --submission <path> [--notes "<text>"]');
