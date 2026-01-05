@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createJob } from '@hg/local-job-store';
+import { loadRubric, RubricNotFoundError } from '../../../lib/rubrics';
 
 export const runtime = 'nodejs';
 
@@ -19,10 +20,19 @@ export async function POST(request: NextRequest) {
     const questionFile = formData.get('question') as File | null;
     const submissionFile = formData.get('submission') as File | null;
     const notes = formData.get('notes') as string | null;
+    const examId = formData.get('examId') as string | null;
+    const questionId = formData.get('questionId') as string | null;
 
     if (!questionFile || !submissionFile) {
       return NextResponse.json(
         { error: 'Both question and submission files are required' },
+        { status: 400 }
+      );
+    }
+
+    if (!examId || !questionId) {
+      return NextResponse.json(
+        { error: 'examId and questionId are required' },
         { status: 400 }
       );
     }
@@ -50,11 +60,26 @@ export async function POST(request: NextRequest) {
     await fs.writeFile(questionPath, questionBuffer);
     await fs.writeFile(submissionPath, submissionBuffer);
 
+    // Load rubric
+    let rubric;
+    try {
+      rubric = await loadRubric(DATA_DIR, examId, questionId);
+    } catch (error) {
+      if (error instanceof RubricNotFoundError) {
+        return NextResponse.json(
+          { error: 'Rubric not found. Create it at /rubrics first.' },
+          { status: 404 }
+        );
+      }
+      throw error;
+    }
+
     // Create job
     const { jobId } = await createJob({
       questionSourcePath: questionPath,
       submissionSourcePath: submissionPath,
       notes: notes || undefined,
+      rubric,
     });
 
     return NextResponse.json({ jobId });

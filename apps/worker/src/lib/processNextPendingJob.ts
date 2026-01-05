@@ -22,10 +22,21 @@ export async function processNextPendingJob(): Promise<ProcessResult> {
 
   try {
     // Grade the submission using Gemini
-    const result = await gradeSubmission(job);
+    const gradeResult = await gradeSubmission(job);
+
+    // Prepare result JSON based on type
+    let resultJson: unknown;
+    if (gradeResult.type === 'rubric') {
+      resultJson = {
+        rubricEvaluation: gradeResult.result,
+      };
+    } else {
+      // Legacy format - keep existing structure for backward compatibility
+      resultJson = gradeResult.result;
+    }
 
     // Complete the job
-    await completeJob(jobId, result);
+    await completeJob(jobId, resultJson);
 
     console.log(`[worker] Completed job ${jobId}`);
     return { processed: true, jobId };

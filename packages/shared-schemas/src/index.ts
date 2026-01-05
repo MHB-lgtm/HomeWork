@@ -38,3 +38,22 @@ export type EvaluationResult = z.infer<typeof EvaluationResultSchema>;
 export function validateEvaluationResult(data: unknown): EvaluationResult {
   return EvaluationResultSchema.parse(data);
 }
+
+// Re-export rubric v1 exports
+export {
+  RubricSpecSchema,
+  RubricSpec,
+  RubricEvaluationRawSchema,
+  RubricEvaluationRaw,
+  RubricCriterionEvaluation,
+  RubricEvaluationResult,
+} from './rubric/v1/schemas';
+
+export {
+  RubricValidationErrorCode,
+  RubricValidationError,
+} from './rubric/v1/errors';
+
+export {
+  normalizeAndValidateRubricEvaluation,
+} from './rubric/v1/normalize';

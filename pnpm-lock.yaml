@@ -65,6 +65,10 @@ importers:
         version: 5.9.3
 
   packages/local-job-store:
+    dependencies:
+      '@hg/shared-schemas':
+        specifier: workspace:*
+        version: link:../shared-schemas
     devDependencies:
       typescript:
         specifier: ^5.0.0

@@ -1,6 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { JobRecord, JobStatus } from './types';
+import { RubricSpec } from '@hg/shared-schemas';
 
 // Get data directory from environment variable
 // Fail fast if missing (no fallbacks - HG_DATA_DIR must be set)
@@ -49,6 +50,7 @@ interface CreateJobParams {
   questionSourcePath: string;
   submissionSourcePath: string;
   notes?: string;
+  rubric?: RubricSpec;
 }
 
 /**
@@ -89,6 +91,7 @@ export async function createJob(params: CreateJobParams): Promise<{ jobId: strin
       rubric_version: '1.0.0',
       model_version: 'gemini-1.5-pro',
     },
+    rubric: params.rubric,
   };
 
   const jobFilePath = path.join(PENDING_DIR(), `${jobId}.json`);

@@ -10,6 +10,9 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc --watch"
   },
+  "dependencies": {
+    "@hg/shared-schemas": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.0.0"
   }
