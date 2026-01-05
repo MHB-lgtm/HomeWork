@@ -1,6 +1,6 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '../storage/types';
+import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import { validateEvaluationResult, EvaluationResult } from '@hg/shared-schemas';
 

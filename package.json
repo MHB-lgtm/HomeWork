@@ -5,7 +5,7 @@
   "description": "MVP homework grader monorepo",
   "scripts": {
     "dev:worker": "pnpm --filter worker dev",
-    "dev:web": "echo 'Web app not scaffolded yet'"
+    "dev:web": "pnpm --filter web dev"
   },
   "keywords": [],
   "author": "",
