@@ -1,5 +1,11 @@
+import path from 'path';
+import dotenv from 'dotenv';
 import { ensureJobDirs, claimNextPendingJob, completeJob, failJob } from '../storage/fileJobStore';
-import { validateEvaluationResult } from '@hg/shared-schemas';
+import { gradeSubmission } from '../core/gradeSubmission';
+
+// Load .env from repo root (not from current working directory)
+dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
+console.log('[env] Has GEMINI_API_KEY:', Boolean(process.env.GEMINI_API_KEY));
 
 async function main() {
   await ensureJobDirs();
@@ -12,35 +18,17 @@ async function main() {
   }
 
   try {
-    // Create a mock EvaluationResult
-    const mockResult = {
-      score_total: 85,
-      confidence: 0.9,
-      summary_feedback: 'Good work overall. The solution demonstrates understanding of the problem.',
-      flags: [],
-      criteria: [
-        {
-          id: 'criterion-1',
-          title: 'Problem Solving',
-          max_score: 30,
-          score: 25,
-          comment: 'Demonstrated good understanding of the problem',
-          evidence: 'Solution shows correct approach',
-        },
-      ],
-    };
-
-    // Validate the mock result
-    const validatedResult = validateEvaluationResult(mockResult);
+    // Grade the submission using Gemini
+    const result = await gradeSubmission(job);
 
     // Complete the job
-    await completeJob(job.id, validatedResult);
+    await completeJob(job.id, result);
 
     console.log(`Completed job ${job.id}`);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     await failJob(job.id, errorMessage);
-    console.error(`Failed job ${job.id}: ${errorMessage}`);
+    console.error('Job failed:', job.id, errorMessage);
     process.exit(1);
   }
 }
