@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { EvaluationResult } from '@hg/shared-schemas';
+import { EvaluationResult, RubricEvaluationResult } from '@hg/shared-schemas';
+import { RubricCriterionRow } from '../components/RubricCriterionRow';
 
 interface HealthStatus {
   ok: boolean;
@@ -17,6 +18,7 @@ export default function Home() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<EvaluationResult | null>(null);
+  const [rubricEvaluation, setRubricEvaluation] = useState<RubricEvaluationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [workerAlive, setWorkerAlive] = useState<boolean | null>(null);
@@ -99,7 +101,15 @@ export default function Home() {
           clearInterval(pollInterval);
           setIsSubmitting(false);
           if (data.resultJson) {
-            setResult(data.resultJson as EvaluationResult);
+            // Check if rubricEvaluation exists
+            if (data.resultJson.rubricEvaluation) {
+              setRubricEvaluation(data.resultJson.rubricEvaluation as RubricEvaluationResult);
+              setResult(null);
+            } else {
+              // Legacy format
+              setResult(data.resultJson as EvaluationResult);
+              setRubricEvaluation(null);
+            }
           }
         } else if (data.status === 'FAILED') {
           clearInterval(pollInterval);
@@ -207,12 +217,45 @@ export default function Home() {
             </div>
           )}
 
-          {result && (
+          {status === 'DONE' && rubricEvaluation && (
+            <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f0f0f0', borderRadius: '4px' }}>
+              <h3>Rubric Evaluation</h3>
+              <p style={{ fontSize: '1.2em', fontWeight: 'bold', marginBottom: '1rem' }}>
+                Section score: {rubricEvaluation.sectionScore} / {rubricEvaluation.sectionMaxPoints}
+              </p>
+
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '1rem' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#ddd', borderBottom: '2px solid #999' }}>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ccc' }}>Label</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'center', border: '1px solid #ccc' }}>Kind</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'center', border: '1px solid #ccc' }}>Max Points</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'center', border: '1px solid #ccc' }}>Score</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ccc' }}>Feedback</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rubricEvaluation.criteria.map((criterion) => (
+                    <RubricCriterionRow key={criterion.criterionId} criterion={criterion} />
+                  ))}
+                </tbody>
+              </table>
+
+              {rubricEvaluation.overallFeedback && (
+                <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#e8f4f8', borderRadius: '4px' }}>
+                  <strong>Overall Feedback:</strong>
+                  <p style={{ marginTop: '0.5rem', marginBottom: 0 }}>{rubricEvaluation.overallFeedback}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {status === 'DONE' && result && !rubricEvaluation && (
             <div style={{ marginTop: '2rem', padding: '1rem', backgroundColor: '#f0f0f0', borderRadius: '4px' }}>
               <h3>Grading Results</h3>
-              <p><strong>Score:</strong> {result.score_total}/100</p>
-              <p><strong>Confidence:</strong> {(result.confidence * 100).toFixed(1)}%</p>
-              <p><strong>Summary:</strong> {result.summary_feedback}</p>
+              <p><strong>Score:</strong> {result.score_total != null ? `${result.score_total}/100` : 'N/A'}</p>
+              <p><strong>Confidence:</strong> {result.confidence != null ? `${(result.confidence * 100).toFixed(1)}%` : 'N/A'}</p>
+              <p><strong>Summary:</strong> {result.summary_feedback || 'N/A'}</p>
 
               {result.flags && result.flags.length > 0 && (
                 <div style={{ marginTop: '1rem' }}>
@@ -253,6 +296,7 @@ export default function Home() {
               setJobId(null);
               setStatus(null);
               setResult(null);
+              setRubricEvaluation(null);
               setError(null);
               setQuestionFile(null);
               setSubmissionFile(null);
