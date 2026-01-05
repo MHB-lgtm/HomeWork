@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { EvaluationResult, RubricEvaluationResult } from '@hg/shared-schemas';
 import { RubricCriterionRow } from '../components/RubricCriterionRow';
 
@@ -12,6 +13,8 @@ interface HealthStatus {
 }
 
 export default function Home() {
+  const [examId, setExamId] = useState('exam-001');
+  const [questionId, setQuestionId] = useState('q1');
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
   const [notes, setNotes] = useState('');
@@ -34,8 +37,16 @@ export default function Home() {
       return;
     }
 
+    if (!examId.trim() || !questionId.trim()) {
+      setError('Please provide examId and questionId');
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       const formData = new FormData();
+      formData.append('examId', examId.trim());
+      formData.append('questionId', questionId.trim());
       formData.append('question', questionFile);
       formData.append('submission', submissionFile);
       if (notes) {
@@ -49,7 +60,16 @@ export default function Home() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create job');
+        const errorMessage = errorData.error || 'Failed to create job';
+        
+        // User-friendly error messages
+        if (response.status === 404 && errorMessage.includes('Rubric not found')) {
+          throw new Error('Rubric not found. Please create it at /rubrics first.');
+        }
+        if (response.status === 400) {
+          throw new Error(errorMessage);
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -128,7 +148,12 @@ export default function Home() {
 
   return (
     <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>Homework Grader MVP</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <h1 style={{ margin: 0 }}>Homework Grader MVP</h1>
+        <Link href="/rubrics" style={{ color: '#0070f3', textDecoration: 'none' }}>
+          Edit Rubrics →
+        </Link>
+      </div>
 
       {showWorkerWarning && (
         <div
@@ -148,6 +173,36 @@ export default function Home() {
 
       {!jobId ? (
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div>
+              <label htmlFor="examId" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                Exam ID:
+              </label>
+              <input
+                id="examId"
+                type="text"
+                value={examId}
+                onChange={(e) => setExamId(e.target.value)}
+                required
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="questionId" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+                Question ID:
+              </label>
+              <input
+                id="questionId"
+                type="text"
+                value={questionId}
+                onChange={(e) => setQuestionId(e.target.value)}
+                required
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+            </div>
+          </div>
+
           <div>
             <label htmlFor="question" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               Question File:
@@ -298,6 +353,8 @@ export default function Home() {
               setResult(null);
               setRubricEvaluation(null);
               setError(null);
+              setExamId('exam-001');
+              setQuestionId('q1');
               setQuestionFile(null);
               setSubmissionFile(null);
               setNotes('');

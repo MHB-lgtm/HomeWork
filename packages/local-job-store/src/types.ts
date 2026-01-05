@@ -1,3 +1,5 @@
+import { RubricSpec } from '@hg/shared-schemas';
+
 export type JobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
 
 export type JobRecord = {
@@ -17,6 +19,7 @@ export type JobRecord = {
     rubric_version: string;
     model_version: string;
   };
+  rubric?: RubricSpec;
   resultJson?: unknown;
   errorMessage?: string;
 };
