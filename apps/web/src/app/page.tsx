@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { EvaluationResult, RubricEvaluationResult } from '@hg/shared-schemas';
 import { RubricCriterionRow } from '../components/RubricCriterionRow';
+import { listExams, ExamSummary } from '../lib/examsClient';
 
 interface HealthStatus {
   ok: boolean;
@@ -25,14 +26,16 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [workerAlive, setWorkerAlive] = useState<boolean | null>(null);
+  const [availableExams, setAvailableExams] = useState<ExamSummary[]>([]);
+  const [isLoadingExams, setIsLoadingExams] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
 
-    if (!questionFile || !submissionFile) {
-      setError('Please select both question and submission files');
+    if (!submissionFile) {
+      setError('Please select a submission file');
       setIsSubmitting(false);
       return;
     }
@@ -47,8 +50,10 @@ export default function Home() {
       const formData = new FormData();
       formData.append('examId', examId.trim());
       formData.append('questionId', questionId.trim());
-      formData.append('question', questionFile);
       formData.append('submission', submissionFile);
+      if (questionFile) {
+        formData.append('question', questionFile);
+      }
       if (notes) {
         formData.append('notes', notes);
       }
@@ -106,6 +111,19 @@ export default function Home() {
     return () => clearInterval(healthInterval);
   }, []);
 
+  // Load exams on mount
+  useEffect(() => {
+    const loadExams = async () => {
+      setIsLoadingExams(true);
+      const result = await listExams();
+      setIsLoadingExams(false);
+      if (result.ok) {
+        setAvailableExams(result.data);
+      }
+    };
+    loadExams();
+  }, []);
+
   const startPolling = (id: string) => {
     const pollInterval = setInterval(async () => {
       try {
@@ -150,9 +168,14 @@ export default function Home() {
     <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '800px', margin: '0 auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h1 style={{ margin: 0 }}>Homework Grader MVP</h1>
-        <Link href="/rubrics" style={{ color: '#0070f3', textDecoration: 'none' }}>
-          Edit Rubrics →
-        </Link>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <Link href="/exams" style={{ color: '#0070f3', textDecoration: 'none' }}>
+            Manage Exams →
+          </Link>
+          <Link href="/rubrics" style={{ color: '#0070f3', textDecoration: 'none' }}>
+            Edit Rubrics →
+          </Link>
+        </div>
       </div>
 
       {showWorkerWarning && (
@@ -178,14 +201,41 @@ export default function Home() {
               <label htmlFor="examId" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
                 Exam ID:
               </label>
-              <input
-                id="examId"
-                type="text"
-                value={examId}
-                onChange={(e) => setExamId(e.target.value)}
-                required
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-              />
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {availableExams.length > 0 && (
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setExamId(e.target.value);
+                      }
+                    }}
+                    value=""
+                    style={{
+                      padding: '0.5rem',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      backgroundColor: '#f8f9fa',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="">Select exam...</option>
+                    {availableExams.map((exam) => (
+                      <option key={exam.examId} value={exam.examId}>
+                        {exam.title} ({exam.examId})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <input
+                  id="examId"
+                  type="text"
+                  value={examId}
+                  onChange={(e) => setExamId(e.target.value)}
+                  required
+                  placeholder={isLoadingExams ? 'Loading exams...' : 'Enter exam ID'}
+                  style={{ flex: 1, padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+                />
+              </div>
             </div>
 
             <div>
@@ -204,22 +254,8 @@ export default function Home() {
           </div>
 
           <div>
-            <label htmlFor="question" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Question File:
-            </label>
-            <input
-              type="file"
-              id="question"
-              accept="image/*,.pdf"
-              onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
-              required
-              style={{ width: '100%', padding: '0.5rem' }}
-            />
-          </div>
-
-          <div>
             <label htmlFor="submission" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Submission File:
+              Submission File: *
             </label>
             <input
               type="file"
@@ -229,6 +265,22 @@ export default function Home() {
               required
               style={{ width: '100%', padding: '0.5rem' }}
             />
+          </div>
+
+          <div>
+            <label htmlFor="question" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Optional Question Image (fallback):
+            </label>
+            <input
+              type="file"
+              id="question"
+              accept="image/*,.pdf"
+              onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
+              style={{ width: '100%', padding: '0.5rem' }}
+            />
+            <small style={{ color: '#666', fontSize: '0.9em' }}>
+              Optional: The exam file will be used as the primary source. This image can help disambiguate if needed.
+            </small>
           </div>
 
           <div>

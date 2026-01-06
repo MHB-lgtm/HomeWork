@@ -24,16 +24,10 @@ export async function processNextPendingJob(): Promise<ProcessResult> {
     // Grade the submission using Gemini
     const gradeResult = await gradeSubmission(job);
 
-    // Prepare result JSON based on type
-    let resultJson: unknown;
-    if (gradeResult.type === 'rubric') {
-      resultJson = {
-        rubricEvaluation: gradeResult.result,
-      };
-    } else {
-      // Legacy format - keep existing structure for backward compatibility
-      resultJson = gradeResult.result;
-    }
+    // Prepare result JSON
+    const resultJson = {
+      rubricEvaluation: gradeResult.result,
+    };
 
     // Complete the job
     await completeJob(jobId, resultJson);
