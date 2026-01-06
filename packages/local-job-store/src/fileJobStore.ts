@@ -47,8 +47,10 @@ export async function ensureJobDirs(): Promise<void> {
 }
 
 interface CreateJobParams {
-  questionSourcePath: string;
+  examSourcePath: string;
+  questionId: string;
   submissionSourcePath: string;
+  questionSourcePath?: string;
   notes?: string;
   rubric?: RubricSpec;
 }
@@ -62,12 +64,12 @@ export async function createJob(params: CreateJobParams): Promise<{ jobId: strin
   const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
   const now = new Date().toISOString();
 
-  // Copy question file to uploads with unique name (preserve extension)
-  const questionExt = path.extname(params.questionSourcePath);
-  const questionBaseName = path.basename(params.questionSourcePath, questionExt);
-  const questionFileName = `${questionBaseName}_${jobId}${questionExt}`;
-  const questionFilePath = path.join(UPLOADS_DIR(), questionFileName);
-  await fs.copyFile(params.questionSourcePath, questionFilePath);
+  // Copy exam file to uploads with unique name (preserve extension)
+  const examExt = path.extname(params.examSourcePath);
+  const examBaseName = path.basename(params.examSourcePath, examExt);
+  const examFileName = `${examBaseName}_${jobId}${examExt}`;
+  const examFilePath = path.join(UPLOADS_DIR(), examFileName);
+  await fs.copyFile(params.examSourcePath, examFilePath);
 
   // Copy submission file to uploads with unique name (preserve extension)
   const submissionExt = path.extname(params.submissionSourcePath);
@@ -76,14 +78,26 @@ export async function createJob(params: CreateJobParams): Promise<{ jobId: strin
   const submissionFilePath = path.join(UPLOADS_DIR(), submissionFileName);
   await fs.copyFile(params.submissionSourcePath, submissionFilePath);
 
+  // Copy optional question file if provided
+  let questionFilePath: string | undefined;
+  if (params.questionSourcePath) {
+    const questionExt = path.extname(params.questionSourcePath);
+    const questionBaseName = path.basename(params.questionSourcePath, questionExt);
+    const questionFileName = `${questionBaseName}_${jobId}${questionExt}`;
+    questionFilePath = path.join(UPLOADS_DIR(), questionFileName);
+    await fs.copyFile(params.questionSourcePath, questionFilePath);
+  }
+
   const job: JobRecord = {
     id: jobId,
     status: 'PENDING',
     createdAt: now,
     updatedAt: now,
     inputs: {
-      questionFilePath,
+      examFilePath,
+      questionId: params.questionId,
       submissionFilePath,
+      questionFilePath,
       notes: params.notes,
     },
     versions: {

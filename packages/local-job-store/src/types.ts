@@ -8,8 +8,10 @@ export type JobRecord = {
   createdAt: string;
   updatedAt: string;
   inputs: {
-    questionFilePath: string;
+    examFilePath: string;
+    questionId: string;
     submissionFilePath: string;
+    questionFilePath?: string;
     notes?: string;
     questionText?: string;
     referenceSolutionText?: string;

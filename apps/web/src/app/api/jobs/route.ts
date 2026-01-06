@@ -3,6 +3,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createJob } from '@hg/local-job-store';
 import { loadRubric, RubricNotFoundError } from '../../../lib/rubrics';
+import { getExam, ExamNotFoundError } from '../../../lib/exams';
 
 export const runtime = 'nodejs';
 
@@ -23,9 +24,9 @@ export async function POST(request: NextRequest) {
     const examId = formData.get('examId') as string | null;
     const questionId = formData.get('questionId') as string | null;
 
-    if (!questionFile || !submissionFile) {
+    if (!submissionFile) {
       return NextResponse.json(
-        { error: 'Both question and submission files are required' },
+        { error: 'submission file is required' },
         { status: 400 }
       );
     }
@@ -41,24 +42,22 @@ export async function POST(request: NextRequest) {
     const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
     await fs.mkdir(UPLOADS_DIR, { recursive: true });
 
-    // Generate unique filenames
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 9);
-    const questionExt = path.extname(questionFile.name);
-    const submissionExt = path.extname(submissionFile.name);
+    // Load exam
+    let exam;
+    try {
+      exam = await getExam(DATA_DIR, examId);
+    } catch (error) {
+      if (error instanceof ExamNotFoundError) {
+        return NextResponse.json(
+          { error: 'Exam not found. Create it at /exams first.' },
+          { status: 404 }
+        );
+      }
+      throw error;
+    }
 
-    const questionFileName = `question_${timestamp}_${random}${questionExt}`;
-    const submissionFileName = `submission_${timestamp}_${random}${submissionExt}`;
-
-    const questionPath = path.join(UPLOADS_DIR, questionFileName);
-    const submissionPath = path.join(UPLOADS_DIR, submissionFileName);
-
-    // Write files
-    const questionBuffer = Buffer.from(await questionFile.arrayBuffer());
-    const submissionBuffer = Buffer.from(await submissionFile.arrayBuffer());
-
-    await fs.writeFile(questionPath, questionBuffer);
-    await fs.writeFile(submissionPath, submissionBuffer);
+    // Resolve exam file path (relative to DATA_DIR)
+    const examFilePath = path.join(DATA_DIR, exam.examFilePath);
 
     // Load rubric
     let rubric;
@@ -74,10 +73,33 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
+    // Generate unique filenames for submission and optional question
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 9);
+    const submissionExt = path.extname(submissionFile.name);
+    const submissionFileName = `submission_${timestamp}_${random}${submissionExt}`;
+    const submissionPath = path.join(UPLOADS_DIR, submissionFileName);
+
+    // Write submission file
+    const submissionBuffer = Buffer.from(await submissionFile.arrayBuffer());
+    await fs.writeFile(submissionPath, submissionBuffer);
+
+    // Write optional question file if provided
+    let questionPath: string | undefined;
+    if (questionFile) {
+      const questionExt = path.extname(questionFile.name);
+      const questionFileName = `question_${timestamp}_${random}${questionExt}`;
+      questionPath = path.join(UPLOADS_DIR, questionFileName);
+      const questionBuffer = Buffer.from(await questionFile.arrayBuffer());
+      await fs.writeFile(questionPath, questionBuffer);
+    }
+
     // Create job
     const { jobId } = await createJob({
-      questionSourcePath: questionPath,
+      examSourcePath: examFilePath,
+      questionId,
       submissionSourcePath: submissionPath,
+      questionSourcePath: questionPath,
       notes: notes || undefined,
       rubric,
     });
