@@ -35,7 +35,7 @@ export default function Home() {
     setIsSubmitting(true);
 
     if (!submissionFile) {
-      setError('Please select a submission file');
+      setError('Submission file is required.');
       setIsSubmitting(false);
       return;
     }
@@ -51,7 +51,7 @@ export default function Home() {
       formData.append('examId', examId.trim());
       formData.append('questionId', questionId.trim());
       formData.append('submission', submissionFile);
-      if (questionFile) {
+      if (questionFile && questionFile.size > 0) {
         formData.append('question', questionFile);
       }
       if (notes) {

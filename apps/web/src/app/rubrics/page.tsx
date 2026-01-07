@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { RubricSpec } from '@hg/shared-schemas';
 import Link from 'next/link';
+import { listExams, ExamSummary } from '../../lib/examsClient';
+import { listRubricQuestionIds } from '../../lib/rubricsClient';
 
 type Criterion = {
   id: string;
@@ -17,8 +19,8 @@ function generateCriterionId(): string {
 }
 
 export default function RubricsPage() {
-  const [examId, setExamId] = useState('exam-001');
-  const [questionId, setQuestionId] = useState('q1');
+  const [examId, setExamId] = useState('');
+  const [questionId, setQuestionId] = useState('');
   const [title, setTitle] = useState('');
   const [generalGuidance, setGeneralGuidance] = useState('');
   const [criteria, setCriteria] = useState<Criterion[]>([
@@ -28,6 +30,13 @@ export default function RubricsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Exam and question selection state
+  const [availableExams, setAvailableExams] = useState<ExamSummary[]>([]);
+  const [isLoadingExams, setIsLoadingExams] = useState(false);
+  const [availableQuestionIds, setAvailableQuestionIds] = useState<string[]>([]);
+  const [isLoadingQuestionIds, setIsLoadingQuestionIds] = useState(false);
+  const [noRubricMessage, setNoRubricMessage] = useState<string | null>(null);
 
   // Validation
   const getCriterionErrors = (criterion: Criterion): string[] => {
@@ -44,6 +53,92 @@ export default function RubricsPage() {
   const allCriteriaValid = criteria.every((c) => getCriterionErrors(c).length === 0);
   const totalMaxPoints = criteria.reduce((sum, c) => sum + (c.maxPoints || 0), 0);
   const canSave = allCriteriaValid && examId.trim() && questionId.trim();
+
+  // Load exams on mount
+  useEffect(() => {
+    const loadExams = async () => {
+      setIsLoadingExams(true);
+      const result = await listExams();
+      setIsLoadingExams(false);
+      if (result.ok) {
+        setAvailableExams(result.data);
+      }
+    };
+    loadExams();
+  }, []);
+
+  // Load questionIds when examId changes
+  useEffect(() => {
+    if (!examId.trim()) {
+      setAvailableQuestionIds([]);
+      setQuestionId('');
+      return;
+    }
+
+    const loadQuestionIds = async () => {
+      setIsLoadingQuestionIds(true);
+      const result = await listRubricQuestionIds(examId.trim());
+      setIsLoadingQuestionIds(false);
+      if (result.ok) {
+        setAvailableQuestionIds(result.questionIds);
+      } else {
+        setAvailableQuestionIds([]);
+      }
+    };
+    loadQuestionIds();
+  }, [examId]);
+
+  // Auto-load rubric when examId + questionId are set
+  useEffect(() => {
+    if (!examId.trim() || !questionId.trim()) {
+      setNoRubricMessage(null);
+      return;
+    }
+
+    const autoLoadRubric = async () => {
+      setIsLoading(true);
+      setNoRubricMessage(null);
+      try {
+        const response = await fetch(`/api/rubrics/${examId.trim()}/${questionId.trim()}`);
+        
+        if (response.status === 404) {
+          setNoRubricMessage('No rubric yet for this question. Create and Save.');
+          setTitle('');
+          setGeneralGuidance('');
+          setCriteria([{ id: generateCriterionId(), label: '', kind: 'points', maxPoints: 10, guidance: '' }]);
+          setIsLoading(false);
+          return;
+        }
+
+        if (!response.ok) {
+          setIsLoading(false);
+          return;
+        }
+
+        const rubric: RubricSpec = await response.json();
+        setTitle(rubric.title || '');
+        setGeneralGuidance(rubric.generalGuidance || '');
+        setCriteria(
+          rubric.criteria.map((c) => ({
+            id: c.id,
+            label: c.label,
+            kind: c.kind,
+            maxPoints: c.maxPoints,
+            guidance: c.guidance || '',
+          }))
+        );
+        setNoRubricMessage(null);
+      } catch (error) {
+        // Silently fail on auto-load errors
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Debounce auto-load slightly
+    const timeoutId = setTimeout(autoLoadRubric, 300);
+    return () => clearTimeout(timeoutId);
+  }, [examId, questionId]);
 
   const handleAddCriterion = () => {
     setCriteria([
@@ -152,9 +247,13 @@ export default function RubricsPage() {
 
   return (
     <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '1rem' }}>
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
         <Link href="/" style={{ color: '#0070f3', textDecoration: 'none' }}>
           ← Back to Home
+        </Link>
+        <span style={{ color: '#666' }}>|</span>
+        <Link href="/exams" style={{ color: '#0070f3', textDecoration: 'none' }}>
+          Manage Exams
         </Link>
       </div>
 
@@ -175,32 +274,71 @@ export default function RubricsPage() {
         </div>
       )}
 
+      {noRubricMessage && (
+        <div
+          style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            backgroundColor: '#fff3cd',
+            border: '1px solid #ffeaa7',
+            borderRadius: '4px',
+            color: '#856404',
+          }}
+        >
+          {noRubricMessage}
+        </div>
+      )}
+
       <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <div>
             <label htmlFor="examId" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Exam ID:
+              Exam:
             </label>
-            <input
-              id="examId"
-              type="text"
-              value={examId}
-              onChange={(e) => setExamId(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-            />
+            {isLoadingExams ? (
+              <div style={{ padding: '0.5rem', color: '#666' }}>Loading exams...</div>
+            ) : (
+              <select
+                id="examId"
+                value={examId}
+                onChange={(e) => setExamId(e.target.value)}
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+              >
+                <option value="">Select an exam...</option>
+                {availableExams.map((exam) => (
+                  <option key={exam.examId} value={exam.examId}>
+                    {exam.title} ({exam.examId})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>
             <label htmlFor="questionId" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
               Question ID:
             </label>
-            <input
-              id="questionId"
-              type="text"
-              value={questionId}
-              onChange={(e) => setQuestionId(e.target.value)}
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                id="questionId"
+                type="text"
+                value={questionId}
+                onChange={(e) => setQuestionId(e.target.value)}
+                list="questionIdOptions"
+                placeholder={isLoadingQuestionIds ? 'Loading...' : 'Type or select question ID'}
+                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+              />
+              {availableQuestionIds.length > 0 && (
+                <datalist id="questionIdOptions">
+                  {availableQuestionIds.map((qId) => (
+                    <option key={qId} value={qId} />
+                  ))}
+                </datalist>
+              )}
+            </div>
+            {isLoadingQuestionIds && examId && (
+              <small style={{ color: '#666', fontSize: '0.85em' }}>Loading existing questions...</small>
+            )}
           </div>
         </div>
 

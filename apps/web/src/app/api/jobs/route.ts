@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     if (!submissionFile) {
       return NextResponse.json(
-        { error: 'submission file is required' },
+        { error: 'Submission file is required' },
         { status: 400 }
       );
     }
@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
     const submissionBuffer = Buffer.from(await submissionFile.arrayBuffer());
     await fs.writeFile(submissionPath, submissionBuffer);
 
-    // Write optional question file if provided
+    // Write optional question file if provided and has content
     let questionPath: string | undefined;
-    if (questionFile) {
+    if (questionFile && questionFile.size > 0) {
       const questionExt = path.extname(questionFile.name);
       const questionFileName = `question_${timestamp}_${random}${questionExt}`;
       questionPath = path.join(UPLOADS_DIR, questionFileName);
