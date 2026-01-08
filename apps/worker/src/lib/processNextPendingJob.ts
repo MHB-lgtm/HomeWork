@@ -1,5 +1,6 @@
-import { claimNextJob, completeJob, failJob } from '@hg/local-job-store';
+import { claimNextJob, completeJob, failJob, getOrCreateReview, saveReview } from '@hg/local-job-store';
 import { gradeSubmission } from '../core/gradeSubmission';
+import { localizeMistakes } from '../core/localizeMistakes';
 
 export interface ProcessResult {
   processed: boolean;
@@ -29,7 +30,30 @@ export async function processNextPendingJob(): Promise<ProcessResult> {
       rubricEvaluation: gradeResult.result,
     };
 
-    // Complete the job
+    // Run localization pass to generate annotations
+    const localizationResult = await localizeMistakes({
+      jobId,
+      questionId: job.inputs.questionId,
+      submissionFilePath: job.inputs.submissionFilePath,
+      rubricEvaluation: gradeResult.result,
+    });
+
+    // Ensure ReviewRecord exists and save annotations
+    const review = await getOrCreateReview(jobId);
+    if (localizationResult.ok) {
+      review.annotations = localizationResult.annotations;
+      review.updatedAt = new Date().toISOString();
+      await saveReview(review);
+      console.log(`[job:${jobId}] annotations generated: ${localizationResult.annotations.length}`);
+    } else {
+      // Localization failed - save review with empty annotations
+      review.annotations = [];
+      review.updatedAt = new Date().toISOString();
+      await saveReview(review);
+      console.warn(`[job:${jobId}] annotations generation failed: ${localizationResult.error}`);
+    }
+
+    // Complete the job (regardless of localization success/failure)
     await completeJob(jobId, resultJson);
 
     console.log(`[worker] Completed job ${jobId}`);

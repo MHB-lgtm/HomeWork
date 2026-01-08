@@ -57,3 +57,13 @@ export {
 export {
   normalizeAndValidateRubricEvaluation,
 } from './rubric/v1/normalize';
+
+// Re-export review v1 exports
+export {
+  BBoxNormSchema,
+  BBoxNorm,
+  AnnotationSchema,
+  Annotation,
+  ReviewRecordSchema,
+  ReviewRecord,
+} from './review/v1/schemas';

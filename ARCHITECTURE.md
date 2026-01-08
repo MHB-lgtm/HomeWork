@@ -20,7 +20,7 @@ HomeWork/
 │   │
 │   └── worker/           # Node.js TypeScript worker (grading processor)
 │       └── src/
-│           ├── core/     # Core grading logic
+│           ├── core/     # Core grading logic + localization
 │           ├── lib/      # Worker utilities (heartbeat, job processing)
 │           ├── scripts/  # CLI scripts (createJob, runLoop, smoke tests)
 │           └── services/ # External service integrations (Gemini API)
@@ -28,16 +28,19 @@ HomeWork/
 └── packages/
     ├── shared-schemas/   # Zod schemas + TypeScript types (shared contracts)
     │   └── src/
-    │       ├── index.ts  # Legacy EvaluationResult + rubric v1 exports
-    │       └── rubric/v1/
-    │           ├── schemas.ts    # RubricSpec, RubricEvaluationRaw schemas
-    │           ├── errors.ts     # RubricValidationError classes
-    │           └── normalize.ts  # normalizeAndValidateRubricEvaluation()
+    │       ├── index.ts  # Legacy EvaluationResult + rubric v1 + review v1 exports
+    │       ├── rubric/v1/
+    │       │   ├── schemas.ts    # RubricSpec, RubricEvaluationRaw schemas
+    │       │   ├── errors.ts     # RubricValidationError classes
+    │       │   └── normalize.ts  # normalizeAndValidateRubricEvaluation()
+    │       └── review/v1/
+    │           └── schemas.ts    # ReviewRecord, Annotation, BBoxNorm schemas
     │
     └── local-job-store/  # File-based job queue (no DB)
         └── src/
             ├── types.ts         # JobRecord, JobStatus types
             ├── fileJobStore.ts  # CRUD operations for jobs
+            ├── fileReviewStore.ts  # CRUD operations for reviews
             └── index.ts         # Public API exports
 ```
 
@@ -82,6 +85,9 @@ All storage paths are relative to `HG_DATA_DIR` environment variable (must be se
 │       └── assets/
 │           └── <originalName>_<timestamp>_<random>.<ext>  # Exam PDF/image
 │
+├── reviews/                  # Review annotations (AI-generated + human edits)
+│   └── <jobId>.json          # ReviewRecord v1 with annotations (bboxNorm)
+│
 └── worker/
     └── heartbeat.json        # Worker health heartbeat { ts: ISO, pid: number }
 ```
@@ -91,6 +97,7 @@ All storage paths are relative to `HG_DATA_DIR` environment variable (must be se
 - **Job files**: `packages/local-job-store/src/fileJobStore.ts` (lines 31-36)
 - **Rubrics**: `apps/web/src/lib/rubrics.ts` (line 9)
 - **Exams**: `apps/web/src/lib/exams.ts` (lines 40-50)
+- **Reviews**: `packages/local-job-store/src/fileReviewStore.ts`
 - **Heartbeat**: `apps/worker/src/lib/heartbeat.ts`
 
 ---
@@ -188,6 +195,43 @@ type RubricEvaluationResult = {
 - If `status === 'FAILED'`: `job.errorMessage` contains error string
 - Common errors: `QUESTION_NOT_FOUND_IN_EXAM`, rubric validation failures
 - Validation errors include error codes: `MISSING_CRITERIA`, `EXTRA_CRITERIA`, `DUPLICATE_CRITERIA`, `INVALID_SCORE_RANGE`, etc.
+
+### 3.4 ReviewRecord Schema (v1)
+
+**File:** `packages/shared-schemas/src/review/v1/schemas.ts`
+
+```typescript
+type BBoxNorm = {
+  x: number;  // 0..1, top-left corner X
+  y: number;  // 0..1, top-left corner Y
+  w: number;  // 0..1, width (must be > 0)
+  h: number;  // 0..1, height (must be > 0)
+};
+
+type Annotation = {
+  id: string;                    // Format: "ai-<criterionId>-<timestamp>-<random>"
+  criterionId: string;           // Links to rubric criterion
+  pageIndex: number;             // 0 for PNG/JPG, >0 for PDF pages
+  bboxNorm: BBoxNorm;            // Normalized bounding box coordinates
+  label?: string;                 // Optional short label
+  comment?: string;               // Optional explanation
+  createdBy: 'human' | 'ai';      // Source of annotation
+  confidence?: number;            // 0..1, AI confidence level
+  status: 'proposed' | 'confirmed' | 'rejected';
+  createdAt: string;              // ISO timestamp
+  updatedAt: string;              // ISO timestamp
+};
+
+type ReviewRecord = {
+  version: '1.0.0';
+  jobId: string;
+  createdAt: string;             // ISO timestamp
+  updatedAt: string;             // ISO timestamp
+  annotations: Annotation[];     // Array of annotations (can be empty)
+};
+```
+
+**Storage:** `<HG_DATA_DIR>/reviews/<jobId>.json`
 
 ---
 
@@ -376,6 +420,69 @@ type RubricEvaluationResult = {
 
 ---
 
+### 4.10 GET /api/jobs/[id]/submission
+
+**File:** `apps/web/src/app/api/jobs/[id]/submission/route.ts`
+
+**Purpose:** Get the submission image file for a job.
+
+**Request:**
+- Method: `GET`
+- Path: `/api/jobs/<jobId>/submission`
+
+**Response:**
+- `200`: Raw image bytes (PNG/JPG)
+- `404`: `{ error: string }` (job not found or file missing)
+- `415`: `{ error: 'Submission review supports PNG/JPG only for now.' }` (unsupported format)
+- `500`: `{ error: string }` (HG_DATA_DIR missing)
+
+**Headers:**
+- `Content-Type`: `image/png` or `image/jpeg`
+- `Cache-Control`: `no-store`
+
+**Note:** Used by Review Viewer page to display submission image with annotation overlays.
+
+---
+
+### 4.11 GET /api/reviews/[jobId]
+
+**File:** `apps/web/src/app/api/reviews/[jobId]/route.ts`
+
+**Purpose:** Get a review record (returns empty record if none exists).
+
+**Request:**
+- Method: `GET`
+- Path: `/api/reviews/<jobId>`
+
+**Response:**
+- `200`: `{ ok: true, data: ReviewRecord }` (empty annotations array if not found)
+- `500`: `{ ok: false, error: string }` (HG_DATA_DIR missing)
+
+**Note:** Always returns a ReviewRecord, even if file doesn't exist (empty annotations).
+
+---
+
+### 4.12 PUT /api/reviews/[jobId]
+
+**File:** `apps/web/src/app/api/reviews/[jobId]/route.ts`
+
+**Purpose:** Create or update a review record.
+
+**Request:**
+- Method: `PUT`
+- Path: `/api/reviews/<jobId>`
+- Content-Type: `application/json`
+- Body: `ReviewRecord` JSON
+
+**Response:**
+- `200`: `{ ok: true }`
+- `400`: `{ ok: false, error: string }` (validation failed or jobId mismatch)
+- `500`: `{ ok: false, error: string }` (HG_DATA_DIR missing or save error)
+
+**Validation:** Validates body with `ReviewRecordSchema`, ensures `body.jobId` matches route param.
+
+---
+
 ## 5. UI Pages
 
 ### 5.1 / (Home)
@@ -396,10 +503,19 @@ type RubricEvaluationResult = {
   - If `rubricEvaluation` exists: Shows rubric table with criteria scores
   - Legacy fallback: Shows `score_total`, `confidence`, `summary_feedback`
 - Worker health banner (polls `/api/health` every 7 seconds)
+- "Open Review" link/button:
+  - Shown when `jobId` exists (after job creation)
+  - Non-intrusive link for PENDING/RUNNING/FAILED
+  - Primary CTA button for DONE status
+  - Links to `/reviews/<jobId>`
 - "Start New Grading" button (resets form)
 
 **Components Used:**
 - `RubricCriterionRow` (`apps/web/src/components/RubricCriterionRow.tsx`) - Renders single criterion row
+
+**Client Helpers:**
+- `apps/web/src/lib/jobsClient.ts` - `getJob()` wrapper
+- `apps/web/src/lib/reviewsClient.ts` - `getReview()` wrapper
 
 ---
 
@@ -449,9 +565,34 @@ type RubricEvaluationResult = {
 
 ---
 
-### 5.4 Job Status/Result Page
+### 5.4 /reviews/[jobId]
 
-**Status:** No dedicated route. Results are displayed inline on `/` after job completion.
+**File:** `apps/web/src/app/reviews/[jobId]/page.tsx`
+
+**Purpose:** Review Viewer - displays submission image with AI annotation overlays.
+
+**Features:**
+- Loads job and review data on mount (parallel fetch)
+- Displays submission image (`/api/jobs/<jobId>/submission`)
+- Overlays bounding boxes:
+  - Absolute positioning using `bboxNorm` coordinates (x,y,w,h → CSS percentages)
+  - Clickable rectangles (select annotation)
+  - Visual highlighting for selected annotation
+- Side panel:
+  - Lists all annotations (label, criterionId, confidence)
+  - Shows full comment when annotation selected
+  - Maps `criterionId` to rubric criterion label (from `rubricEvaluation`)
+- States:
+  - Loading state
+  - Error banner if fetch fails
+  - Warning if job status is not DONE (still allows viewing annotations)
+- Navigation: "Back to Home" link
+
+**Client Helpers:**
+- `apps/web/src/lib/jobsClient.ts` - `getJob()`
+- `apps/web/src/lib/reviewsClient.ts` - `getReview()`
+
+**Note:** Only displays annotations with `pageIndex === 0` (PNG/JPG support).
 
 ---
 
@@ -520,7 +661,7 @@ type RubricEvaluationResult = {
 
 ---
 
-### 6.4 Gemini API Call
+### 6.4 Gemini API Call (Grading)
 
 **File:** `apps/worker/src/core/gradeSubmission.ts` (lines 149-168)
 
@@ -540,7 +681,33 @@ type RubricEvaluationResult = {
 
 ---
 
-### 6.5 Normalize/Validate
+### 6.5 Localization Pass (AI Annotations)
+
+**File:** `apps/worker/src/core/localizeMistakes.ts`
+
+**Process:**
+1. After grading succeeds, identifies target criteria (where `score < maxPoints`)
+2. If no target criteria → returns empty annotations
+3. Reads submission file and converts to base64
+4. Builds prompt requesting bounding boxes for mistakes:
+   - Lists target criteria with scores/feedback
+   - Requests normalized coordinates (x, y, w, h in [0,1])
+   - Specifies JSON output format
+5. Calls Gemini with submission image only (no exam file)
+6. Validates output with `LocalizationOutputSchema`:
+   - Ensures `criterionId` matches target criteria
+   - Validates `bboxNorm` coordinates (0..1, w/h > 0)
+   - Validates `confidence` (0..1)
+7. Converts to `Annotation` objects:
+   - Generates stable ID: `ai-<criterionId>-<timestamp>-<random>`
+   - Sets `createdBy: 'ai'`, `status: 'proposed'`, `pageIndex: 0`
+8. Returns `{ ok: true, annotations }` or `{ ok: false, error }` (best-effort, doesn't throw)
+
+**Note:** Localization failure does NOT fail the job (job remains DONE).
+
+---
+
+### 6.6 Normalize/Validate
 
 **File:** `apps/worker/src/core/gradeSubmission.ts` (lines 188-207)
 
@@ -565,19 +732,26 @@ type RubricEvaluationResult = {
 
 ---
 
-### 6.6 Job Completion/Failure
+### 6.7 Job Completion/Failure + Review Save
 
-**File:** `apps/worker/src/lib/processNextPendingJob.ts` (lines 13-43)
+**File:** `apps/worker/src/lib/processNextPendingJob.ts` (lines 13-67)
 
 **Process:**
 1. If `gradeSubmission()` succeeds:
    - Wraps result: `{ rubricEvaluation: gradeResult.result }`
+   - **NEW:** Runs localization pass:
+     - Calls `localizeMistakes()` with job data and rubricEvaluation
+     - Loads or creates ReviewRecord via `getOrCreateReview(jobId)`
+     - If localization succeeds: saves annotations to review
+     - If localization fails: saves empty annotations (logs warning)
+     - Always saves ReviewRecord (best-effort)
    - Calls `completeJob(jobId, resultJson)`:
      - **File:** `packages/local-job-store/src/fileJobStore.ts` (lines 189-202)
      - Reads job from `running/<jobId>.json`
      - Updates: `status = 'DONE'`, `updatedAt`, `resultJson`
      - Writes to `done/<jobId>.json`
      - Deletes `running/<jobId>.json`
+   - Logs: `[job:<id>] annotations generated: <n>` or `[job:<id>] annotations generation failed: <reason>`
 2. If `gradeSubmission()` throws:
    - Extracts error message
    - Calls `failJob(jobId, errorMessage)`:
@@ -587,109 +761,52 @@ type RubricEvaluationResult = {
      - Writes to `failed/<jobId>.json`
      - Deletes `running/<jobId>.json`
 
----
-
-## 7. Where to Add New Feature X: Review/Annotations
-
-### Suggested Architecture for Review/Annotations Feature
-
-**Goal:** Allow lecturers to review AI-graded results and add annotations/comments.
-
-### 7.1 Data Storage
-
-**New Path:** `<HG_DATA_DIR>/reviews/<jobId>.json`
-
-**Schema (suggested):**
-```typescript
-type ReviewRecord = {
-  jobId: string;
-  reviewerId?: string;        // Future: multi-user support
-  createdAt: string;
-  updatedAt: string;
-  annotations: Array<{
-    criterionId: string;     // Links to rubric criterion
-    comment: string;
-    overrideScore?: number;   // Optional score override
-  }>;
-  overallComment?: string;
-  status: 'draft' | 'approved' | 'rejected';
-};
-```
-
-**File:** Create `apps/web/src/lib/reviews.ts` (similar to `exams.ts`, `rubrics.ts`)
+**Review Storage Functions:**
+- `getOrCreateReview(jobId)` - Returns ReviewRecord (empty if not found)
+- `saveReview(review)` - Atomically saves ReviewRecord (temp file + rename)
+- **File:** `packages/local-job-store/src/fileReviewStore.ts`
 
 ---
 
-### 7.2 API Endpoints
+## 7. Review/Annotations System (v1) - IMPLEMENTED
 
-**Create:** `apps/web/src/app/api/reviews/[jobId]/route.ts`
+### 7.1 Overview
 
-- **POST**: Create/update review
-  - Body: `{ annotations: [...], overallComment?: string, status: 'draft' | 'approved' | 'rejected' }`
-  - Response: `{ ok: true, reviewId: string }`
-- **GET**: Retrieve review
-  - Response: `ReviewRecord` or 404
+**Status:** ✅ Fully implemented
 
-**List:** `apps/web/src/app/api/reviews/route.ts`
+The system includes:
+- **AI-generated annotations**: Worker automatically generates bounding boxes for mistakes after grading
+- **Review storage**: ReviewRecord v1 schema with annotations stored per job
+- **Review Viewer**: Dedicated page (`/reviews/<jobId>`) showing submission image with annotation overlays
+- **Open Review CTA**: Link/button on home page to access reviews
 
-- **GET**: List reviews (with filters: `?jobId=...`, `?status=...`)
-  - Response: `{ ok: true, data: ReviewRecord[] }`
+### 7.2 Implementation Details
 
----
+**Schemas:** `packages/shared-schemas/src/review/v1/schemas.ts`
+- `BBoxNorm` - Normalized bounding box coordinates (0..1)
+- `Annotation` - Single annotation with bboxNorm, criterionId, label, comment, confidence
+- `ReviewRecord` - Container for annotations per job
 
-### 7.3 UI Pages
+**Storage:** `packages/local-job-store/src/fileReviewStore.ts`
+- `getReviewDir()` - Returns reviews directory path
+- `loadReview(jobId)` - Loads ReviewRecord or returns null
+- `saveReview(review)` - Atomically saves ReviewRecord (temp + rename)
+- `getOrCreateReview(jobId)` - Returns ReviewRecord (empty if not found)
 
-**Option A: Inline on Home Page**
-- Add "Review" section below results table
-- Show annotations editor when job is DONE
-- Save to `/api/reviews/<jobId>`
+**Worker Integration:** `apps/worker/src/core/localizeMistakes.ts`
+- Runs after successful grading
+- Identifies criteria with `score < maxPoints`
+- Calls Gemini with submission image to generate bounding boxes
+- Best-effort: failures don't affect job status
 
-**Option B: Dedicated Page**
-- Create `apps/web/src/app/reviews/[jobId]/page.tsx`
-- Full-page review editor
-- Link from home page results: "Review this grading"
+**API Endpoints:**
+- `GET /api/reviews/[jobId]` - Get review (returns empty if not found)
+- `PUT /api/reviews/[jobId]` - Save review
+- `GET /api/jobs/[id]/submission` - Get submission image file
 
-**Recommendation:** Start with Option A (inline), migrate to Option B if complexity grows.
-
----
-
-### 7.4 Schema Updates
-
-**File:** `packages/shared-schemas/src/index.ts` or new `packages/shared-schemas/src/review/v1/schemas.ts`
-
-- Add `ReviewRecordSchema` (Zod)
-- Export types for web + worker (if worker needs to read reviews)
-
----
-
-### 7.5 Worker Integration (Optional)
-
-If reviews should affect future grading:
-
-- **File:** `apps/worker/src/core/gradeSubmission.ts`
-- Load review for similar submissions (if exists)
-- Include review annotations in prompt as "previous feedback examples"
-
-**Recommendation:** Keep reviews separate initially (post-processing), add worker integration later if needed.
-
----
-
-### 7.6 Summary: Files to Create/Modify
-
-**New Files:**
-1. `apps/web/src/lib/reviews.ts` - Review storage helpers
-2. `apps/web/src/app/api/reviews/[jobId]/route.ts` - Review CRUD API
-3. `apps/web/src/app/api/reviews/route.ts` - List reviews API
-4. `apps/web/src/components/ReviewEditor.tsx` - Review UI component (optional)
-5. `packages/shared-schemas/src/review/v1/schemas.ts` - Review schemas (if shared)
-
-**Modify:**
-1. `apps/web/src/app/page.tsx` - Add review section below results
-2. `packages/shared-schemas/src/index.ts` - Export review schemas (if created)
-
-**No Changes Needed:**
-- Worker pipeline (reviews are post-processing)
-- Job store (reviews are separate entities)
+**UI:**
+- `/reviews/[jobId]` - Review Viewer page with image overlay
+- Home page - "Open Review" CTA (prominent when DONE)
 
 ---
 
@@ -701,12 +818,18 @@ If reviews should affect future grading:
 | Job storage | `packages/local-job-store/src/fileJobStore.ts` |
 | Rubric schemas | `packages/shared-schemas/src/rubric/v1/schemas.ts` |
 | Rubric normalization | `packages/shared-schemas/src/rubric/v1/normalize.ts` |
+| Review schemas | `packages/shared-schemas/src/review/v1/schemas.ts` |
+| Review storage | `packages/local-job-store/src/fileReviewStore.ts` |
 | Grading logic | `apps/worker/src/core/gradeSubmission.ts` |
+| Localization logic | `apps/worker/src/core/localizeMistakes.ts` |
 | Worker loop | `apps/worker/src/scripts/runLoop.ts` |
 | Job processing | `apps/worker/src/lib/processNextPendingJob.ts` |
 | Gemini service | `apps/worker/src/services/geminiService.ts` |
 | Home page | `apps/web/src/app/page.tsx` |
+| Review Viewer | `apps/web/src/app/reviews/[jobId]/page.tsx` |
 | Jobs API | `apps/web/src/app/api/jobs/route.ts` |
+| Jobs submission API | `apps/web/src/app/api/jobs/[id]/submission/route.ts` |
+| Reviews API | `apps/web/src/app/api/reviews/[jobId]/route.ts` |
 | Exams API | `apps/web/src/app/api/exams/route.ts` |
 | Rubrics API | `apps/web/src/app/api/rubrics/route.ts` |
 | Health API | `apps/web/src/app/api/health/route.ts` |
