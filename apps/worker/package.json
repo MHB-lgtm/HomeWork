@@ -17,7 +17,8 @@
     "@google/generative-ai": "^0.24.1",
     "@hg/local-job-store": "workspace:*",
     "@hg/shared-schemas": "workspace:*",
-    "dotenv": "^17.2.3"
+    "dotenv": "^17.2.3",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

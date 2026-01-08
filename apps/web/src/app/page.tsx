@@ -318,6 +318,25 @@ export default function Home() {
           <p><strong>Job ID:</strong> {jobId}</p>
           <p><strong>Status:</strong> {status}</p>
 
+          {/* Open Review link - always shown when jobId exists */}
+          <div style={{ marginTop: '1rem', marginBottom: '1rem' }}>
+            <Link
+              href={`/reviews/${jobId}`}
+              style={{
+                display: 'inline-block',
+                padding: status === 'DONE' ? '0.75rem 1.5rem' : '0.5rem 1rem',
+                backgroundColor: status === 'DONE' ? '#0070f3' : '#666',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '4px',
+                fontWeight: status === 'DONE' ? 'bold' : 'normal',
+                fontSize: status === 'DONE' ? '1rem' : '0.9rem',
+              }}
+            >
+              {status === 'DONE' ? '📋 Open Review' : 'Open Review →'}
+            </Link>
+          </div>
+
           {error && (
             <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fee', border: '1px solid #fcc', borderRadius: '4px' }}>
               <strong>Error:</strong> {error}
