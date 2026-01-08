@@ -104,13 +104,25 @@ export async function gradeSubmission(job: JobRecord): Promise<GradeSubmissionRe
     )
     .join('\n');
 
-  const prompt = `You are grading a student's homework submission using a rubric. 
+  const prompt = `You are a strict exam grader.
 
-IMPORTANT: Grade ONLY questionId="${job.inputs.questionId}" from the exam file provided.
+IMPORTANT:
+- Grade ONLY questionId="${job.inputs.questionId}" from the exam file provided.
+- The exam file is the PRIMARY source. ${hasQuestionFallback ? 'A fallback question image is also provided.' : ''}
 
-First, locate the requested question in the exam. If you cannot confidently locate it, return a failure with reason.
+CRITICAL RULES (must follow):
+1) DO NOT correct the student's notation. Grade what is written, not what you think they meant.
+2) First do a Transcription Phase (mandatory):
+   - Transcribe the key mathematical lines needed for grading into LaTeX EXACTLY as they appear.
+   - If the student wrote "x" (no subscript), write "x". Do NOT change it to "x_0".
+   - If you cannot confidently distinguish between x and x_0, write "[AMBIGUOUS: x vs x_0]".
+3) Then do the Grading Phase:
+   - Base ALL scores ONLY on your transcription (not on assumptions).
+   - If a crucial symbol is ambiguous (e.g., x vs x_0 in epsilon), you MUST score conservatively (stricter interpretation).
 
-The exam file is the PRIMARY source. ${hasQuestionFallback ? 'An optional question image is also provided which may help disambiguate, but the exam is the main source.' : ''}
+MANDATORY CONSISTENCY CHECK:
+- Check whether epsilon is defined using x_0 (constant) versus x (variable).
+- If epsilon depends on the variable x, it is invalid for that criterion.
 
 Rubric for ${rubric.examId}/${rubric.questionId}:
 ${rubric.title ? `Title: ${rubric.title}` : ''}
@@ -119,17 +131,18 @@ ${rubric.generalGuidance ? `General Guidance: ${rubric.generalGuidance}` : ''}
 Criteria:
 ${criteriaList}
 
-Return ONLY valid JSON (no markdown, no code fences, no explanations). The JSON must match this exact structure:
+OUTPUT REQUIREMENTS:
+- Return ONLY valid JSON (no markdown, no code fences, no explanations).
+- Each criterion feedback MUST include:
+  (a) "EVIDENCE:" followed by a short LaTeX snippet from your transcription OR "EVIDENCE: NOT_FOUND"
+  (b) If ambiguity exists, include "AMBIGUITY:".
 
+JSON format:
 {
   "examId": "${rubric.examId}",
   "questionId": "${rubric.questionId}",
   "criteria": [
-    {
-      "criterionId": "<string>",
-      "score": <integer>,
-      "feedback": "<string>"
-    }
+    { "criterionId": "<string>", "score": <integer>, "feedback": "<string>" }
   ],
   "overallFeedback": "<string>" (optional)
 }
@@ -142,9 +155,10 @@ If you cannot locate the question in the exam, return:
   "reason": "<explanation>"
 }
 
-${job.inputs.notes ? `Additional grading notes: ${job.inputs.notes}` : ''}
-
-Return the JSON now:`;
+Now perform:
+Step 1: Transcription Phase.
+Step 2: Grading Phase.
+Return the JSON now.`;
 
   // Create GeminiService and generate response
   const geminiService = new GeminiService();
