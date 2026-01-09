@@ -78,7 +78,7 @@ export async function GET(
     }
 
     // Return image with appropriate headers
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         'Content-Type': mimeType,
         'Cache-Control': 'no-store',
