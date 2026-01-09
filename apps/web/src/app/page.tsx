@@ -40,6 +40,7 @@ export default function Home() {
   const [questionId, setQuestionId] = useState('q1');
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [submissionMode, setSubmissionMode] = useState<'image' | 'pdf'>('image');
   const [notes, setNotes] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -73,6 +74,7 @@ export default function Home() {
       formData.append('examId', examId.trim());
       formData.append('questionId', questionId.trim());
       formData.append('submission', submissionFile);
+      formData.append('submissionMode', submissionMode);
       if (questionFile && questionFile.size > 0) {
         formData.append('question', questionFile);
       }
@@ -273,13 +275,43 @@ export default function Home() {
                   </div>
 
                   <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Submission Type: <span className="text-red-600">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={submissionMode === 'image' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setSubmissionMode('image');
+                          setSubmissionFile(null);
+                        }}
+                      >
+                        Upload Image (existing)
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={submissionMode === 'pdf' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          setSubmissionMode('pdf');
+                          setSubmissionFile(null);
+                        }}
+                      >
+                        Upload Sheet (PDF)
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
                     <label htmlFor="submission" className="text-sm font-medium">
                       Submission File: <span className="text-red-600">*</span>
                     </label>
                     <Input
                       type="file"
                       id="submission"
-                      accept="image/*,.pdf"
+                      accept={submissionMode === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
                       onChange={(e) => setSubmissionFile(e.target.files?.[0] || null)}
                       required
                     />
@@ -386,6 +418,7 @@ export default function Home() {
                       setQuestionId('q1');
                       setQuestionFile(null);
                       setSubmissionFile(null);
+                      setSubmissionMode('image');
                       setNotes('');
                     }}
                     className="w-full"

@@ -11,6 +11,7 @@ export type JobRecord = {
     examFilePath: string;
     questionId: string;
     submissionFilePath: string;
+    submissionMimeType?: string;
     questionFilePath?: string;
     notes?: string;
     questionText?: string;

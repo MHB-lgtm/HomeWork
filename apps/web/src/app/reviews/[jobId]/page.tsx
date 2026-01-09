@@ -4,16 +4,18 @@ import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { getJob } from '../../../lib/jobsClient';
 import { getReview, ReviewRecordV1 } from '../../../lib/reviewsClient';
-import { RubricEvaluationResult } from '@hg/shared-schemas';
+import { RubricEvaluationResult, Annotation } from '@hg/shared-schemas';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
 import { cn } from '../../../lib/utils';
+import { PDFViewer } from '../../../components/review/pdf/PDFViewer';
 
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
   const [resultJson, setResultJson] = useState<any>(null);
+  const [submissionMimeType, setSubmissionMimeType] = useState<string | undefined>(undefined);
   const [review, setReview] = useState<ReviewRecordV1 | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
       setJobStatus(jobResult.status);
       setResultJson(jobResult.resultJson);
+      setSubmissionMimeType(jobResult.submissionMimeType);
 
       if (reviewResult.ok) {
         setReview(reviewResult.review);
@@ -68,9 +71,13 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     return criterion?.label || criterionId;
   };
 
-  // Filter annotations for pageIndex === 0 (PNG/JPG) and sort by confidence desc
-  const pageAnnotations = useMemo(() => {
-    const filtered = review?.annotations.filter((ann) => ann.pageIndex === 0) || [];
+  // Get all annotations, sorted by confidence desc (undefined last)
+  // For images, filter to pageIndex === 0; for PDFs, include all pageIndex values
+  const allAnnotations = useMemo(() => {
+    if (!review) return [];
+    const filtered = submissionMimeType === 'application/pdf' 
+      ? review.annotations 
+      : review.annotations.filter((ann) => ann.pageIndex === 0);
     // Sort by confidence desc (undefined last)
     return [...filtered].sort((a, b) => {
       if (a.confidence === undefined && b.confidence === undefined) return 0;
@@ -78,7 +85,15 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       if (b.confidence === undefined) return -1;
       return b.confidence - a.confidence;
     });
-  }, [review]);
+  }, [review, submissionMimeType]);
+
+  // For image review, use pageAnnotations (pageIndex === 0)
+  const pageAnnotations = useMemo(() => {
+    if (submissionMimeType === 'application/pdf') {
+      return allAnnotations;
+    }
+    return allAnnotations.filter((ann) => ann.pageIndex === 0);
+  }, [allAnnotations, submissionMimeType]);
 
   // Get selected annotation details
   const selectedAnnotation = pageAnnotations.find((ann) => ann.id === selectedAnnotationId);
@@ -135,48 +150,62 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle>Submission Image</CardTitle>
+                <CardTitle>Submission {submissionMimeType === 'application/pdf' ? 'PDF' : 'Image'}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="relative inline-block w-full max-w-full">
-                  <img
-                    src={`/api/jobs/${jobId}/submission`}
-                    alt="Student submission"
-                    className="w-full h-auto block border border-gray-200 rounded-lg"
-                  />
-                  {/* Overlay bounding boxes */}
-                  {pageAnnotations.map((ann) => {
-                    const bbox = ann.bboxNorm;
-                    const isSelected = selectedAnnotationId === ann.id;
-                    const isHovered = hoveredAnnotationId === ann.id;
-                    
-                    return (
-                      <div
-                        key={ann.id}
-                        onClick={() => setSelectedAnnotationId(ann.id)}
-                        onMouseEnter={() => setHoveredAnnotationId(ann.id)}
-                        onMouseLeave={() => setHoveredAnnotationId(null)}
-                        className={cn(
-                          'absolute cursor-pointer rounded transition-all',
-                          'box-border',
-                          // Default state
-                          !isSelected && !isHovered && 'border border-blue-400 bg-blue-400/10',
-                          // Hover state (not selected)
-                          !isSelected && isHovered && 'border-2 border-blue-600 bg-blue-400/20',
-                          // Selected state
-                          isSelected && 'border-[3px] border-red-600 bg-red-400/20 shadow-lg shadow-red-500/30'
-                        )}
-                        style={{
-                          left: `${bbox.x * 100}%`,
-                          top: `${bbox.y * 100}%`,
-                          width: `${bbox.w * 100}%`,
-                          height: `${bbox.h * 100}%`,
-                        }}
-                        title={ann.label || getCriterionLabel(ann.criterionId)}
-                      />
-                    );
-                  })}
-                </div>
+                {submissionMimeType === 'application/pdf' ? (
+                  <div className="space-y-4">
+                    <PDFViewer
+                      pdfUrl={`/api/jobs/${jobId}/submission-raw`}
+                      annotations={allAnnotations}
+                      selectedAnnotationId={selectedAnnotationId}
+                      hoveredAnnotationId={hoveredAnnotationId}
+                      onAnnotationClick={setSelectedAnnotationId}
+                      onAnnotationHover={setHoveredAnnotationId}
+                      getCriterionLabel={getCriterionLabel}
+                    />
+                  </div>
+                ) : (
+                  <div className="relative inline-block w-full max-w-full">
+                    <img
+                      src={`/api/jobs/${jobId}/submission`}
+                      alt="Student submission"
+                      className="w-full h-auto block border border-gray-200 rounded-lg"
+                    />
+                    {/* Overlay bounding boxes */}
+                    {pageAnnotations.map((ann) => {
+                      const bbox = ann.bboxNorm;
+                      const isSelected = selectedAnnotationId === ann.id;
+                      const isHovered = hoveredAnnotationId === ann.id;
+                      
+                      return (
+                        <div
+                          key={ann.id}
+                          onClick={() => setSelectedAnnotationId(ann.id)}
+                          onMouseEnter={() => setHoveredAnnotationId(ann.id)}
+                          onMouseLeave={() => setHoveredAnnotationId(null)}
+                          className={cn(
+                            'absolute cursor-pointer rounded transition-all',
+                            'box-border',
+                            // Default state
+                            !isSelected && !isHovered && 'border border-blue-400 bg-blue-400/10',
+                            // Hover state (not selected)
+                            !isSelected && isHovered && 'border-2 border-blue-600 bg-blue-400/20',
+                            // Selected state
+                            isSelected && 'border-[3px] border-red-600 bg-red-400/20 shadow-lg shadow-red-500/30'
+                          )}
+                          style={{
+                            left: `${bbox.x * 100}%`,
+                            top: `${bbox.y * 100}%`,
+                            width: `${bbox.w * 100}%`,
+                            height: `${bbox.h * 100}%`,
+                          }}
+                          title={ann.label || getCriterionLabel(ann.criterionId)}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -249,6 +278,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             >
                               {ann.status}
                             </Badge>
+                            {submissionMimeType === 'application/pdf' && (
+                              <Badge variant="outline" className="text-xs">
+                                Page {ann.pageIndex + 1}
+                              </Badge>
+                            )}
                             <span className="text-xs text-gray-500">{ann.criterionId}</span>
                           </div>
                           {isSelected && ann.comment && (

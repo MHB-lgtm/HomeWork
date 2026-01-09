@@ -38,6 +38,7 @@ export async function GET(
       status: job.status,
       resultJson: job.resultJson,
       errorMessage: job.errorMessage,
+      submissionMimeType: job.inputs.submissionMimeType,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

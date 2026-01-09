@@ -56,7 +56,8 @@ export async function gradeSubmission(job: JobRecord): Promise<GradeSubmissionRe
 
   // Read submission file (required)
   const submissionBuffer = await fs.readFile(job.inputs.submissionFilePath);
-  const submissionMimeType = inferMimeType(job.inputs.submissionFilePath);
+  // Use submissionMimeType from job inputs if present, otherwise infer from file extension
+  const submissionMimeType = job.inputs.submissionMimeType || inferMimeType(job.inputs.submissionFilePath);
   const submissionBase64 = submissionBuffer.toString('base64');
 
   // Read optional question image if provided

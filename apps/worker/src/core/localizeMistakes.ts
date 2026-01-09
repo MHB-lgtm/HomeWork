@@ -43,7 +43,7 @@ const LocalizationOutputSchema = z.object({
   annotations: z.array(
     z.object({
       criterionId: z.string(),
-      pageIndex: z.literal(0),
+      pageIndex: z.number().int().min(0), // Support any page index (0-based)
       bboxNorm: BBoxNormSchema,
       label: z.string().optional(),
       comment: z.string().optional(),
@@ -81,7 +81,13 @@ export async function localizeMistakes(
 
     // Read submission file
     const submissionBuffer = await fs.readFile(input.submissionFilePath);
+    // For localization, we only support images for now (PDF support will come in PR 3/3)
+    // If PDF is provided, skip localization (return empty annotations)
     const submissionMimeType = inferMimeType(input.submissionFilePath);
+    if (submissionMimeType === 'application/pdf') {
+      // PDF localization will be implemented in PR 3/3
+      return { ok: true, annotations: [] };
+    }
     const submissionBase64 = submissionBuffer.toString('base64');
 
     // Build prompt
@@ -102,7 +108,8 @@ TASK:
 For each criterion listed above, identify the exact location in the submission image where the mistake or issue occurs. Draw a bounding box around the relevant area.
 
 IMPORTANT:
-- This is a single-page image (PNG/JPG), so use pageIndex: 0 for all annotations.
+- For single-page images (PNG/JPG), use pageIndex: 0 for all annotations.
+- For multi-page PDFs, use the appropriate pageIndex (0-based: first page is 0, second page is 1, etc.).
 - Provide normalized bounding box coordinates (x, y, w, h) where:
   - x, y: top-left corner coordinates (0.0 to 1.0)
   - w, h: width and height (0.0 to 1.0)
@@ -110,7 +117,7 @@ IMPORTANT:
   - w and h must be greater than 0
 - For each annotation, provide:
   - criterionId: must match one of the criterion IDs listed above
-  - pageIndex: 0 (single page)
+  - pageIndex: integer >= 0 (0 for first page, 1 for second page, etc.)
   - bboxNorm: { x, y, w, h } normalized coordinates
   - label: optional short label describing the mistake
   - comment: optional brief explanation
@@ -122,7 +129,7 @@ Return ONLY valid JSON (no markdown, no code fences, no explanations). The JSON 
   "annotations": [
     {
       "criterionId": "<string>",
-      "pageIndex": 0,
+      "pageIndex": <integer >= 0>,
       "bboxNorm": {
         "x": <number 0..1>,
         "y": <number 0..1>,

@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     const notes = formData.get('notes') as string | null;
     const examId = formData.get('examId') as string | null;
     const questionId = formData.get('questionId') as string | null;
+    const submissionMode = formData.get('submissionMode') as string | null;
 
     if (!submissionFile) {
       return NextResponse.json(
@@ -84,6 +85,26 @@ export async function POST(request: NextRequest) {
     const submissionBuffer = Buffer.from(await submissionFile.arrayBuffer());
     await fs.writeFile(submissionPath, submissionBuffer);
 
+    // Determine submission MIME type
+    let submissionMimeType: string | undefined;
+    if (submissionMode === 'pdf') {
+      submissionMimeType = 'application/pdf';
+    } else if (submissionFile.type) {
+      submissionMimeType = submissionFile.type;
+    } else {
+      // Infer from extension as fallback
+      const ext = path.extname(submissionFile.name).toLowerCase();
+      if (ext === '.pdf') {
+        submissionMimeType = 'application/pdf';
+      } else if (ext === '.png') {
+        submissionMimeType = 'image/png';
+      } else if (ext === '.jpg' || ext === '.jpeg') {
+        submissionMimeType = 'image/jpeg';
+      } else if (ext === '.webp') {
+        submissionMimeType = 'image/webp';
+      }
+    }
+
     // Write optional question file if provided and has content
     let questionPath: string | undefined;
     if (questionFile && questionFile.size > 0) {
@@ -99,6 +120,7 @@ export async function POST(request: NextRequest) {
       examSourcePath: examFilePath,
       questionId,
       submissionSourcePath: submissionPath,
+      submissionMimeType,
       questionSourcePath: questionPath,
       notes: notes || undefined,
       rubric,
