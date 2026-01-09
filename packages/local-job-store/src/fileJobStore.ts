@@ -50,6 +50,7 @@ interface CreateJobParams {
   examSourcePath: string;
   questionId: string;
   submissionSourcePath: string;
+  submissionMimeType?: string;
   questionSourcePath?: string;
   notes?: string;
   rubric?: RubricSpec;
@@ -88,18 +89,19 @@ export async function createJob(params: CreateJobParams): Promise<{ jobId: strin
     await fs.copyFile(params.questionSourcePath, questionFilePath);
   }
 
-  const job: JobRecord = {
-    id: jobId,
-    status: 'PENDING',
-    createdAt: now,
-    updatedAt: now,
-    inputs: {
-      examFilePath,
-      questionId: params.questionId,
-      submissionFilePath,
-      questionFilePath,
-      notes: params.notes,
-    },
+    const job: JobRecord = {
+      id: jobId,
+      status: 'PENDING',
+      createdAt: now,
+      updatedAt: now,
+      inputs: {
+        examFilePath,
+        questionId: params.questionId,
+        submissionFilePath,
+        submissionMimeType: params.submissionMimeType,
+        questionFilePath,
+        notes: params.notes,
+      },
     versions: {
       prompt_version: '1.0.0',
       rubric_version: '1.0.0',

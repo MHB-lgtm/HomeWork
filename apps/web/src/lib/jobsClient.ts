@@ -2,7 +2,7 @@
  * Get a job by ID
  */
 export async function getJob(jobId: string): Promise<
-  | { ok: true; status: string; resultJson?: any; errorMessage?: string }
+  | { ok: true; status: string; resultJson?: any; errorMessage?: string; submissionMimeType?: string }
   | { ok: false; error: string; status?: number }
 > {
   try {
@@ -23,6 +23,7 @@ export async function getJob(jobId: string): Promise<
       status: data.status,
       resultJson: data.resultJson,
       errorMessage: data.errorMessage,
+      submissionMimeType: data.submissionMimeType,
     };
   } catch (error) {
     return {
