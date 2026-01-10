@@ -6,28 +6,17 @@ import { cn } from '../../../lib/utils';
 import type { Annotation } from '@hg/shared-schemas';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
 
-// Configure PDF.js worker using bundler-managed worker (no CDN)
+// Configure PDF.js worker using CDN with .mjs (ESM worker for pdfjs-dist v4)
 // This must be set before any Document component renders
-// For Next.js App Router, we use import.meta.url with the worker path
-// The bundler resolves this at build time
+// Use module-level guard so it runs once on the client
+// Note: Next.js webpack doesn't support import.meta.url, so we use CDN as the primary method
 let workerConfigured = false;
 
 if (typeof window !== 'undefined' && !workerConfigured) {
-  // Use import.meta.url to resolve worker from pdfjs-dist package
-  // Next.js bundler handles this resolution at build time
-  // Note: This requires the worker file to be accessible via the bundler
-  try {
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      'pdfjs-dist/build/pdf.worker.min.mjs',
-      import.meta.url
-    ).toString();
-  } catch (error) {
-    // Fallback: If import.meta.url fails, use a path that Next.js can resolve
-    // This should not happen in production with proper webpack configuration
-    console.warn('PDF.js worker: import.meta.url failed, using fallback');
-    // Use the worker from node_modules via a path Next.js can resolve
-    pdfjs.GlobalWorkerOptions.workerSrc = `/_next/static/chunks/pdf.worker-${pdfjs.version}.min.mjs`;
-  }
+  // Use pinned CDN URL with .mjs (ESM worker for pdfjs-dist v4)
+  // Do NOT use pdf.worker.min.js - use .mjs for proper ESM support
+  // This avoids "Setting up fake worker failed" errors
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
   workerConfigured = true;
 }
 
@@ -139,12 +128,16 @@ export function PDFViewer({
   }, []);
 
   const onDocumentLoadError = useCallback((error: Error) => {
-    setError(`Failed to load PDF document: ${error.message}`);
+    // Show detailed error message instead of infinite loading
+    const errorMessage = error.message || String(error);
+    setError(`Failed to load PDF document: ${errorMessage}`);
     setLoading(false);
   }, []);
 
   const onDocumentSourceError = useCallback((error: Error) => {
-    setError(`PDF source error: ${error.message}`);
+    // Show detailed error message instead of infinite loading
+    const errorMessage = error.message || String(error);
+    setError(`PDF source error: ${errorMessage}`);
     setLoading(false);
   }, []);
 
@@ -242,7 +235,9 @@ export function PDFViewer({
           <div className="py-8">
             <Alert variant="destructive">
               <AlertTitle>Error rendering PDF</AlertTitle>
-              <AlertDescription>Failed to render PDF document.</AlertDescription>
+              <AlertDescription>
+                {error || 'Failed to render PDF document. Please check the browser console for details.'}
+              </AlertDescription>
             </Alert>
           </div>
         }

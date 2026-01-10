@@ -24,6 +24,8 @@ export async function POST(request: NextRequest) {
     const examId = formData.get('examId') as string | null;
     const questionId = formData.get('questionId') as string | null;
     const submissionMode = formData.get('submissionMode') as string | null;
+    const gradingMode = (formData.get('gradingMode') as string | null) || 'RUBRIC';
+    const gradingScope = (formData.get('gradingScope') as string | null) || 'QUESTION';
 
     if (!submissionFile) {
       return NextResponse.json(
@@ -32,11 +34,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!examId || !questionId) {
+    if (!examId) {
       return NextResponse.json(
-        { error: 'examId and questionId are required' },
+        { error: 'examId is required' },
         { status: 400 }
       );
+    }
+
+    // Validate gradingMode
+    if (gradingMode !== 'RUBRIC' && gradingMode !== 'GENERAL') {
+      return NextResponse.json(
+        { error: 'gradingMode must be RUBRIC or GENERAL' },
+        { status: 400 }
+      );
+    }
+
+    // Validate gradingScope
+    if (gradingScope !== 'QUESTION' && gradingScope !== 'DOCUMENT') {
+      return NextResponse.json(
+        { error: 'gradingScope must be QUESTION or DOCUMENT' },
+        { status: 400 }
+      );
+    }
+
+    // Validate questionId based on mode/scope
+    if (gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')) {
+      if (!questionId) {
+        return NextResponse.json(
+          { error: 'questionId is required for Rubric mode or General + Question scope' },
+          { status: 400 }
+        );
+      }
     }
 
     const DATA_DIR = path.resolve(dataDir);
@@ -60,18 +88,26 @@ export async function POST(request: NextRequest) {
     // Resolve exam file path (relative to DATA_DIR)
     const examFilePath = path.join(DATA_DIR, exam.examFilePath);
 
-    // Load rubric
+    // Load rubric only for RUBRIC mode
     let rubric;
-    try {
-      rubric = await loadRubric(DATA_DIR, examId, questionId);
-    } catch (error) {
-      if (error instanceof RubricNotFoundError) {
+    if (gradingMode === 'RUBRIC') {
+      if (!questionId) {
         return NextResponse.json(
-          { error: 'Rubric not found. Create it at /rubrics first.' },
-          { status: 404 }
+          { error: 'questionId is required for Rubric mode' },
+          { status: 400 }
         );
       }
-      throw error;
+      try {
+        rubric = await loadRubric(DATA_DIR, examId, questionId);
+      } catch (error) {
+        if (error instanceof RubricNotFoundError) {
+          return NextResponse.json(
+            { error: 'Rubric not found. Create it at /rubrics first.' },
+            { status: 404 }
+          );
+        }
+        throw error;
+      }
     }
 
     // Generate unique filenames for submission and optional question
@@ -118,12 +154,14 @@ export async function POST(request: NextRequest) {
     // Create job
     const { jobId } = await createJob({
       examSourcePath: examFilePath,
-      questionId,
+      questionId: questionId || '', // Empty string if not required (for GENERAL + DOCUMENT)
       submissionSourcePath: submissionPath,
       submissionMimeType,
       questionSourcePath: questionPath,
       notes: notes || undefined,
       rubric,
+      gradingMode: gradingMode as 'RUBRIC' | 'GENERAL',
+      gradingScope: gradingScope as 'QUESTION' | 'DOCUMENT',
     });
 
     return NextResponse.json({ jobId });

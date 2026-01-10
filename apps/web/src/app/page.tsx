@@ -41,6 +41,8 @@ export default function Home() {
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
   const [submissionMode, setSubmissionMode] = useState<'image' | 'pdf'>('image');
+  const [gradingMode, setGradingMode] = useState<'RUBRIC' | 'GENERAL'>('RUBRIC');
+  const [gradingScope, setGradingScope] = useState<'QUESTION' | 'DOCUMENT'>('QUESTION');
   const [notes, setNotes] = useState('');
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -63,10 +65,20 @@ export default function Home() {
       return;
     }
 
-    if (!examId.trim() || !questionId.trim()) {
-      setError('Please provide examId and questionId');
+    // Validation based on grading mode and scope
+    if (!examId.trim()) {
+      setError('Please provide examId');
       setIsSubmitting(false);
       return;
+    }
+
+    // Question ID required for Rubric mode or General + Question scope
+    if (gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')) {
+      if (!questionId.trim()) {
+        setError('Please provide questionId');
+        setIsSubmitting(false);
+        return;
+      }
     }
 
     try {
@@ -75,6 +87,8 @@ export default function Home() {
       formData.append('questionId', questionId.trim());
       formData.append('submission', submissionFile);
       formData.append('submissionMode', submissionMode);
+      formData.append('gradingMode', gradingMode);
+      formData.append('gradingScope', gradingScope);
       if (questionFile && questionFile.size > 0) {
         formData.append('question', questionFile);
       }
@@ -263,16 +277,71 @@ export default function Home() {
                     <div className="space-y-2">
                       <label htmlFor="questionId" className="text-sm font-medium">
                         Question ID:
+                        {(gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')) && (
+                          <span className="text-red-600"> *</span>
+                        )}
                       </label>
                       <Input
                         id="questionId"
                         type="text"
                         value={questionId}
                         onChange={(e) => setQuestionId(e.target.value)}
-                        required
+                        required={gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')}
+                        disabled={gradingMode === 'GENERAL' && gradingScope === 'DOCUMENT'}
+                        placeholder={gradingMode === 'GENERAL' && gradingScope === 'DOCUMENT' ? 'Optional for Document scope' : ''}
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">
+                      Grading Mode: <span className="text-red-600">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant={gradingMode === 'RUBRIC' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setGradingMode('RUBRIC')}
+                      >
+                        Rubric
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={gradingMode === 'GENERAL' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setGradingMode('GENERAL')}
+                      >
+                        General
+                      </Button>
+                    </div>
+                  </div>
+
+                  {gradingMode === 'GENERAL' && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        Scope: <span className="text-red-600">*</span>
+                      </label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={gradingScope === 'QUESTION' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setGradingScope('QUESTION')}
+                        >
+                          Question
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={gradingScope === 'DOCUMENT' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setGradingScope('DOCUMENT')}
+                        >
+                          Document
+                        </Button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">

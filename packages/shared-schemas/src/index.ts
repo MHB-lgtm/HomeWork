@@ -67,3 +67,25 @@ export {
   ReviewRecordSchema,
   ReviewRecord,
 } from './review/v1/schemas';
+
+// Re-export general v1 exports
+export {
+  GeneralEvaluationSchema,
+  GeneralEvaluation,
+  FindingSchema,
+  Finding,
+  ScopeSchema,
+  Scope,
+  GeneralFindingsLocalizationSchema,
+  GeneralFindingsLocalization,
+  FindingBoxSchema,
+  FindingBox,
+  QuestionMappingSchema,
+  QuestionMapping,
+  QuestionEvaluationSchema,
+  QuestionEvaluation,
+  GeneralFindingsLocalizationV1Schema,
+  GeneralFindingsLocalizationV1,
+  FindingBoxV1Schema,
+  FindingBoxV1,
+} from './general/v1/schemas';
