@@ -39,6 +39,8 @@ export async function GET(
       resultJson: job.resultJson,
       errorMessage: job.errorMessage,
       submissionMimeType: job.inputs.submissionMimeType,
+      gradingMode: job.inputs.gradingMode,
+      gradingScope: job.inputs.gradingScope,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

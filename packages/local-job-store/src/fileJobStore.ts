@@ -48,12 +48,14 @@ export async function ensureJobDirs(): Promise<void> {
 
 interface CreateJobParams {
   examSourcePath: string;
-  questionId: string;
+  questionId: string; // Required but can be empty string for GENERAL + DOCUMENT scope
   submissionSourcePath: string;
   submissionMimeType?: string;
   questionSourcePath?: string;
   notes?: string;
   rubric?: RubricSpec;
+  gradingMode?: 'RUBRIC' | 'GENERAL';
+  gradingScope?: 'QUESTION' | 'DOCUMENT';
 }
 
 /**
@@ -101,6 +103,8 @@ export async function createJob(params: CreateJobParams): Promise<{ jobId: strin
         submissionMimeType: params.submissionMimeType,
         questionFilePath,
         notes: params.notes,
+        gradingMode: params.gradingMode,
+        gradingScope: params.gradingScope,
       },
     versions: {
       prompt_version: '1.0.0',

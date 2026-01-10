@@ -16,6 +16,8 @@ export type JobRecord = {
     notes?: string;
     questionText?: string;
     referenceSolutionText?: string;
+    gradingMode?: 'RUBRIC' | 'GENERAL';
+    gradingScope?: 'QUESTION' | 'DOCUMENT';
   };
   versions: {
     prompt_version: string;
