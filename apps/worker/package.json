@@ -11,7 +11,8 @@
     "job:create": "ts-node src/scripts/createJob.ts",
     "job:run-once": "ts-node src/scripts/runOnce.ts",
     "job:run-loop": "ts-node src/scripts/runLoop.ts",
-    "gemini:smoke": "ts-node src/scripts/geminiSmokeTest.ts"
+    "gemini:smoke": "ts-node src/scripts/geminiSmokeTest.ts",
+    "exam:index": "ts-node src/scripts/generateExamIndex.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

@@ -89,3 +89,11 @@ export {
   FindingBoxV1Schema,
   FindingBoxV1,
 } from './general/v1/schemas';
+
+// Re-export exam-index v1 exports
+export {
+  ExamIndexSchema,
+  ExamIndex,
+  QuestionEntrySchema,
+  QuestionEntry,
+} from './exam-index/v1/schemas';
