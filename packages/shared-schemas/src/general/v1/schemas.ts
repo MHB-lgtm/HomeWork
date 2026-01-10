@@ -32,6 +32,9 @@ export const ScopeSchema = z.discriminatedUnion('type', [
  */
 export const QuestionEvaluationSchema = z.object({
   questionId: z.string(),
+  order: z.number().int().positive().optional(), // from examIndex
+  displayLabel: z.string().optional(), // from examIndex
+  promptText: z.string().optional(), // from examIndex (optional to store; recommended)
   pageIndices: z.array(z.number().int().nonnegative()).optional(), // from mapping (0-based for original submission)
   mappingConfidence: z.number().min(0).max(1).optional(), // 0..1
   findings: z.array(FindingSchema).min(3), // must have >=3 findings

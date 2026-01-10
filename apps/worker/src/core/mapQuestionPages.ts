@@ -39,11 +39,20 @@ function extractJsonFromText(text: string): string {
 
 export type MapQuestionPagesResult = { ok: true; mapping: QuestionMapping } | { ok: false; error: string };
 
+export type QuestionMetadata = {
+  displayLabel?: string;
+  aliases?: string[];
+  promptText?: string;
+};
+
 /**
  * Map questionId to page indices where its answer appears in the submission
  * Best-effort: failures don't fail the job
  */
-export async function mapQuestionPages(job: JobRecord): Promise<MapQuestionPagesResult> {
+export async function mapQuestionPages(
+  job: JobRecord,
+  questionMetadata?: QuestionMetadata
+): Promise<MapQuestionPagesResult> {
   try {
     const gradingMode = job.inputs.gradingMode || 'RUBRIC';
     const gradingScope = job.inputs.gradingScope || 'QUESTION';
@@ -73,11 +82,22 @@ export async function mapQuestionPages(job: JobRecord): Promise<MapQuestionPages
 
     console.log(`[worker] Mapping question ${questionId} pages for job ${job.id}`);
 
+    // Build prompt with question metadata if available
+    const questionContext = questionMetadata?.promptText
+      ? `QUESTION: ${questionMetadata.promptText}`
+      : questionMetadata?.displayLabel
+      ? `Question: ${questionMetadata.displayLabel}`
+      : `questionId="${questionId}"`;
+
+    const aliasesHint = questionMetadata?.aliases && questionMetadata.aliases.length > 0
+      ? `\nNote: This question may also be referred to as: ${questionMetadata.aliases.join(', ')}`
+      : '';
+
     // Build prompt
     const prompt = `You are analyzing a student's homework submission to locate where a specific question's answer appears.
 
 TASK:
-Locate where the student's answer to questionId="${questionId}" appears in the submission.
+Locate where the student's answer to ${questionContext} appears in the submission.${aliasesHint}
 
 IMPORTANT:
 - Return ONLY valid JSON (no markdown, no code fences, no explanations).

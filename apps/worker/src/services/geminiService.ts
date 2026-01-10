@@ -93,10 +93,13 @@ export class GeminiService {
     }
   }
 
-  async generateFromParts(parts: any[]): Promise<string> {
+  async generateFromParts(parts: any[], options?: { temperature?: number }): Promise<string> {
     try {
       // Get the model
-      const model = this.genAI.getGenerativeModel({ model: this.modelName });
+      const model = this.genAI.getGenerativeModel({ 
+        model: this.modelName,
+        generationConfig: options?.temperature !== undefined ? { temperature: options.temperature } : undefined,
+      });
 
       // Generate content
       const result = await model.generateContent({ contents: [{ role: 'user', parts }] });

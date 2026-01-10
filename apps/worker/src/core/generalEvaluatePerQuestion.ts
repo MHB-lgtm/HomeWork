@@ -11,6 +11,8 @@ import {
 import { listExamQuestionIds } from './listExamQuestionIds';
 import { mapQuestionPages } from './mapQuestionPages';
 import { extractMiniPdf } from './extractMiniPdf';
+import { loadExamIndexForWorker, resolveExamId } from './loadExamIndex';
+import { ExamIndex, QuestionEntry } from '@hg/shared-schemas';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -59,30 +61,128 @@ export async function generalEvaluatePerQuestion(job: JobRecord): Promise<Genera
     throw new Error('generalEvaluatePerQuestion can only be used for GENERAL grading mode');
   }
 
+  // Resolve examId (primary: from job.inputs.examId, fallback: infer from examFilePath)
+  const examId = await resolveExamId(job);
+  if (!examId) {
+    console.warn(`[worker] Cannot resolve examId for job ${job.id}, falling back to DOCUMENT scope`);
+    // Fallback: use single "DOCUMENT" questionId
+    const questionEntries = [{ questionId: 'DOCUMENT' }];
+    const examBuffer = await fs.readFile(job.inputs.examFilePath);
+    const examMimeType = inferMimeType(job.inputs.examFilePath);
+    const examBase64 = examBuffer.toString('base64');
+    const submissionBuffer = await fs.readFile(job.inputs.submissionFilePath);
+    const submissionMimeType = job.inputs.submissionMimeType || inferMimeType(job.inputs.submissionFilePath);
+    const submissionBase64 = submissionBuffer.toString('base64');
+    const scopeInstruction = 'Evaluate the ENTIRE submission document. Look for mistakes across all questions.';
+    const prompt = `You are a strict exam evaluator. Your task is to find ALL mistakes and strengths in the student's submission.
+
+IMPORTANT:
+- Return ONLY valid JSON (no markdown, no code fences, no explanations).
+- NO scoring. Only list findings (mistakes/issues and strengths).
+- Be strict: list every mistake and strength you can find.
+- No duplicates: merge similar issues into a single finding.
+- Use stable IDs: DOCUMENT-F1, DOCUMENT-F2, DOCUMENT-F3, ... (prefixed with DOCUMENT).
+
+${scopeInstruction}
+
+CRITICAL REQUIREMENTS:
+1) You MUST return at least 3 findings.
+2) You MUST include at least 1 finding with kind="strength" (what the student did well).
+3) You MUST include at least 1 finding with kind="issue" (mistakes/problems).
+4) For issues: include severity ("critical", "major", or "minor").
+5) For strengths: severity is optional/ignored.
+6) Confidence: 0.0 to 1.0 (how certain you are about this finding).
+7) Suggestion (optional): How to fix or improve.
+
+JSON format (strict):
+{
+  "questionId": "DOCUMENT",
+  "findings": [
+    {
+      "findingId": "DOCUMENT-F1",
+      "title": "<short title>",
+      "description": "<detailed description>",
+      "kind": "issue" | "strength",
+      "severity": "critical" | "major" | "minor",
+      "confidence": <number 0..1>,
+      "suggestion": "<optional suggestion>"
+    },
+    ...
+  ],
+  "overallSummary": "<optional summary>"
+}
+
+Return the JSON now:`;
+
+    const parts = [
+      { text: prompt },
+      { inlineData: { data: examBase64, mimeType: examMimeType } },
+      { inlineData: { data: submissionBase64, mimeType: submissionMimeType } },
+    ];
+
+    const geminiService = new GeminiService();
+    const rawOutput = await geminiService.generateFromParts(parts);
+    const jsonText = extractJsonFromText(rawOutput);
+    const parsed = JSON.parse(jsonText);
+    const findings = Array.isArray(parsed.findings) ? parsed.findings.map((f: unknown) => FindingSchema.parse(f)) : [];
+    
+    const result: GeneralEvaluation = {
+      examId: 'unknown',
+      scope: { type: 'DOCUMENT' },
+      questions: [{
+        questionId: 'DOCUMENT',
+        findings,
+        overallSummary: typeof parsed.overallSummary === 'string' ? parsed.overallSummary : undefined,
+      }],
+    };
+
+    return { type: 'general', result: GeneralEvaluationSchema.parse(result) };
+  }
+
   // Read exam file (required)
   const examBuffer = await fs.readFile(job.inputs.examFilePath);
   const examMimeType = inferMimeType(job.inputs.examFilePath);
   const examBase64 = examBuffer.toString('base64');
-  const examId = path.basename(job.inputs.examFilePath, path.extname(job.inputs.examFilePath));
 
-  // Determine questionIds
-  let questionIds: string[];
+  // Determine questionIds and question metadata
+  let questionEntries: Array<{ questionId: string; order?: number; displayLabel?: string; promptText?: string; aliases?: string[] }> = [];
+  
   if (gradingScope === 'QUESTION') {
     const questionId = job.inputs.questionId;
     if (!questionId) {
       throw new Error('questionId is required for QUESTION scope');
     }
-    questionIds = [questionId];
+    questionEntries = [{ questionId }];
   } else {
-    // DOCUMENT scope: list questionIds from rubrics
-    questionIds = await listExamQuestionIds(examId);
-    if (questionIds.length === 0) {
-      // Fallback: use single "DOCUMENT" questionId
-      questionIds = ['DOCUMENT'];
+    // DOCUMENT scope: try ExamIndex first, then fallback to rubrics
+    const examIndex = await loadExamIndexForWorker(examId);
+    if (examIndex && examIndex.questions && examIndex.questions.length > 0) {
+      // Use ExamIndex: sort by order and extract metadata
+      questionEntries = examIndex.questions
+        .sort((a, b) => a.order - b.order)
+        .map((q: QuestionEntry) => ({
+          questionId: q.id,
+          order: q.order,
+          displayLabel: q.displayLabel,
+          promptText: q.promptText,
+          aliases: q.aliases,
+        }));
+      console.log(`[worker] Using ExamIndex for examId=${examId}: ${questionEntries.length} questions`);
+    } else {
+      // Fallback: list questionIds from rubrics
+      const questionIds = await listExamQuestionIds(examId);
+      if (questionIds.length > 0) {
+        questionEntries = questionIds.map((id) => ({ questionId: id }));
+        console.log(`[worker] No examIndex for examId=${examId}, fallback to rubrics: ${questionIds.length} questions`);
+      } else {
+        // Final fallback: use single "DOCUMENT" questionId
+        questionEntries = [{ questionId: 'DOCUMENT' }];
+        console.log(`[worker] No examIndex or rubrics for examId=${examId}, using DOCUMENT scope`);
+      }
     }
   }
 
-  console.log(`[worker] Processing General mode per-question job ${job.id}: scope=${gradingScope}, questions=${questionIds.length}`);
+  console.log(`[worker] Processing General mode per-question job ${job.id}: scope=${gradingScope}, questions=${questionEntries.length}`);
 
   // Read submission file once
   const submissionBuffer = await fs.readFile(job.inputs.submissionFilePath);
@@ -92,8 +192,9 @@ export async function generalEvaluatePerQuestion(job: JobRecord): Promise<Genera
   // Process each question sequentially
   const questionEvaluations: QuestionEvaluation[] = [];
 
-  for (const questionId of questionIds) {
-    console.log(`[worker] Processing question ${questionId}...`);
+  for (const questionEntry of questionEntries) {
+    const { questionId, order, displayLabel, promptText, aliases } = questionEntry;
+    console.log(`[worker] Processing question ${questionId}${displayLabel ? ` (${displayLabel})` : ''}...`);
 
     let pageIndices: number[] | undefined;
     let mappingConfidence: number | undefined;
@@ -101,7 +202,7 @@ export async function generalEvaluatePerQuestion(job: JobRecord): Promise<Genera
 
     // Step 1: Map pages (if not DOCUMENT)
     if (questionId !== 'DOCUMENT') {
-      // Create a temporary job-like object for mapping
+      // Create a temporary job-like object for mapping with question metadata
       const mappingJob: JobRecord = {
         ...job,
         inputs: {
@@ -110,7 +211,11 @@ export async function generalEvaluatePerQuestion(job: JobRecord): Promise<Genera
           gradingScope: 'QUESTION',
         },
       };
-      const mappingResult = await mapQuestionPages(mappingJob);
+      const mappingResult = await mapQuestionPages(mappingJob, {
+        displayLabel,
+        aliases: aliases || [],
+        promptText,
+      });
       if (mappingResult.ok) {
         pageIndices = mappingResult.mapping.pageIndices;
         mappingConfidence = mappingResult.mapping.confidence;
@@ -162,7 +267,9 @@ export async function generalEvaluatePerQuestion(job: JobRecord): Promise<Genera
     const scopeInstruction =
       questionId === 'DOCUMENT'
         ? 'Evaluate the ENTIRE submission document. Look for mistakes across all questions.'
-        : `Focus ONLY on questionId="${questionId}" from the exam file. Do NOT evaluate other questions.`;
+        : promptText
+        ? `Focus ONLY on this specific question from the exam:\n\nQUESTION: ${promptText}\n\n${displayLabel ? `(Label: ${displayLabel})` : `(Question ID: ${questionId})`}\n\nDo NOT evaluate other questions.`
+        : `Focus ONLY on questionId="${questionId}"${displayLabel ? ` (${displayLabel})` : ''} from the exam file. Do NOT evaluate other questions.`;
 
     const prompt = `You are a strict exam evaluator. Your task is to find ALL mistakes and strengths in the student's submission for a specific question.
 
@@ -276,9 +383,12 @@ Return the JSON now:`;
           throw new Error(`Invalid findings: must include at least 1 strength and 1 issue. Got ${strengths.length} strengths and ${issues.length} issues.`);
         }
 
-        // Build question evaluation
+        // Build question evaluation with metadata
         questionEval = {
           questionId,
+          order,
+          displayLabel,
+          promptText,
           pageIndices,
           mappingConfidence,
           findings,
@@ -309,7 +419,7 @@ Return the JSON now:`;
   // Build final GeneralEvaluation
   const scope =
     gradingScope === 'QUESTION'
-      ? { type: 'QUESTION' as const, questionId: questionIds[0] }
+      ? { type: 'QUESTION' as const, questionId: questionEntries[0].questionId }
       : { type: 'DOCUMENT' as const };
 
   const result: GeneralEvaluation = {

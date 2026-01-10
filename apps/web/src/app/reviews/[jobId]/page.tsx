@@ -311,11 +311,12 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       </Alert>
                       {/* Per-question findings */}
                       {questionEvaluations.map((qEval) => {
+                        const questionTitle = qEval.displayLabel || `Question ${qEval.questionId}`;
                         return (
                           <div key={qEval.questionId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                             <div className="flex items-center justify-between mb-3">
                               <h3 className="font-semibold text-base">
-                                Question {qEval.questionId}
+                                {questionTitle}
                                 {qEval.pageIndices && (
                                   <span className="text-sm text-gray-600 ml-2">
                                     (pages: {qEval.pageIndices.join(', ')})

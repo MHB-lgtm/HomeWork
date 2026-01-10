@@ -8,6 +8,7 @@ export type JobRecord = {
   createdAt: string;
   updatedAt: string;
   inputs: {
+    examId?: string; // Required going forward; optional for backward compatibility
     examFilePath: string;
     questionId: string;
     submissionFilePath: string;

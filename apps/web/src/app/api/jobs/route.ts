@@ -153,6 +153,7 @@ export async function POST(request: NextRequest) {
 
     // Create job
     const { jobId } = await createJob({
+      examId, // Store examId in job inputs
       examSourcePath: examFilePath,
       questionId: questionId || '', // Empty string if not required (for GENERAL + DOCUMENT)
       submissionSourcePath: submissionPath,
