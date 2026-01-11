@@ -361,11 +361,16 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* PDF/Image Area - Left Column with own scrollbar */}
           <div className="lg:col-span-2 h-full flex flex-col overflow-hidden">
-            <Card className="h-full flex flex-col overflow-hidden">
-              <CardHeader className="shrink-0">
-                <CardTitle>Submission {submissionMimeType === 'application/pdf' ? 'PDF' : 'Image'}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-y-auto p-4">
+            {/* Panel Chrome: PDF Viewer */}
+            <div className="h-full flex flex-col rounded-2xl border bg-white shadow-sm overflow-hidden">
+              {/* Panel Header */}
+              <div className="shrink-0 border-b px-4 py-3 bg-gray-50/50">
+                <h2 className="text-sm font-semibold text-gray-800">
+                  Submission {submissionMimeType === 'application/pdf' ? 'PDF' : 'Image'}
+                </h2>
+              </div>
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-4">
                 {submissionMimeType === 'application/pdf' ? (
                   <div className="space-y-4">
                     <PDFViewer
@@ -437,63 +442,73 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                     })}
                   </div>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           </div>
 
           {/* Sidebar - Right Column with own scrollbar */}
-          <div className="h-full flex flex-col overflow-hidden">
+          <div className="h-full flex flex-col items-start overflow-hidden">
             {resultMode === 'GENERAL' ? (
-              <Card className="h-full flex flex-col overflow-hidden">
-                <CardHeader className="shrink-0">
-                  <CardTitle>Findings</CardTitle>
-                </CardHeader>
-                <CardContent
+              <div className="h-[85%] w-full flex flex-col rounded-2xl border bg-white shadow-sm overflow-hidden">
+                {/* Panel Header */}
+                <div className="shrink-0 border-b px-4 py-3 bg-gray-50/50">
+                  <h2 className="text-sm font-semibold text-gray-800">Findings</h2>
+                </div>
+                {/* Scrollable Content */}
+                <div
                   ref={(el) => {
                     sidebarContainerRef.current = el;
                   }}
-                  className="flex-1 overflow-y-auto"
+                  className="flex-1 overflow-y-auto p-4"
                 >
                   {questionEvaluations.length > 0 ? (
-                    <div className="space-y-4">
-                      {/* Overall summary */}
+                    <>
+                      {/* Overall summary (outside of gap container) */}
                       {generalEvaluation && 'overallSummary' in generalEvaluation && generalEvaluation.overallSummary && (
-                        <Alert variant="default" className="mb-4">
+                        <Alert variant="default" className="mb-6">
                           <AlertTitle>Overall Summary</AlertTitle>
                           <AlertDescription>{generalEvaluation.overallSummary}</AlertDescription>
                         </Alert>
                       )}
-                      {/* Note about bbox */}
-                      <Alert variant="default" className="mb-4 border-blue-300 bg-blue-50">
-                        <AlertTitle>Note</AlertTitle>
-                        <AlertDescription>
-                          Evidence boxes (bbox) will be added in the next PR.
-                        </AlertDescription>
-                      </Alert>
-                      {/* Per-question findings */}
-                      {questionEvaluations.map((qEval) => {
-                        const questionTitle = qEval.displayLabel || `Question ${qEval.questionId}`;
-                        return (
-                          <div key={qEval.questionId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="font-semibold text-base">
-                                {questionTitle}
-                                {qEval.pageIndices && (
-                                  <span className="text-sm text-gray-600 ml-2">
-                                    (pages: {qEval.pageIndices.join(', ')})
-                                  </span>
-                                )}
-                              </h3>
-                              <Badge variant="secondary" className="text-xs">
-                                {qEval.findings.length} finding{qEval.findings.length !== 1 ? 's' : ''}
-                              </Badge>
+                      
+                      {/* Question Groups Container - CRITICAL: flex-col with gap-8 ensures spacing */}
+                      <div className="flex flex-col gap-8">
+                        {questionEvaluations.map((qEval, qIndex) => {
+                          const questionTitle = qEval.displayLabel || `Question ${qEval.questionId}`;
+                          return (
+                            <div 
+                              key={qEval.questionId} 
+                              className="bg-gradient-to-br from-white to-gray-50/30 border border-gray-200 rounded-xl p-5 shadow-sm"
+                            >
+                            {/* Question Header */}
+                            <div className="mb-4 pb-3 border-b border-gray-200">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <h3 className="font-bold text-base text-gray-900 mb-1">
+                                    {questionTitle}
+                                  </h3>
+                                  {qEval.pageIndices && (
+                                    <p className="text-xs text-gray-500">
+                                      Pages: {qEval.pageIndices.join(', ')}
+                                    </p>
+                                  )}
+                                </div>
+                                <Badge variant="secondary" className="text-xs shrink-0">
+                                  {qEval.findings.length} finding{qEval.findings.length !== 1 ? 's' : ''}
+                                </Badge>
+                              </div>
                             </div>
+
+                            {/* Question Summary (if exists) */}
                             {qEval.overallSummary && (
-                              <div className="mb-3 text-sm text-gray-700 bg-white p-2 rounded border border-gray-200">
-                                <strong>Summary:</strong> {qEval.overallSummary}
+                              <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                <p className="text-xs font-semibold text-blue-900 mb-1">Summary</p>
+                                <p className="text-sm text-gray-700">{qEval.overallSummary}</p>
                               </div>
                             )}
-                            <div className="space-y-2">
+
+                            {/* Findings List with spacing */}
+                            <div className="flex flex-col gap-3">
                               {qEval.findings.map((finding) => {
                                 const matchingAnnotations = findingsToAnnotations.get(finding.findingId) || [];
                                 const hasBoxes = matchingAnnotations.length > 0;
@@ -508,14 +523,14 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                     id={`sidebar-finding-${finding.findingId}`}
                                     onClick={() => handleFindingClick(finding.findingId)}
                                     className={cn(
-                                      'p-3 rounded-lg border bg-white transition-all cursor-pointer',
+                                      'p-3 rounded-lg border transition-colors cursor-pointer',
                                       isSelected
                                         ? 'border-red-500 bg-red-50 shadow-md'
                                         : isOnActivePage
-                                        ? 'border-l-4 border-l-blue-500 bg-blue-50/30'
+                                        ? 'border-l-4 border-l-blue-500 bg-blue-50/50'
                                         : hasBoxes
-                                        ? 'border-blue-300 hover:border-blue-500 hover:shadow-sm'
-                                        : 'border-gray-200 hover:border-gray-300'
+                                        ? 'border-gray-300 bg-white hover:bg-gray-50 hover:border-blue-400'
+                                        : 'border-gray-200 bg-white/60 hover:bg-gray-50'
                                     )}
                                   >
                                     <div className="flex items-start justify-between gap-2 mb-1">
@@ -562,7 +577,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                           </div>
                         );
                       })}
-                    </div>
+                      </div>
+                    </>
                   ) : (
                     <div className="text-center py-8">
                       <div className="text-gray-400 mb-2">
@@ -586,18 +602,20 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       </p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             ) : (
-              <Card className="h-full flex flex-col overflow-hidden">
-                <CardHeader className="shrink-0">
-                  <CardTitle>Annotations</CardTitle>
-                </CardHeader>
-                <CardContent
+              <div className="h-[85%] w-full flex flex-col rounded-2xl border bg-white shadow-sm overflow-hidden">
+                {/* Panel Header */}
+                <div className="shrink-0 border-b px-4 py-3 bg-gray-50/50">
+                  <h2 className="text-sm font-semibold text-gray-800">Annotations</h2>
+                </div>
+                {/* Scrollable Content */}
+                <div
                   ref={(el) => {
                     sidebarContainerRef.current = el;
                   }}
-                  className="flex-1 overflow-y-auto"
+                  className="flex-1 overflow-y-auto p-4"
                 >
                   {pageAnnotations.length === 0 ? (
                     <div className="text-center py-8">
@@ -689,8 +707,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       })}
                     </div>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
           </div>
           </div>
