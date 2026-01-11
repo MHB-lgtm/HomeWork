@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { getJob } from '../../../lib/jobsClient';
 import { getReview, ReviewRecordV1 } from '../../../lib/reviewsClient';
@@ -19,8 +19,21 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [review, setReview] = useState<ReviewRecordV1 | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(null);
+  const [activePageIndex, setActivePageIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const programmaticScrollRef = useRef<{ lockUntilMs: number; targetPageIndex: number | null }>({
+    lockUntilMs: 0,
+    targetPageIndex: null,
+  });
+  const sidebarContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  const LOCK_MS = 800; // Lock duration in milliseconds
+  
+  // Helper to check if scroll is locked
+  const isLocked = (): boolean => {
+    return Date.now() < programmaticScrollRef.current.lockUntilMs;
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -169,9 +182,128 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
         if (b.confidence === undefined) return -1;
         return b.confidence - a.confidence;
       });
-      setSelectedAnnotationId(sorted[0].id);
+      const targetAnnotation = sorted[0];
+      setSelectedAnnotationId(targetAnnotation.id);
+      
+      // Set programmatic scroll lock with target page
+      programmaticScrollRef.current = {
+        lockUntilMs: Date.now() + LOCK_MS,
+        targetPageIndex: targetAnnotation.pageIndex,
+      };
     }
   };
+
+  // Handle page change from PDF viewer
+  const handlePageChange = (pageIndex: number) => {
+    const lock = programmaticScrollRef.current;
+    
+    // If locked and this is NOT the target page, ignore update (prevents scroll fighting)
+    if (isLocked() && lock.targetPageIndex !== null && pageIndex !== lock.targetPageIndex) {
+      return;
+    }
+    
+    // If we reached the target page, release lock early
+    if (lock.targetPageIndex !== null && pageIndex === lock.targetPageIndex) {
+      // Release after a small delay to avoid immediate re-entrancy
+      requestAnimationFrame(() => {
+        programmaticScrollRef.current.lockUntilMs = 0;
+        programmaticScrollRef.current.targetPageIndex = null;
+      });
+    }
+    
+    setActivePageIndex(pageIndex);
+  };
+
+  // Helper to scroll sidebar to a specific element
+  const scrollSidebarToElement = (targetElement: HTMLElement) => {
+    if (!targetElement || !sidebarContainerRef.current) {
+      return;
+    }
+    
+    const container = sidebarContainerRef.current;
+    
+    // Calculate scroll position using offsetTop (more reliable than getBoundingClientRect)
+    // Find the offset relative to the container
+    let offsetTop = 0;
+    let current: HTMLElement | null = targetElement;
+    while (current && current !== container) {
+      offsetTop += current.offsetTop;
+      current = current.offsetParent as HTMLElement | null;
+    }
+    
+    const padding = 8; // Small padding from top
+    
+    container.scrollTo({
+      top: offsetTop - padding,
+      behavior: 'smooth',
+    });
+  };
+
+  // Scroll sidebar to active page findings (when scrolling PDF)
+  useEffect(() => {
+    if (activePageIndex === null || isLocked() || !sidebarContainerRef.current) {
+      return;
+    }
+
+    // Find the first finding/annotation for this page
+    let targetElement: HTMLElement | null = null;
+
+    if (resultMode === 'GENERAL') {
+      // For General mode: find first finding that has annotations on this page
+      for (const qEval of questionEvaluations) {
+        for (const finding of qEval.findings) {
+          const matchingAnnotations = findingsToAnnotations.get(finding.findingId) || [];
+          const hasAnnotationOnPage = matchingAnnotations.some((ann) => ann.pageIndex === activePageIndex);
+          if (hasAnnotationOnPage) {
+            targetElement = document.getElementById(`sidebar-finding-${finding.findingId}`);
+            if (targetElement) break;
+          }
+        }
+        if (targetElement) break;
+      }
+    } else {
+      // For Rubric mode: find first annotation on this page
+      const annotationOnPage = pageAnnotations.find((ann) => ann.pageIndex === activePageIndex);
+      if (annotationOnPage) {
+        targetElement = document.getElementById(`sidebar-annotation-${annotationOnPage.id}`);
+      }
+    }
+
+    if (targetElement) {
+      scrollSidebarToElement(targetElement);
+    }
+  }, [activePageIndex, resultMode, questionEvaluations, findingsToAnnotations, pageAnnotations]);
+
+  // Scroll sidebar to selected annotation (when clicking on bbox)
+  useEffect(() => {
+    if (!selectedAnnotationId || !sidebarContainerRef.current) {
+      return;
+    }
+
+    // Find the corresponding sidebar element
+    let targetElement: HTMLElement | null = null;
+
+    if (resultMode === 'GENERAL') {
+      // For General mode: find the finding that contains this annotation
+      for (const qEval of questionEvaluations) {
+        for (const finding of qEval.findings) {
+          const matchingAnnotations = findingsToAnnotations.get(finding.findingId) || [];
+          if (matchingAnnotations.some((ann) => ann.id === selectedAnnotationId)) {
+            targetElement = document.getElementById(`sidebar-finding-${finding.findingId}`);
+            break;
+          }
+        }
+        if (targetElement) break;
+      }
+    } else {
+      // For Rubric mode: use annotation id directly
+      targetElement = document.getElementById(`sidebar-annotation-${selectedAnnotationId}`);
+    }
+
+    if (targetElement) {
+      scrollSidebarToElement(targetElement);
+    }
+  }, [selectedAnnotationId, resultMode, questionEvaluations, findingsToAnnotations]);
 
   if (loading) {
     return (
@@ -200,34 +332,40 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">Review: {jobId}</h1>
-          <div className="mb-4">
-            <Link href="/" className="text-blue-600 hover:text-blue-800 font-medium">
-              ← Back to Home
-            </Link>
+    <main className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+      {/* Header - Fixed height */}
+      <div className="shrink-0 p-4 md:p-8 border-b border-gray-200 bg-white">
+        <div className="max-w-[1600px] mx-auto">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link
+                href="/"
+                className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                ← Back to Home
+              </Link>
+              <h1 className="text-2xl font-bold text-gray-900">Review Job: {jobId}</h1>
+            </div>
+            {jobStatus && (
+              <Badge variant={jobStatus === 'completed' ? 'default' : jobStatus === 'failed' ? 'destructive' : 'outline'}>
+                {jobStatus}
+              </Badge>
+            )}
           </div>
-          {jobStatus !== 'DONE' && (
-            <Alert variant="default" className="mb-4 border-yellow-300 bg-yellow-50">
-              <AlertTitle>Note</AlertTitle>
-              <AlertDescription>
-                Job status is {jobStatus}. Annotations may not be available yet.
-              </AlertDescription>
-            </Alert>
-          )}
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Image with overlay */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
+      {/* Main Content - Takes remaining height */}
+      <div className="flex-1 overflow-hidden p-4 md:p-8">
+        <div className="max-w-[1600px] mx-auto h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+          {/* PDF/Image Area - Left Column with own scrollbar */}
+          <div className="lg:col-span-2 h-full flex flex-col overflow-hidden">
+            <Card className="h-full flex flex-col overflow-hidden">
+              <CardHeader className="shrink-0">
                 <CardTitle>Submission {submissionMimeType === 'application/pdf' ? 'PDF' : 'Image'}</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1 overflow-y-auto p-4">
                 {submissionMimeType === 'application/pdf' ? (
                   <div className="space-y-4">
                     <PDFViewer
@@ -235,9 +373,20 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       annotations={allAnnotations}
                       selectedAnnotationId={selectedAnnotationId}
                       hoveredAnnotationId={hoveredAnnotationId}
-                      onAnnotationClick={setSelectedAnnotationId}
+                      onAnnotationClick={(annotationId) => {
+                        setSelectedAnnotationId(annotationId);
+                        // Set programmatic scroll lock to prevent sidebar from jumping during PDF scroll
+                        const annotation = allAnnotations.find((ann) => ann.id === annotationId);
+                        if (annotation) {
+                          programmaticScrollRef.current = {
+                            lockUntilMs: Date.now() + LOCK_MS,
+                            targetPageIndex: annotation.pageIndex,
+                          };
+                        }
+                      }}
                       onAnnotationHover={setHoveredAnnotationId}
                       getCriterionLabel={getCriterionLabel}
+                      onPageChange={submissionMimeType === 'application/pdf' ? handlePageChange : undefined}
                     />
                   </div>
                 ) : (
@@ -256,7 +405,14 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       return (
                         <div
                           key={ann.id}
-                          onClick={() => setSelectedAnnotationId(ann.id)}
+                          onClick={() => {
+                            setSelectedAnnotationId(ann.id);
+                            // Set programmatic scroll lock
+                            programmaticScrollRef.current = {
+                              lockUntilMs: Date.now() + LOCK_MS,
+                              targetPageIndex: ann.pageIndex,
+                            };
+                          }}
                           onMouseEnter={() => setHoveredAnnotationId(ann.id)}
                           onMouseLeave={() => setHoveredAnnotationId(null)}
                           className={cn(
@@ -285,14 +441,19 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
             </Card>
           </div>
 
-          {/* Side panel */}
-          <div>
+          {/* Sidebar - Right Column with own scrollbar */}
+          <div className="h-full flex flex-col overflow-hidden">
             {resultMode === 'GENERAL' ? (
-              <Card>
-                <CardHeader>
+              <Card className="h-full flex flex-col overflow-hidden">
+                <CardHeader className="shrink-0">
                   <CardTitle>Findings</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent
+                  ref={(el) => {
+                    sidebarContainerRef.current = el;
+                  }}
+                  className="flex-1 overflow-y-auto"
+                >
                   {questionEvaluations.length > 0 ? (
                     <div className="space-y-4">
                       {/* Overall summary */}
@@ -338,15 +499,20 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                 const hasBoxes = matchingAnnotations.length > 0;
                                 const isSelected = matchingAnnotations.some((ann) => ann.id === selectedAnnotationId);
                                 const isStrength = finding.kind === 'strength';
+                                // Check if this finding is on the active page
+                                const isOnActivePage = activePageIndex !== null && matchingAnnotations.some((ann) => ann.pageIndex === activePageIndex);
                                 
                                 return (
                                   <div
                                     key={finding.findingId}
+                                    id={`sidebar-finding-${finding.findingId}`}
                                     onClick={() => handleFindingClick(finding.findingId)}
                                     className={cn(
                                       'p-3 rounded-lg border bg-white transition-all cursor-pointer',
                                       isSelected
                                         ? 'border-red-500 bg-red-50 shadow-md'
+                                        : isOnActivePage
+                                        ? 'border-l-4 border-l-blue-500 bg-blue-50/30'
                                         : hasBoxes
                                         ? 'border-blue-300 hover:border-blue-500 hover:shadow-sm'
                                         : 'border-gray-200 hover:border-gray-300'
@@ -423,11 +589,16 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 </CardContent>
               </Card>
             ) : (
-              <Card>
-                <CardHeader>
+              <Card className="h-full flex flex-col overflow-hidden">
+                <CardHeader className="shrink-0">
                   <CardTitle>Annotations</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent
+                  ref={(el) => {
+                    sidebarContainerRef.current = el;
+                  }}
+                  className="flex-1 overflow-y-auto"
+                >
                   {pageAnnotations.length === 0 ? (
                     <div className="text-center py-8">
                       <div className="text-gray-400 mb-2">
@@ -455,21 +626,32 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       {pageAnnotations.map((ann) => {
                         const isSelected = selectedAnnotationId === ann.id;
                         const isHovered = hoveredAnnotationId === ann.id;
+                        const isOnActivePage = activePageIndex !== null && ann.pageIndex === activePageIndex;
                         
                         return (
                           <div
                             key={ann.id}
-                            onClick={() => setSelectedAnnotationId(ann.id)}
+                            id={`sidebar-annotation-${ann.id}`}
+                            onClick={() => {
+                              setSelectedAnnotationId(ann.id);
+                              // Set programmatic scroll lock with target page
+                              programmaticScrollRef.current = {
+                                lockUntilMs: Date.now() + LOCK_MS,
+                                targetPageIndex: ann.pageIndex,
+                              };
+                            }}
                             onMouseEnter={() => setHoveredAnnotationId(ann.id)}
                             onMouseLeave={() => setHoveredAnnotationId(null)}
                             className={cn(
                               'p-3 rounded-lg border cursor-pointer transition-all',
+                              // Selected state (highest priority)
+                              isSelected && 'border-red-500 bg-red-50 shadow-sm',
+                              // Active page highlight (when not selected)
+                              !isSelected && isOnActivePage && 'border-l-4 border-l-blue-500 bg-blue-50/30',
+                              // Hover state (not selected, not active page)
+                              !isSelected && !isOnActivePage && isHovered && 'border-blue-400 bg-blue-50',
                               // Default state
-                              !isSelected && !isHovered && 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50',
-                              // Hover state (not selected)
-                              !isSelected && isHovered && 'border-blue-400 bg-blue-50',
-                              // Selected state
-                              isSelected && 'border-red-500 bg-red-50 shadow-sm'
+                              !isSelected && !isOnActivePage && !isHovered && 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
                             )}
                           >
                             <div className="flex items-start justify-between gap-2 mb-1">
@@ -510,6 +692,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 </CardContent>
               </Card>
             )}
+          </div>
           </div>
         </div>
       </div>

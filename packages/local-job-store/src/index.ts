@@ -15,3 +15,10 @@ export {
   getOrCreateReview,
 } from './fileReviewStore';
 
+export {
+  getExamIndexPath,
+  loadExamIndex,
+  getOrCreateExamIndex,
+  saveExamIndex,
+} from './fileExamIndexStore';
+

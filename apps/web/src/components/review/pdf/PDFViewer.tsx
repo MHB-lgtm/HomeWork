@@ -28,6 +28,7 @@ interface PDFViewerProps {
   onAnnotationClick: (annotationId: string) => void;
   onAnnotationHover: (annotationId: string | null) => void;
   getCriterionLabel: (criterionId: string) => string;
+  onPageChange?: (pageIndex: number) => void;
 }
 
 export function PDFViewer({
@@ -38,6 +39,7 @@ export function PDFViewer({
   onAnnotationClick,
   onAnnotationHover,
   getCriterionLabel,
+  onPageChange,
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDimensions, setPageDimensions] = useState<Map<number, { width: number; height: number }>>(new Map());
@@ -48,6 +50,14 @@ export function PDFViewer({
   const [fetchError, setFetchError] = useState<{ status: number; contentType: string; message: string } | null>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const objectUrlRef = useRef<string | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const activePageRef = useRef<number | null>(null);
+  const ratioByPageRef = useRef<Map<number, number>>(new Map());
+  const pdfScrollContainerRef = useRef<HTMLElement | null>(null);
+  
+  // Constants for hysteresis
+  const MIN_SWITCH_DELTA = 0.05;
+  const MIN_ACTIVE_RATIO = 0.15;
 
   // Fetch PDF and create object URL
   useEffect(() => {
@@ -177,6 +187,131 @@ export function PDFViewer({
     }
   }, [selectedAnnotationId, annotations]);
 
+  // Find PDF scroll container (the element that scrolls the PDF pages)
+  // This runs after pages are rendered to find the actual scroll container
+  useEffect(() => {
+    if (!onPageChange || numPages === 0 || pageRefs.current.size === 0) {
+      return;
+    }
+
+    // Try to find the scroll container by looking for the parent that has overflow
+    const findScrollContainer = (): HTMLElement | null => {
+      const firstPage = pageRefs.current.values().next().value;
+      if (!firstPage) return null;
+      
+      let current: HTMLElement | null = firstPage.parentElement;
+      while (current) {
+        const style = window.getComputedStyle(current);
+        if (style.overflowY === 'auto' || style.overflowY === 'scroll' || style.overflow === 'auto' || style.overflow === 'scroll') {
+          return current;
+        }
+        current = current.parentElement;
+      }
+      return null;
+    };
+
+    const container = findScrollContainer();
+    if (container !== pdfScrollContainerRef.current) {
+      pdfScrollContainerRef.current = container;
+      // If observer exists, recreate it with new root
+      if (observerRef.current && pageRefs.current.size > 0) {
+        const oldObserver = observerRef.current;
+        oldObserver.disconnect();
+        
+        const newObserver = new IntersectionObserver(observerCallback, {
+          threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
+          rootMargin: '-20% 0px -20% 0px',
+          root: container || undefined,
+        });
+        
+        observerRef.current = newObserver;
+        // Re-observe all pages
+        pageRefs.current.forEach((pageElement) => {
+          if (pageElement) {
+            newObserver.observe(pageElement);
+          }
+        });
+      }
+    }
+  }, [numPages, onPageChange]);
+
+  // Observer callback (shared logic)
+  const observerCallback = (entries: IntersectionObserverEntry[]) => {
+    // Update ratios for all received entries
+    entries.forEach((entry) => {
+      const pageIndex = parseInt(entry.target.getAttribute('data-page-index') || '-1', 10);
+      if (pageIndex >= 0) {
+        ratioByPageRef.current.set(pageIndex, entry.intersectionRatio);
+      }
+    });
+
+    // Find the page with the highest intersection ratio
+    let maxRatio = 0;
+    let candidatePage: number | null = null;
+
+    ratioByPageRef.current.forEach((ratio, pageIndex) => {
+      if (ratio > maxRatio) {
+        maxRatio = ratio;
+        candidatePage = pageIndex;
+      }
+    });
+
+    // Apply hysteresis: only switch if significant change or current is too low
+    const currentPage = activePageRef.current;
+    const currentRatio = currentPage !== null ? ratioByPageRef.current.get(currentPage) || 0 : 0;
+
+    if (candidatePage !== null) {
+      const shouldSwitch =
+        candidatePage !== currentPage &&
+        (maxRatio >= currentRatio + MIN_SWITCH_DELTA || currentRatio < MIN_ACTIVE_RATIO);
+
+      if (shouldSwitch && onPageChange) {
+        activePageRef.current = candidatePage;
+        onPageChange(candidatePage);
+      }
+    }
+  };
+
+  // Set up IntersectionObserver to detect active page
+  useEffect(() => {
+    if (!onPageChange || numPages === 0) {
+      return;
+    }
+
+    // Cleanup previous observer
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+    }
+
+    // Create new observer with correct root (use current container if available)
+    const observer = new IntersectionObserver(
+      observerCallback,
+      {
+        threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0], // Multiple thresholds for better detection
+        rootMargin: '-20% 0px -20% 0px', // Consider page active when it's in the middle 60% of viewport
+        root: pdfScrollContainerRef.current || undefined, // Use PDF scroll container if found, else window
+      }
+    );
+
+    observerRef.current = observer;
+
+    // Observe all existing page elements
+    pageRefs.current.forEach((pageElement) => {
+      if (pageElement) {
+        observer.observe(pageElement);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+      ratioByPageRef.current.clear();
+    };
+  }, [numPages, onPageChange]);
+
   const groupedAnnotations = annotationsByPage();
 
   // Show fetch error (from API call)
@@ -251,9 +386,26 @@ export function PDFViewer({
             return (
               <div
                 key={index}
+                id={`pdf-page-${index}`}
+                data-page-index={index}
                 ref={(el) => {
                   if (el) {
+                    // Store element in map
                     pageRefs.current.set(index, el);
+                    // Observe immediately if observer exists
+                    if (observerRef.current) {
+                      observerRef.current.observe(el);
+                    }
+                  } else {
+                    // Unobserve and remove from map on unmount
+                    if (observerRef.current) {
+                      const existingEl = pageRefs.current.get(index);
+                      if (existingEl) {
+                        observerRef.current.unobserve(existingEl);
+                      }
+                    }
+                    pageRefs.current.delete(index);
+                    ratioByPageRef.current.delete(index);
                   }
                 }}
                 className="relative inline-block border border-gray-200 rounded-lg overflow-visible bg-white shadow-sm"
