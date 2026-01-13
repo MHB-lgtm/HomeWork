@@ -20,6 +20,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(null);
   const [activePageIndex, setActivePageIndex] = useState<number | null>(null);
+  const [showStrengths, setShowStrengths] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const programmaticScrollRef = useRef<{ lockUntilMs: number; targetPageIndex: number | null }>({
@@ -171,6 +172,21 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     return map;
   }, [resultMode, review, questionEvaluations]);
 
+  // Precompute filtered findings per question based on "showStrengths" toggle
+  const filteredQuestionEvaluations = useMemo(() => {
+    return questionEvaluations.map((qEval) => {
+      const visibleFindings = showStrengths
+        ? qEval.findings
+        : qEval.findings.filter((finding) => finding.kind !== 'strength');
+      return { ...qEval, visibleFindings };
+    });
+  }, [questionEvaluations, showStrengths]);
+
+  const hasVisibleFindings = useMemo(
+    () => filteredQuestionEvaluations.some((qEval) => qEval.visibleFindings.length > 0),
+    [filteredQuestionEvaluations]
+  );
+
   // Handle finding click: select first matching annotation
   const handleFindingClick = (findingId: string) => {
     const matchingAnnotations = findingsToAnnotations.get(findingId);
@@ -309,7 +325,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     return (
       <main className="min-h-screen bg-gray-50 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-slate-600">Loading...</p>
         </div>
       </main>
     );
@@ -332,19 +348,19 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   }
 
   return (
-    <main className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <main className="h-screen review-page-bg flex flex-col overflow-hidden text-slate-900">
       {/* Header - Fixed height */}
-      <div className="shrink-0 p-4 md:p-8 border-b border-gray-200 bg-white">
+      <div className="shrink-0 p-4 md:p-8 border-b border-slate-200/80 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 shadow-sm">
         <div className="max-w-[1600px] mx-auto">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Link
                 href="/"
-                className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="inline-flex items-center text-sm text-slate-600 hover:text-blue-700 transition-colors"
               >
-                ← Back to Home
+                Back to Home
               </Link>
-              <h1 className="text-2xl font-bold text-gray-900">Review Job: {jobId}</h1>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Review Job: {jobId}</h1>
             </div>
             {jobStatus && (
               <Badge variant={jobStatus === 'completed' ? 'default' : jobStatus === 'failed' ? 'destructive' : 'outline'}>
@@ -362,15 +378,15 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
           {/* PDF/Image Area - Left Column with own scrollbar */}
           <div className="lg:col-span-2 h-full flex flex-col overflow-hidden">
             {/* Panel Chrome: PDF Viewer */}
-            <div className="h-full flex flex-col rounded-2xl border bg-white shadow-sm overflow-hidden">
+            <div className="h-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
               {/* Panel Header */}
-              <div className="shrink-0 border-b px-4 py-3 bg-gray-50/50">
-                <h2 className="text-sm font-semibold text-gray-800">
+              <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
+                <h2 className="text-sm font-semibold text-slate-900">
                   Submission {submissionMimeType === 'application/pdf' ? 'PDF' : 'Image'}
                 </h2>
               </div>
               {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 review-scrollbar review-scroll-padding">
                 {submissionMimeType === 'application/pdf' ? (
                   <div className="space-y-4">
                     <PDFViewer
@@ -399,7 +415,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                     <img
                       src={`/api/jobs/${jobId}/submission`}
                       alt="Student submission"
-                      className="w-full h-auto block border border-gray-200 rounded-lg"
+                      className="w-full h-auto block border border-slate-200 rounded-lg"
                     />
                     {/* Overlay bounding boxes */}
                     {pageAnnotations.map((ann) => {
@@ -449,46 +465,59 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
           {/* Sidebar - Right Column with own scrollbar */}
           <div className="h-full flex flex-col items-start overflow-hidden">
             {resultMode === 'GENERAL' ? (
-              <div className="h-[85%] w-full flex flex-col rounded-2xl border bg-white shadow-sm overflow-hidden">
+              <div className="h-[85%] w-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
                 {/* Panel Header */}
-                <div className="shrink-0 border-b px-4 py-3 bg-gray-50/50">
-                  <h2 className="text-sm font-semibold text-gray-800">Findings</h2>
+                <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold text-slate-900">Findings</h2>
+                    <label className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-blue-600"
+                        checked={showStrengths}
+                        onChange={(e) => setShowStrengths(e.target.checked)}
+                      />
+                      Show strengths
+                    </label>
+                  </div>
                 </div>
                 {/* Scrollable Content */}
                 <div
                   ref={(el) => {
                     sidebarContainerRef.current = el;
                   }}
-                  className="flex-1 overflow-y-auto p-4"
+                  className="flex-1 overflow-y-auto p-4 review-scrollbar review-scroll-padding"
                 >
-                  {questionEvaluations.length > 0 ? (
+                  {hasVisibleFindings ? (
                     <>
                       {/* Overall summary (outside of gap container) */}
                       {generalEvaluation && 'overallSummary' in generalEvaluation && generalEvaluation.overallSummary && (
                         <Alert variant="default" className="mb-6">
-                          <AlertTitle>Overall Summary</AlertTitle>
-                          <AlertDescription>{generalEvaluation.overallSummary}</AlertDescription>
+                          <AlertTitle className="text-slate-900">Overall Summary</AlertTitle>
+                          <AlertDescription className="text-slate-700">{generalEvaluation.overallSummary}</AlertDescription>
                         </Alert>
                       )}
                       
                       {/* Question Groups Container - CRITICAL: flex-col with gap-8 ensures spacing */}
                       <div className="flex flex-col gap-8">
-                        {questionEvaluations.map((qEval, qIndex) => {
+                        {filteredQuestionEvaluations
+                          .filter((qEval) => qEval.visibleFindings.length > 0)
+                          .map((qEval) => {
                           const questionTitle = qEval.displayLabel || `Question ${qEval.questionId}`;
                           return (
                             <div 
                               key={qEval.questionId} 
-                              className="bg-gradient-to-br from-white to-gray-50/30 border border-gray-200 rounded-xl p-5 shadow-sm"
+                              className="bg-gradient-to-br from-white to-sky-50/40 border border-slate-200/80 rounded-xl p-5 shadow-[0_12px_35px_rgba(15,23,42,0.05)]"
                             >
                             {/* Question Header */}
-                            <div className="mb-4 pb-3 border-b border-gray-200">
+                            <div className="mb-4 pb-3 border-b border-slate-200/70">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
-                                  <h3 className="font-bold text-base text-gray-900 mb-1">
+                                  <h3 className="font-bold text-base text-slate-900 mb-1">
                                     {questionTitle}
                                   </h3>
                                   {qEval.pageIndices && (
-                                    <p className="text-xs text-gray-500">
+                                    <p className="text-xs text-slate-500">
                                       Pages: {qEval.pageIndices.join(', ')}
                                     </p>
                                   )}
@@ -501,15 +530,15 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
                             {/* Question Summary (if exists) */}
                             {qEval.overallSummary && (
-                              <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                              <div className="mb-4 p-3 bg-blue-50/70 border border-blue-100 rounded-lg">
                                 <p className="text-xs font-semibold text-blue-900 mb-1">Summary</p>
-                                <p className="text-sm text-gray-700">{qEval.overallSummary}</p>
+                                <p className="text-sm text-slate-700">{qEval.overallSummary}</p>
                               </div>
                             )}
 
                             {/* Findings List with spacing */}
                             <div className="flex flex-col gap-3">
-                              {qEval.findings.map((finding) => {
+                              {qEval.visibleFindings.map((finding) => {
                                 const matchingAnnotations = findingsToAnnotations.get(finding.findingId) || [];
                                 const hasBoxes = matchingAnnotations.length > 0;
                                 const isSelected = matchingAnnotations.some((ann) => ann.id === selectedAnnotationId);
@@ -523,14 +552,14 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                     id={`sidebar-finding-${finding.findingId}`}
                                     onClick={() => handleFindingClick(finding.findingId)}
                                     className={cn(
-                                      'p-3 rounded-lg border transition-colors cursor-pointer',
+                                      'p-3 rounded-lg border transition-all cursor-pointer shadow-sm',
                                       isSelected
                                         ? 'border-red-500 bg-red-50 shadow-md'
                                         : isOnActivePage
                                         ? 'border-l-4 border-l-blue-500 bg-blue-50/50'
                                         : hasBoxes
-                                        ? 'border-gray-300 bg-white hover:bg-gray-50 hover:border-blue-400'
-                                        : 'border-gray-200 bg-white/60 hover:bg-gray-50'
+                                        ? 'border-slate-300 bg-white/90 hover:bg-blue-50/80 hover:border-blue-400'
+                                        : 'border-slate-200 bg-white/70 hover:bg-slate-50/80'
                                     )}
                                   >
                                     <div className="flex items-start justify-between gap-2 mb-1">
@@ -542,13 +571,13 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                           <Badge variant="default" className="text-xs bg-green-500">
                                             Strength
                                           </Badge>
-                                        ) : (
-                                          finding.severity && (
-                                            <Badge variant={getSeverityVariant(finding.severity)} className="text-xs">
-                                              {finding.severity}
-                                            </Badge>
-                                          )
-                                        )}
+                        ) : (
+                          finding.severity && (
+                            <Badge variant={getSeverityVariant(finding.severity)} className="text-xs">
+                              {finding.severity}
+                            </Badge>
+                          )
+                        )}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 mt-2 mb-2">
@@ -561,13 +590,13 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="text-sm text-gray-700 mb-2">
+                                    <div className="text-sm text-slate-700 mb-2">
                                       {finding.description}
                                     </div>
                                     {finding.suggestion && (
-                                      <div className="mt-2 pt-2 border-t border-gray-200">
-                                        <div className="text-xs font-medium text-gray-700 mb-1">Suggestion:</div>
-                                        <div className="text-sm text-gray-600">{finding.suggestion}</div>
+                                      <div className="mt-2 pt-2 border-t border-slate-200">
+                                        <div className="text-xs font-medium text-slate-700 mb-1">Suggestion:</div>
+                                        <div className="text-sm text-slate-600">{finding.suggestion}</div>
                                       </div>
                                     )}
                                   </div>
@@ -580,8 +609,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       </div>
                     </>
                   ) : (
-                    <div className="text-center py-8">
-                      <div className="text-gray-400 mb-2">
+                    <div className="text-center py-8 text-slate-700">
+                      <div className="text-slate-400 mb-2">
                         <svg
                           className="mx-auto h-12 w-12"
                           fill="none"
@@ -596,8 +625,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                           />
                         </svg>
                       </div>
-                      <p className="text-gray-600 font-medium">No findings were identified.</p>
-                      <p className="text-sm text-gray-500 mt-2">
+                      <p className="text-slate-700 font-medium">No findings were identified.</p>
+                      <p className="text-sm text-slate-500 mt-2">
                         {generalEvaluation?.overallSummary || 'The submission appears to be correct.'}
                       </p>
                     </div>
@@ -605,21 +634,21 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 </div>
               </div>
             ) : (
-              <div className="h-[85%] w-full flex flex-col rounded-2xl border bg-white shadow-sm overflow-hidden">
+              <div className="h-[85%] w-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
                 {/* Panel Header */}
-                <div className="shrink-0 border-b px-4 py-3 bg-gray-50/50">
-                  <h2 className="text-sm font-semibold text-gray-800">Annotations</h2>
+                <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
+                  <h2 className="text-sm font-semibold text-slate-900">Annotations</h2>
                 </div>
                 {/* Scrollable Content */}
                 <div
                   ref={(el) => {
                     sidebarContainerRef.current = el;
                   }}
-                  className="flex-1 overflow-y-auto p-4"
+                  className="flex-1 overflow-y-auto p-4 review-scrollbar review-scroll-padding"
                 >
                   {pageAnnotations.length === 0 ? (
-                    <div className="text-center py-8">
-                      <div className="text-gray-400 mb-2">
+                    <div className="text-center py-8 text-slate-700">
+                      <div className="text-slate-400 mb-2">
                         <svg
                           className="mx-auto h-12 w-12"
                           fill="none"
@@ -634,8 +663,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                           />
                         </svg>
                       </div>
-                      <p className="text-gray-600 font-medium">No annotations were generated for this job.</p>
-                      <p className="text-sm text-gray-500 mt-2">
+                      <p className="text-slate-700 font-medium">No annotations were generated for this job.</p>
+                      <p className="text-sm text-slate-500 mt-2">
                         The AI did not identify any mistakes in this submission.
                       </p>
                     </div>
@@ -661,15 +690,15 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             onMouseEnter={() => setHoveredAnnotationId(ann.id)}
                             onMouseLeave={() => setHoveredAnnotationId(null)}
                             className={cn(
-                              'p-3 rounded-lg border cursor-pointer transition-all',
+                              'p-3 rounded-lg border cursor-pointer transition-all shadow-sm',
                               // Selected state (highest priority)
-                              isSelected && 'border-red-500 bg-red-50 shadow-sm',
+                              isSelected && 'border-red-500 bg-red-50 shadow-md',
                               // Active page highlight (when not selected)
-                              !isSelected && isOnActivePage && 'border-l-4 border-l-blue-500 bg-blue-50/30',
+                              !isSelected && isOnActivePage && 'border-l-4 border-l-blue-500 bg-blue-50/40',
                               // Hover state (not selected, not active page)
-                              !isSelected && !isOnActivePage && isHovered && 'border-blue-400 bg-blue-50',
+                              !isSelected && !isOnActivePage && isHovered && 'border-blue-400 bg-blue-50/80',
                               // Default state
-                              !isSelected && !isOnActivePage && !isHovered && 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50'
+                              !isSelected && !isOnActivePage && !isHovered && 'border-slate-200 bg-white/90 hover:border-blue-300 hover:bg-blue-50/60'
                             )}
                           >
                             <div className="flex items-start justify-between gap-2 mb-1">
@@ -694,12 +723,12 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                   Page {ann.pageIndex + 1}
                                 </Badge>
                               )}
-                              <span className="text-xs text-gray-500">{ann.criterionId}</span>
+                              <span className="text-xs text-slate-500">{ann.criterionId}</span>
                             </div>
                             {isSelected && ann.comment && (
-                              <div className="mt-3 pt-3 border-t border-gray-200">
-                                <div className="text-xs font-medium text-gray-700 mb-1">Comment:</div>
-                                <div className="text-sm text-gray-600">{ann.comment}</div>
+                              <div className="mt-3 pt-3 border-t border-slate-200">
+                                <div className="text-xs font-medium text-slate-700 mb-1">Comment:</div>
+                                <div className="text-sm text-slate-600">{ann.comment}</div>
                               </div>
                             )}
                           </div>
