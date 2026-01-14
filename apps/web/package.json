@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hg/local-job-store": "workspace:*",
+    "@hg/local-course-store": "workspace:*",
     "@hg/shared-schemas": "workspace:*",
     "clsx": "^2.1.1",
     "next": "^14.0.0",
