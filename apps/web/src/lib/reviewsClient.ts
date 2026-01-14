@@ -6,6 +6,19 @@ export type ReviewRecordV1 = {
   annotations: any[];
 };
 
+export type ReviewSummary = {
+  jobId: string;
+  status: string;
+  examId?: string;
+  questionId?: string;
+  gradingMode?: 'RUBRIC' | 'GENERAL';
+  gradingScope?: 'QUESTION' | 'DOCUMENT';
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  annotationCount: number;
+  hasResult: boolean;
+};
+
 /**
  * Get a review record by jobId
  */
@@ -41,6 +54,38 @@ export async function getReview(jobId: string): Promise<
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Failed to fetch review',
+    };
+  }
+}
+
+/**
+ * List all reviews (summaries)
+ */
+export async function listReviews(): Promise<
+  | { ok: true; data: ReviewSummary[] }
+  | { ok: false; error: string; status?: number }
+> {
+  try {
+    const response = await fetch('/api/reviews');
+
+    const data = await response.json().catch(() => ({
+      ok: false,
+      error: 'Failed to parse response',
+    }));
+
+    if (!response.ok || !data.ok) {
+      return {
+        ok: false,
+        error: data.error || 'Failed to fetch reviews',
+        status: response.status,
+      };
+    }
+
+    return { ok: true, data: data.data as ReviewSummary[] };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch reviews',
     };
   }
 }
