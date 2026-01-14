@@ -58,6 +58,36 @@ export {
   normalizeAndValidateRubricEvaluation,
 } from './rubric/v1/normalize';
 
+// Re-export course v1 exports
+export {
+  CourseSchema,
+  Course,
+  LectureSchema,
+  Lecture,
+  ChunkAnchorsSchema,
+  ChunkAnchors,
+  CourseChunkSchema,
+  CourseChunk,
+  RagManifestSchema,
+  RagManifest,
+  StudyPointerAnchorSchema,
+  StudyPointerAnchor,
+  StudyPointerDeepLinkSchema,
+  StudyPointerDeepLink,
+  StudyPointerV1Schema,
+  StudyPointerV1,
+  RagQueryRequestV1Schema,
+  RagQueryRequestV1,
+  ChunkHitV1Schema,
+  ChunkHitV1,
+  RagQueryResponseV1Schema,
+  RagQueryResponseV1,
+  SuggestRequestV1Schema,
+  SuggestRequestV1,
+  SuggestResponseV1Schema,
+  SuggestResponseV1,
+} from './course/v1/schemas';
+
 // Re-export review v1 exports
 export {
   BBoxNormSchema,

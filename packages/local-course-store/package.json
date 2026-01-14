@@ -1,0 +1,19 @@
+{
+  "name": "@hg/local-course-store",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local file-based course and lecture store for homework grader",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc --watch -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hg/shared-schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
