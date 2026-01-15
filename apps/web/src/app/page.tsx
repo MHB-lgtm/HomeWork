@@ -259,6 +259,11 @@ export default function Home() {
                   Manage Exams
                 </Button>
               </Link>
+              <Link href="/courses">
+                <Button variant="outline" size="sm">
+                  Manage Courses
+                </Button>
+              </Link>
               <Link href="/rubrics">
                 <Button variant="outline" size="sm">
                   Edit Rubrics

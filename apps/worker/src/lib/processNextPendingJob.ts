@@ -3,6 +3,7 @@ import { gradeSubmission } from '../core/gradeSubmission';
 import { generalEvaluatePerQuestion } from '../core/generalEvaluatePerQuestion';
 import { localizeMistakes } from '../core/localizeMistakes';
 import { localizeFindingsPerQuestion } from '../core/localizeFindingsPerQuestion';
+import { attachStudyPointers } from '../core/attachStudyPointers';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 
@@ -126,6 +127,17 @@ export async function processNextPendingJob(): Promise<ProcessResult> {
         await saveReview(review);
         console.warn(`[job:${jobId}] annotations generation failed: ${localizationResult.error}`);
       }
+    }
+
+    // Attach study pointers (best-effort)
+    try {
+      const studyPointers = await attachStudyPointers({ job, resultJson });
+      if (studyPointers) {
+        resultJson.studyPointers = studyPointers;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[job:${jobId}] studyPointers failed: ${message}`);
     }
 
     // Complete the job

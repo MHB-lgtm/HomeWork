@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
     const submissionMode = formData.get('submissionMode') as string | null;
     const gradingMode = (formData.get('gradingMode') as string | null) || 'RUBRIC';
     const gradingScope = (formData.get('gradingScope') as string | null) || 'QUESTION';
+    const courseId = (formData.get('courseId') as string | null)?.trim() || null;
 
     if (!submissionFile) {
       return NextResponse.json(
@@ -153,6 +154,7 @@ export async function POST(request: NextRequest) {
 
     // Create job
     const { jobId } = await createJob({
+      courseId: courseId || undefined,
       examId, // Store examId in job inputs
       examSourcePath: examFilePath,
       questionId: questionId || '', // Empty string if not required (for GENERAL + DOCUMENT)

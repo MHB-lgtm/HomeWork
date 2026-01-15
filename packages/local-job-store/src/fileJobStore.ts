@@ -47,6 +47,7 @@ export async function ensureJobDirs(): Promise<void> {
 }
 
 interface CreateJobParams {
+  courseId?: string;
   examId?: string; // Required going forward; optional for backward compatibility
   examSourcePath: string;
   questionId: string; // Required but can be empty string for GENERAL + DOCUMENT scope
@@ -98,6 +99,7 @@ export async function createJob(params: CreateJobParams): Promise<{ jobId: strin
       createdAt: now,
       updatedAt: now,
       inputs: {
+        courseId: params.courseId,
         examId: params.examId,
         examFilePath,
         questionId: params.questionId,

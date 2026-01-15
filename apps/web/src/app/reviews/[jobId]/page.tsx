@@ -4,12 +4,20 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { getJob } from '../../../lib/jobsClient';
 import { getReview, ReviewRecordV1 } from '../../../lib/reviewsClient';
-import { RubricEvaluationResult, Annotation, GeneralEvaluation, QuestionMapping, QuestionEvaluation } from '@hg/shared-schemas';
+import {
+  RubricEvaluationResult,
+  Annotation,
+  GeneralEvaluation,
+  QuestionMapping,
+  QuestionEvaluation,
+  StudyPointerV1,
+} from '@hg/shared-schemas';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
 import { cn } from '../../../lib/utils';
 import { PDFViewer } from '../../../components/review/pdf/PDFViewer';
+import { StudyPointersPanel } from '../../../components/review/StudyPointersPanel';
 
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const [jobId, setJobId] = useState<string | null>(null);
@@ -18,6 +26,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [submissionMimeType, setSubmissionMimeType] = useState<string | undefined>(undefined);
   const [review, setReview] = useState<ReviewRecordV1 | null>(null);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
+  const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(null);
   const [activePageIndex, setActivePageIndex] = useState<number | null>(null);
   const [showStrengths, setShowStrengths] = useState(true);
@@ -107,6 +116,80 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     return [];
   }, [generalEvaluation]);
 
+  useEffect(() => {
+    if (resultMode !== 'GENERAL' && selectedFindingId) {
+      setSelectedFindingId(null);
+    }
+  }, [resultMode, selectedFindingId]);
+
+  const pointersByTarget = useMemo(() => {
+    const raw = resultJson?.studyPointers?.pointersByTarget;
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((entry) => Array.isArray(entry?.pointers));
+  }, [resultJson]);
+
+  const findingQuestionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    questionEvaluations.forEach((qEval) => {
+      qEval.findings.forEach((finding) => {
+        if (!map.has(finding.findingId)) {
+          map.set(finding.findingId, qEval.questionId);
+        }
+      });
+    });
+    return map;
+  }, [questionEvaluations]);
+
+  const getPointersForSelection = (args: {
+    mode: string | undefined;
+    selectedAnnotation?: Annotation;
+    selectedFindingId?: string | null;
+    pointersByTarget: Array<{
+      targetType: 'criterion' | 'finding';
+      targetId: string;
+      questionId?: string;
+      pointers: StudyPointerV1[];
+    }>;
+    findingQuestionMap: Map<string, string>;
+  }): StudyPointerV1[] => {
+    const { mode, selectedAnnotation, selectedFindingId: findingIdOverride, pointersByTarget, findingQuestionMap } = args;
+    if (!pointersByTarget.length) return [];
+
+    if (mode === 'GENERAL') {
+      const findingId = findingIdOverride || selectedAnnotation?.criterionId;
+      if (!findingId) return [];
+      const questionId = findingQuestionMap.get(findingId);
+      const match = pointersByTarget.find(
+        (entry) =>
+          entry.targetType === 'finding' &&
+          entry.targetId === findingId &&
+          (entry.questionId == null || entry.questionId === questionId)
+      );
+      return match?.pointers ?? [];
+    }
+
+    const criterionId = selectedAnnotation?.criterionId;
+    if (!criterionId) return [];
+    const match = pointersByTarget.find(
+      (entry) => entry.targetType === 'criterion' && entry.targetId === criterionId
+    );
+    return match?.pointers ?? [];
+  };
+
+  const hasPointersForTarget = (args: {
+    targetType: 'criterion' | 'finding';
+    targetId: string;
+    questionId?: string;
+  }): boolean => {
+    return pointersByTarget.some(
+      (entry) =>
+        entry.targetType === args.targetType &&
+        entry.targetId === args.targetId &&
+        entry.pointers?.length > 0 &&
+        (entry.questionId == null || entry.questionId === args.questionId)
+    );
+  };
+
   // Get criterion label by ID (for Rubric mode)
   const getCriterionLabel = (criterionId: string): string => {
     if (!rubricEvaluation) return criterionId;
@@ -153,6 +236,16 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   // Get selected annotation details
   const selectedAnnotation = pageAnnotations.find((ann) => ann.id === selectedAnnotationId);
 
+  const activePointers = useMemo(() => {
+    return getPointersForSelection({
+      mode: resultMode,
+      selectedAnnotation,
+      selectedFindingId,
+      pointersByTarget,
+      findingQuestionMap,
+    });
+  }, [resultMode, selectedAnnotation, selectedFindingId, pointersByTarget, findingQuestionMap]);
+
   // For General mode: map findings to annotations
   const findingsToAnnotations = useMemo(() => {
     if (resultMode !== 'GENERAL' || !review || questionEvaluations.length === 0) {
@@ -189,24 +282,27 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
   // Handle finding click: select first matching annotation
   const handleFindingClick = (findingId: string) => {
+    setSelectedFindingId(findingId);
     const matchingAnnotations = findingsToAnnotations.get(findingId);
-    if (matchingAnnotations && matchingAnnotations.length > 0) {
-      // Select the first annotation (sorted by confidence desc)
-      const sorted = [...matchingAnnotations].sort((a, b) => {
-        if (a.confidence === undefined && b.confidence === undefined) return 0;
-        if (a.confidence === undefined) return 1;
-        if (b.confidence === undefined) return -1;
-        return b.confidence - a.confidence;
-      });
-      const targetAnnotation = sorted[0];
-      setSelectedAnnotationId(targetAnnotation.id);
-      
-      // Set programmatic scroll lock with target page
-      programmaticScrollRef.current = {
-        lockUntilMs: Date.now() + LOCK_MS,
-        targetPageIndex: targetAnnotation.pageIndex,
-      };
+    if (!matchingAnnotations || matchingAnnotations.length === 0) {
+      setSelectedAnnotationId(null);
+      return;
     }
+    // Select the first annotation (sorted by confidence desc)
+    const sorted = [...matchingAnnotations].sort((a, b) => {
+      if (a.confidence === undefined && b.confidence === undefined) return 0;
+      if (a.confidence === undefined) return 1;
+      if (b.confidence === undefined) return -1;
+      return b.confidence - a.confidence;
+    });
+    const targetAnnotation = sorted[0];
+    setSelectedAnnotationId(targetAnnotation.id);
+    
+    // Set programmatic scroll lock with target page
+    programmaticScrollRef.current = {
+      lockUntilMs: Date.now() + LOCK_MS,
+      targetPageIndex: targetAnnotation.pageIndex,
+    };
   };
 
   // Handle page change from PDF viewer
@@ -396,8 +492,13 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       hoveredAnnotationId={hoveredAnnotationId}
                       onAnnotationClick={(annotationId) => {
                         setSelectedAnnotationId(annotationId);
-                        // Set programmatic scroll lock to prevent sidebar from jumping during PDF scroll
                         const annotation = allAnnotations.find((ann) => ann.id === annotationId);
+                        if (resultMode === 'GENERAL') {
+                          if (annotation) {
+                            setSelectedFindingId(annotation.criterionId);
+                          }
+                        }
+                        // Set programmatic scroll lock to prevent sidebar from jumping during PDF scroll
                         if (annotation) {
                           programmaticScrollRef.current = {
                             lockUntilMs: Date.now() + LOCK_MS,
@@ -428,6 +529,9 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                           key={ann.id}
                           onClick={() => {
                             setSelectedAnnotationId(ann.id);
+                            if (resultMode === 'GENERAL') {
+                              setSelectedFindingId(ann.criterionId);
+                            }
                             // Set programmatic scroll lock
                             programmaticScrollRef.current = {
                               lockUntilMs: Date.now() + LOCK_MS,
@@ -541,10 +645,17 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                               {qEval.visibleFindings.map((finding) => {
                                 const matchingAnnotations = findingsToAnnotations.get(finding.findingId) || [];
                                 const hasBoxes = matchingAnnotations.length > 0;
-                                const isSelected = matchingAnnotations.some((ann) => ann.id === selectedAnnotationId);
+                                const isSelected =
+                                  selectedFindingId === finding.findingId ||
+                                  matchingAnnotations.some((ann) => ann.id === selectedAnnotationId);
                                 const isStrength = finding.kind === 'strength';
                                 // Check if this finding is on the active page
                                 const isOnActivePage = activePageIndex !== null && matchingAnnotations.some((ann) => ann.pageIndex === activePageIndex);
+                                const hasPointers = hasPointersForTarget({
+                                  targetType: 'finding',
+                                  targetId: finding.findingId,
+                                  questionId: qEval.questionId,
+                                });
                                 
                                 return (
                                   <div
@@ -578,6 +689,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             </Badge>
                           )
                         )}
+                                        {hasPointers && (
+                                          <Badge variant="outline" className="text-xs">
+                                            Course refs
+                                          </Badge>
+                                        )}
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2 mt-2 mb-2">
@@ -599,6 +715,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                         <div className="text-sm text-slate-600">{finding.suggestion}</div>
                                       </div>
                                     )}
+                                    {isSelected && <StudyPointersPanel pointers={activePointers} />}
                                   </div>
                                 );
                               })}
@@ -674,6 +791,10 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                         const isSelected = selectedAnnotationId === ann.id;
                         const isHovered = hoveredAnnotationId === ann.id;
                         const isOnActivePage = activePageIndex !== null && ann.pageIndex === activePageIndex;
+                        const hasPointers = hasPointersForTarget({
+                          targetType: 'criterion',
+                          targetId: ann.criterionId,
+                        });
                         
                         return (
                           <div
@@ -723,6 +844,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                   Page {ann.pageIndex + 1}
                                 </Badge>
                               )}
+                              {hasPointers && (
+                                <Badge variant="outline" className="text-xs">
+                                  Course refs
+                                </Badge>
+                              )}
                               <span className="text-xs text-slate-500">{ann.criterionId}</span>
                             </div>
                             {isSelected && ann.comment && (
@@ -731,6 +857,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                 <div className="text-sm text-slate-600">{ann.comment}</div>
                               </div>
                             )}
+                            {isSelected && <StudyPointersPanel pointers={activePointers} />}
                           </div>
                         );
                       })}
