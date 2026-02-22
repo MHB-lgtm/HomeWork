@@ -209,6 +209,15 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     }
   };
 
+  const getJobStatusBadgeVariant = (
+    status: string
+  ): 'default' | 'secondary' | 'outline' | 'destructive' => {
+    if (status === 'DONE') return 'default';
+    if (status === 'FAILED') return 'destructive';
+    if (status === 'PENDING' || status === 'RUNNING') return 'secondary';
+    return 'outline';
+  };
+
   // Get all annotations, sorted by confidence desc (undefined last)
   // For images, filter to pageIndex === 0; for PDFs, include all pageIndex values
   const allAnnotations = useMemo(() => {
@@ -436,7 +445,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
             <AlertDescription>{error}</AlertDescription>
           </Alert>
           <Link href="/" className="text-blue-600 hover:text-blue-800 font-medium">
-            ← Back to Home
+            Back to Home
           </Link>
         </div>
       </main>
@@ -459,7 +468,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Review Job: {jobId}</h1>
             </div>
             {jobStatus && (
-              <Badge variant={jobStatus === 'completed' ? 'default' : jobStatus === 'failed' ? 'destructive' : 'outline'}>
+              <Badge variant={getJobStatusBadgeVariant(jobStatus)}>
                 {jobStatus}
               </Badge>
             )}

@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 data/
+.codex-runlogs/
 
 # Env Files
 .env
