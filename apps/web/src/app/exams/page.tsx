@@ -10,7 +10,7 @@ export default function ExamsPage() {
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
 
   // Load exams on mount
   useEffect(() => {
@@ -53,7 +53,16 @@ export default function ExamsPage() {
     setIsCreating(false);
 
     if (result.ok) {
-      setMessage({ type: 'success', text: `Exam created successfully: ${result.examId}` });
+      if (result.indexing?.ok === false) {
+        setMessage({
+          type: 'warning',
+          text: `Exam created: ${result.examId}. Auto-indexing failed. Run: pnpm --filter worker exam:index -- --examId ${result.examId}`,
+        });
+      } else if (result.indexing?.ok === true) {
+        setMessage({ type: 'success', text: `Exam created and indexed successfully: ${result.examId}` });
+      } else {
+        setMessage({ type: 'success', text: `Exam created successfully: ${result.examId}` });
+      }
       setTitle('');
       setExamFile(null);
       // Reset file input
@@ -90,10 +99,26 @@ export default function ExamsPage() {
           style={{
             marginTop: '1rem',
             padding: '1rem',
-            backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da',
-            border: `1px solid ${message.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
+            backgroundColor:
+              message.type === 'success'
+                ? '#d4edda'
+                : message.type === 'warning'
+                  ? '#fff3cd'
+                  : '#f8d7da',
+            border: `1px solid ${
+              message.type === 'success'
+                ? '#c3e6cb'
+                : message.type === 'warning'
+                  ? '#ffe69c'
+                  : '#f5c6cb'
+            }`,
             borderRadius: '4px',
-            color: message.type === 'success' ? '#155724' : '#721c24',
+            color:
+              message.type === 'success'
+                ? '#155724'
+                : message.type === 'warning'
+                  ? '#664d03'
+                  : '#721c24',
           }}
         >
           {message.text}

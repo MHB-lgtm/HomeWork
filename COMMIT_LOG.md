@@ -32,3 +32,25 @@ This file tracks exactly what each project commit is about, so we can quickly tr
   - `pnpm --filter web build` (success).
   - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/presentation-smoke.ps1` (success: job reached `DONE`).
 
+### 2026-02-22
+- `Commit Message`: `feat: auto-index exam immediately after upload`
+- `Goal`: ensure exam question indexing starts right after exam upload, without manual worker command in normal flow.
+- `Main Changes`:
+  - `apps/web/src/app/api/exams/route.ts`
+    - after exam creation, API now triggers auto-indexing by running:
+      - `pnpm --filter worker exam:index -- --examId <examId>`
+    - response now includes `indexing` status (`ok`, `message`, optional `details`).
+  - `apps/web/src/lib/examsClient.ts`
+    - extended create-exam client response with optional `indexing` payload.
+  - `apps/web/src/app/exams/page.tsx`
+    - improved success feedback:
+      - success when indexed,
+      - warning when exam is created but indexing fails (with manual fallback command).
+  - `apps/worker/src/scripts/generateExamIndex.ts`
+    - fixed `.env` resolution to repo root for reliable key loading.
+  - `FLOW_RUNBOOK.md`
+    - documented the updated end-to-end flow and exactly when split/index happens.
+- `Validation`:
+  - `pnpm --filter web build` (success).
+  - `pnpm --filter worker build` (success).
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/presentation-smoke.ps1` (success: job reached `DONE`).

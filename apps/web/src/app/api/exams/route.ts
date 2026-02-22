@@ -1,8 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as path from 'path';
+import * as fs from 'fs';
+import { spawn } from 'child_process';
 import { createExam, listExams, ExamLoadError } from '../../../lib/exams';
 
 export const runtime = 'nodejs';
+
+type ExamIndexingResult = {
+  ok: boolean;
+  message: string;
+  details?: string;
+};
+
+function findWorkspaceRoot(startDir: string): string {
+  let current = path.resolve(startDir);
+
+  while (true) {
+    const workspaceMarker = path.join(current, 'pnpm-workspace.yaml');
+    if (fs.existsSync(workspaceMarker)) {
+      return current;
+    }
+
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return startDir;
+}
+
+async function runExamIndexGeneration(examId: string): Promise<ExamIndexingResult> {
+  const workspaceRoot = findWorkspaceRoot(process.cwd());
+
+  return new Promise((resolve) => {
+    const args = ['--filter', 'worker', 'exam:index', '--', '--examId', examId];
+    const child = spawn('pnpm', args, {
+      cwd: workspaceRoot,
+      env: process.env,
+      shell: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    const timeout = setTimeout(() => {
+      child.kill();
+      resolve({
+        ok: false,
+        message: 'Exam created but auto-indexing timed out after 3 minutes',
+        details: [stdout, stderr].filter(Boolean).join('\n').trim(),
+      });
+    }, 180000);
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('error', (error) => {
+      clearTimeout(timeout);
+      resolve({
+        ok: false,
+        message: `Exam created but failed to start auto-indexing: ${error.message}`,
+      });
+    });
+
+    child.on('close', (code) => {
+      clearTimeout(timeout);
+
+      if (code === 0) {
+        resolve({
+          ok: true,
+          message: 'Exam indexed successfully',
+          details: stdout.trim() || undefined,
+        });
+        return;
+      }
+
+      resolve({
+        ok: false,
+        message: 'Exam created but auto-indexing failed',
+        details: [stdout, stderr].filter(Boolean).join('\n').trim() || `Exit code: ${code}`,
+      });
+    });
+  });
+}
 
 /**
  * POST /api/exams
@@ -46,7 +133,12 @@ export async function POST(request: NextRequest) {
       examFileBuffer
     );
 
-    return NextResponse.json({ examId });
+    const indexing = await runExamIndexGeneration(examId);
+
+    return NextResponse.json({
+      examId,
+      indexing,
+    });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(

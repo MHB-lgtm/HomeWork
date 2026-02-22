@@ -6,6 +6,12 @@ export type ExamSummary = {
   examFilePath?: string;
 };
 
+type ExamIndexingResponse = {
+  ok: boolean;
+  message: string;
+  details?: string;
+};
+
 /**
  * List all exams
  */
@@ -35,7 +41,7 @@ export async function listExams(): Promise<
  * Create a new exam
  */
 export async function createExam(formData: FormData): Promise<
-  | { ok: true; examId: string }
+  | { ok: true; examId: string; indexing?: ExamIndexingResponse }
   | { ok: false; error: string }
 > {
   try {
@@ -50,7 +56,7 @@ export async function createExam(formData: FormData): Promise<
     }
 
     const data = await response.json();
-    return { ok: true, examId: data.examId };
+    return { ok: true, examId: data.examId, indexing: data.indexing };
   } catch (error) {
     return {
       ok: false,

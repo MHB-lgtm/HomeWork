@@ -6,7 +6,7 @@ import { loadExamIndex, saveExamIndex } from '@hg/local-job-store';
 import { ExamIndexSchema, ExamIndex } from '@hg/shared-schemas';
 
 // Load environment variables
-const envPath = path.join(__dirname, '../../.env');
+const envPath = path.resolve(__dirname, '../../../../.env');
 dotenv.config({ path: envPath });
 
 function printUsage(): never {
