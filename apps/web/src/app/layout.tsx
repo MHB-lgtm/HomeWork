@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Manrope, Space_Grotesk } from 'next/font/google';
+import { AppShell } from '../components/layout/AppShell';
 import './globals.css';
 
 const bodyFont = Manrope({
@@ -26,7 +27,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${bodyFont.variable} ${headingFont.variable}`}>
-      <body className="antialiased bg-body text-body">{children}</body>
+      <body className="antialiased bg-body text-body">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

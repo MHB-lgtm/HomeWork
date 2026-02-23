@@ -1,8 +1,40 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { listExams, createExam, ExamSummary } from '../../lib/examsClient';
+import { createExam, ExamSummary, listExams } from '../../lib/examsClient';
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
+import { Button } from '../../components/ui/button';
+import { EmptyState } from '../../components/ui/empty-state';
+import { Input } from '../../components/ui/input';
+import { PageHeader } from '../../components/ui/page-header';
+import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
+import { StatusBadge } from '../../components/ui/status-badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import { CardSkeleton, TableRowSkeleton } from '../../components/ui/skeleton';
+import { cn } from '../../lib/utils';
+
+type ExamMessage = {
+  type: 'success' | 'error' | 'warning';
+  text: string;
+};
+
+type IndexStatus = 'loading' | 'confirmed' | 'proposed' | 'missing' | 'error';
+
+function toIndexStatusBadge(status: IndexStatus | undefined) {
+  switch (status) {
+    case 'confirmed':
+      return <StatusBadge status="DONE" label="Confirmed" />;
+    case 'proposed':
+      return <StatusBadge status="PROPOSED" label="Proposed" />;
+    case 'missing':
+      return <StatusBadge status="NOT_INDEXED" label="Not indexed" />;
+    case 'error':
+      return <StatusBadge status="FAILED" label="Index error" />;
+    case 'loading':
+    default:
+      return <StatusBadge status="LOADING" label="Loading" />;
+  }
+}
 
 export default function ExamsPage() {
   const [title, setTitle] = useState('');
@@ -10,12 +42,53 @@ export default function ExamsPage() {
   const [exams, setExams] = useState<ExamSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
+  const [message, setMessage] = useState<ExamMessage | null>(null);
+  const [indexStatuses, setIndexStatuses] = useState<Record<string, IndexStatus>>({});
+  const [lastCreatedExamId, setLastCreatedExamId] = useState<string | null>(null);
+  const [copiedExamId, setCopiedExamId] = useState<string | null>(null);
 
-  // Load exams on mount
   useEffect(() => {
     loadExams();
   }, []);
+
+  const loadExamIndexStatuses = async (items: ExamSummary[]) => {
+    if (items.length === 0) {
+      setIndexStatuses({});
+      return;
+    }
+
+    const loadingStatuses: Record<string, IndexStatus> = {};
+    for (const exam of items) {
+      loadingStatuses[exam.examId] = 'loading';
+    }
+    setIndexStatuses(loadingStatuses);
+
+    const results = await Promise.all(
+      items.map(async (exam) => {
+        try {
+          const response = await fetch(`/api/exams/${encodeURIComponent(exam.examId)}/index`);
+          if (!response.ok) {
+            return [exam.examId, 'error'] as const;
+          }
+
+          const payload = (await response.json()) as { ok?: boolean; data?: { status?: string } | null };
+          const status = payload?.data?.status;
+
+          if (status === 'confirmed') {
+            return [exam.examId, 'confirmed'] as const;
+          }
+          if (status === 'proposed') {
+            return [exam.examId, 'proposed'] as const;
+          }
+          return [exam.examId, 'missing'] as const;
+        } catch {
+          return [exam.examId, 'error'] as const;
+        }
+      })
+    );
+
+    setIndexStatuses(Object.fromEntries(results));
+  };
 
   const loadExams = async () => {
     setIsLoading(true);
@@ -24,6 +97,7 @@ export default function ExamsPage() {
 
     if (result.ok) {
       setExams(result.data);
+      await loadExamIndexStatuses(result.data);
     } else {
       setMessage({ type: 'error', text: result.error });
     }
@@ -53,22 +127,24 @@ export default function ExamsPage() {
     setIsCreating(false);
 
     if (result.ok) {
+      setLastCreatedExamId(result.examId);
       if (result.indexing?.ok === false) {
         setMessage({
           type: 'warning',
-          text: `Exam created: ${result.examId}. Auto-indexing failed. Run: pnpm --filter worker exam:index -- --examId ${result.examId}`,
+          text: 'Exam created. Auto-indexing did not complete automatically.',
         });
       } else if (result.indexing?.ok === true) {
-        setMessage({ type: 'success', text: `Exam created and indexed successfully: ${result.examId}` });
+        setMessage({ type: 'success', text: 'Exam created and indexed successfully.' });
       } else {
-        setMessage({ type: 'success', text: `Exam created successfully: ${result.examId}` });
+        setMessage({ type: 'success', text: 'Exam created successfully.' });
       }
+
       setTitle('');
       setExamFile(null);
-      // Reset file input
-      const fileInput = document.getElementById('examFile') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-      // Reload exams list
+      const fileInput = document.getElementById('examFile') as HTMLInputElement | null;
+      if (fileInput) {
+        fileInput.value = '';
+      }
       await loadExams();
     } else {
       setMessage({ type: 'error', text: result.error });
@@ -77,147 +153,213 @@ export default function ExamsPage() {
 
   const formatDate = (dateString: string) => {
     try {
-      const date = new Date(dateString);
-      return date.toLocaleString();
+      return new Date(dateString).toLocaleString();
     } catch {
       return dateString;
     }
   };
 
+  const alertTone =
+    message?.type === 'success'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+      : message?.type === 'warning'
+        ? 'border-amber-200 bg-amber-50 text-amber-900'
+        : undefined;
+
+  const copyExamId = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedExamId(value);
+      window.setTimeout(() => {
+        setCopiedExamId((prev) => (prev === value ? null : prev));
+      }, 1200);
+    } catch {
+      setCopiedExamId(null);
+    }
+  };
+
   return (
-    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <Link href="/" style={{ color: '#0070f3', textDecoration: 'none' }}>
-          ← Back to Home
-        </Link>
-      </div>
-
-      <h1>Manage Exams</h1>
-
-      {message && (
-        <div
-          style={{
-            marginTop: '1rem',
-            padding: '1rem',
-            backgroundColor:
-              message.type === 'success'
-                ? '#d4edda'
-                : message.type === 'warning'
-                  ? '#fff3cd'
-                  : '#f8d7da',
-            border: `1px solid ${
-              message.type === 'success'
-                ? '#c3e6cb'
-                : message.type === 'warning'
-                  ? '#ffe69c'
-                  : '#f5c6cb'
-            }`,
-            borderRadius: '4px',
-            color:
-              message.type === 'success'
-                ? '#155724'
-                : message.type === 'warning'
-                  ? '#664d03'
-                  : '#721c24',
-          }}
-        >
-          {message.text}
-        </div>
-      )}
-
-      <div style={{ marginTop: '2rem' }}>
-        <h2>Create Exam</h2>
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-          <div>
-            <label htmlFor="title" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Title:
-            </label>
-            <input
-              id="title"
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              required
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="examFile" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Exam File (PDF/PNG/JPG):
-            </label>
-            <input
-              id="examFile"
-              type="file"
-              accept=".pdf,.png,.jpg,.jpeg"
-              onChange={(e) => setExamFile(e.target.files?.[0] || null)}
-              required
-              style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-            />
-          </div>
-
-          <button
+    <main className="min-h-screen review-page-bg text-slate-900">
+      <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-6">
+      <PageHeader
+        title="Exams"
+        actions={
+          <Button
             type="submit"
+            form="create-exam-form"
             disabled={isCreating}
-            style={{
-              padding: '0.75rem 1.5rem',
-              backgroundColor: isCreating ? '#ccc' : '#28a745',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: isCreating ? 'not-allowed' : 'pointer',
-              fontSize: '1rem',
-            }}
+            className="h-auto w-fit rounded-md px-4 py-2 text-sm font-medium transition-colors"
           >
-            {isCreating ? 'Creating...' : 'Create Exam'}
-          </button>
-        </form>
-      </div>
+            {isCreating ? 'Creating...' : 'Upload Exam'}
+          </Button>
+        }
+      />
 
-      <div style={{ marginTop: '3rem' }}>
-        <h2>Existing Exams</h2>
-        {isLoading ? (
-          <p style={{ marginTop: '1rem' }}>Loading exams...</p>
-        ) : exams.length === 0 ? (
-          <p style={{ marginTop: '1rem', color: '#666' }}>No exams found. Create one above.</p>
-        ) : (
-          <div style={{ marginTop: '1rem' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#f0f0f0' }}>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Exam ID</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Title</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Created At</th>
-                  {exams.some((e) => e.updatedAt) && (
-                    <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Updated At</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {exams.map((exam) => (
-                  <tr key={exam.examId} style={{ borderBottom: '1px solid #ddd' }}>
-                    <td style={{ padding: '0.75rem', border: '1px solid #ddd', fontFamily: 'monospace', fontSize: '0.9em' }}>
-                      {exam.examId}
-                    </td>
-                    <td style={{ padding: '0.75rem', border: '1px solid #ddd', fontWeight: 'bold' }}>
-                      {exam.title}
-                    </td>
-                    <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
-                      {formatDate(exam.createdAt)}
-                    </td>
-                    {exams.some((e) => e.updatedAt) && (
-                      <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
-                        {exam.updatedAt ? formatDate(exam.updatedAt) : '-'}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {message ? (
+        <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={cn('rounded-xl', alertTone)}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <AlertTitle>
+                {message.type === 'success'
+                  ? 'Exam created'
+                  : message.type === 'warning'
+                    ? 'Exam created with indexing warning'
+                    : 'Operation failed'}
+              </AlertTitle>
+              <AlertDescription className="break-words whitespace-pre-wrap">{message.text}</AlertDescription>
+              {message.type === 'warning' && lastCreatedExamId ? (
+                <details className="mt-2 rounded-lg border border-amber-200 bg-white/70 px-3 py-2 text-xs text-amber-900">
+                  <summary className="cursor-pointer font-medium">Technical details</summary>
+                  <div className="mt-2 space-y-1 font-mono">
+                    <p>Exam ID: {lastCreatedExamId}</p>
+                    <p>Manual command: pnpm --filter worker exam:index -- --examId {lastCreatedExamId}</p>
+                  </div>
+                </details>
+              ) : null}
+            </div>
+            <StatusBadge
+              status={message.type === 'error' ? 'FAILED' : message.type === 'warning' ? 'PENDING' : 'DONE'}
+              label={message.type === 'error' ? 'Failed' : message.type === 'warning' ? 'Warning' : 'Success'}
+            />
           </div>
-        )}
+        </Alert>
+      ) : null}
+
+      <Panel id="upload-exam">
+        <PanelHeader>
+          <PanelTitle>Upload exam</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
+          <form id="create-exam-form" onSubmit={handleCreate} className="space-y-5">
+            <div className="space-y-2">
+              <label htmlFor="title" className="text-sm font-medium text-slate-800">
+                Exam title
+              </label>
+              <Input
+                id="title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+                placeholder="Example: Midterm 2026"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <input
+                id="examFile"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={(e) => setExamFile(e.target.files?.[0] || null)}
+                required
+                className="sr-only"
+              />
+              <label
+                htmlFor="examFile"
+                className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-10 text-center transition-colors hover:bg-gray-50"
+              >
+                <p className="text-sm font-medium text-slate-900">Click to upload or drag and drop</p>
+              </label>
+              {examFile ? (
+                <p className="text-xs font-medium text-slate-700">
+                  Selected: <span className="font-semibold">{examFile.name}</span>
+                </p>
+              ) : null}
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isCreating} className="h-auto w-auto rounded-md px-4 py-2 text-sm font-medium transition-colors">
+                {isCreating ? 'Creating...' : 'Create Exam'}
+              </Button>
+            </div>
+          </form>
+        </PanelContent>
+      </Panel>
+
+      <Panel>
+        <PanelHeader>
+          <PanelTitle>Existing exams</PanelTitle>
+        </PanelHeader>
+        <PanelContent>
+          {isLoading ? (
+            <div className="space-y-4">
+              <CardSkeleton lines={2} />
+              <Table className="w-full text-left text-sm">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Title</TableHead>
+                    <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Created</TableHead>
+                    <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRowSkeleton columns={3} />
+                  <TableRowSkeleton columns={3} />
+                  <TableRowSkeleton columns={3} />
+                </TableBody>
+              </Table>
+            </div>
+          ) : exams.length === 0 ? (
+            <EmptyState
+              title="No exams yet"
+              action={
+                <Button
+                  size="sm"
+                  onClick={() => document.getElementById('title')?.focus()}
+                  className="h-auto w-auto rounded-md px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  Upload first exam
+                </Button>
+              }
+            />
+          ) : (
+            <Table className="w-full text-left text-sm">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Title</TableHead>
+                  <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Created</TableHead>
+                  <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Updated</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {exams.map((exam) => (
+                  <TableRow key={exam.examId}>
+                    <TableCell className="border-b border-gray-100 px-4 py-3 text-slate-900">
+                      <div className="space-y-1">
+                        <p className="font-medium">{exam.title}</p>
+                        <details className="text-xs text-slate-500">
+                          <summary className="cursor-pointer">Technical details</summary>
+                          <div className="mt-1 space-y-2">
+                            <div className="flex items-center gap-2 font-mono">
+                              <span>{exam.examId}</span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                                onClick={() => copyExamId(exam.examId)}
+                              >
+                                {copiedExamId === exam.examId ? 'Copied' : 'Copy'}
+                              </Button>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-500">Index:</span>
+                              {toIndexStatusBadge(indexStatuses[exam.examId])}
+                            </div>
+                          </div>
+                        </details>
+                      </div>
+                    </TableCell>
+                    <TableCell className="border-b border-gray-100 px-4 py-3 text-slate-700">{formatDate(exam.createdAt)}</TableCell>
+                    <TableCell className="border-b border-gray-100 px-4 py-3 text-slate-700">{exam.updatedAt ? formatDate(exam.updatedAt) : '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </PanelContent>
+      </Panel>
       </div>
     </main>
   );
 }
-

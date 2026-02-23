@@ -12,8 +12,8 @@ import {
   QuestionEvaluation,
   StudyPointerV1,
 } from '@hg/shared-schemas';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Badge } from '../../../components/ui/badge';
+import { Button } from '../../../components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
 import { cn } from '../../../lib/utils';
 import { PDFViewer } from '../../../components/review/pdf/PDFViewer';
@@ -30,6 +30,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [hoveredAnnotationId, setHoveredAnnotationId] = useState<string | null>(null);
   const [activePageIndex, setActivePageIndex] = useState<number | null>(null);
   const [showStrengths, setShowStrengths] = useState(true);
+  const [copiedTechnicalValue, setCopiedTechnicalValue] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const programmaticScrollRef = useRef<{ lockUntilMs: number; targetPageIndex: number | null }>({
@@ -192,9 +193,9 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
   // Get criterion label by ID (for Rubric mode)
   const getCriterionLabel = (criterionId: string): string => {
-    if (!rubricEvaluation) return criterionId;
+    if (!rubricEvaluation) return 'Criterion';
     const criterion = rubricEvaluation.criteria.find((c) => c.criterionId === criterionId);
-    return criterion?.label || criterionId;
+    return criterion?.label || 'Criterion';
   };
 
   // Get severity badge variant
@@ -216,6 +217,18 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     if (status === 'FAILED') return 'destructive';
     if (status === 'PENDING' || status === 'RUNNING') return 'secondary';
     return 'outline';
+  };
+
+  const copyTechnicalValue = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedTechnicalValue(value);
+      window.setTimeout(() => {
+        setCopiedTechnicalValue((prev) => (prev === value ? null : prev));
+      }, 1200);
+    } catch {
+      setCopiedTechnicalValue(null);
+    }
   };
 
   // Get all annotations, sorted by confidence desc (undefined last)
@@ -431,10 +444,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     }
   }, [selectedAnnotationId, resultMode, questionEvaluations, findingsToAnnotations]);
 
+  const reviewTitle = review?.displayName?.trim() || 'Review details';
   if (loading) {
     return (
-      <main className="min-h-screen bg-gray-50 p-4 md:p-8">
-        <div className="max-w-7xl mx-auto">
+      <main className="min-h-screen review-page-bg text-slate-900">
+        <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
           <p className="text-slate-600">Loading...</p>
         </div>
       </main>
@@ -443,14 +457,14 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-50 p-4 md:p-8">
-        <div className="max-w-7xl mx-auto">
+      <main className="min-h-screen review-page-bg text-slate-900">
+        <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
-          <Link href="/" className="text-blue-600 hover:text-blue-800 font-medium">
-            Back to Home
+          <Link href="/reviews" className="text-blue-600 hover:text-blue-800 font-medium">
+            Back to Reviews
           </Link>
         </div>
       </main>
@@ -462,21 +476,39 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       {/* Header - Fixed height */}
       <div className="shrink-0 p-4 md:p-8 border-b border-slate-200/80 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 shadow-sm">
         <div className="max-w-[1600px] mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
               <Link
-                href="/"
+                href="/reviews"
                 className="inline-flex items-center text-sm text-slate-600 hover:text-blue-700 transition-colors"
               >
-                Back to Home
+                Back to Reviews
               </Link>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Review Job: {jobId}</h1>
+              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{reviewTitle}</h1>
             </div>
-            {jobStatus && (
-              <Badge variant={getJobStatusBadgeVariant(jobStatus)}>
-                {jobStatus}
-              </Badge>
-            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {jobStatus && <Badge variant={getJobStatusBadgeVariant(jobStatus)}>{jobStatus}</Badge>}
+              <details className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                <summary className="cursor-pointer font-medium text-slate-700">Technical details</summary>
+                <div className="mt-2 space-y-1 min-w-[240px]">
+                  {jobId && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono">Job ID: {jobId}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        onClick={() => copyTechnicalValue(jobId)}
+                      >
+                        {copiedTechnicalValue === jobId ? 'Copied' : 'Copy'}
+                      </Button>
+                    </div>
+                  )}
+                  {submissionMimeType ? <p className="font-mono">Submission: {submissionMimeType}</p> : null}
+                  {resultMode ? <p className="font-mono">Mode: {resultMode}</p> : null}
+                </div>
+              </details>
+            </div>
           </div>
         </div>
       </div>
@@ -689,7 +721,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                   >
                                     <div className="flex items-start justify-between gap-2 mb-1">
                                       <div className="font-semibold text-sm flex-1">
-                                        {finding.findingId}: {finding.title}
+                                        {finding.title}
                                       </div>
                                       <div className="flex gap-1 shrink-0">
                                         {isStrength ? (
@@ -863,7 +895,6 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                   Course refs
                                 </Badge>
                               )}
-                              <span className="text-xs text-slate-500">{ann.criterionId}</span>
                             </div>
                             {isSelected && ann.comment && (
                               <div className="mt-3 pt-3 border-t border-slate-200">

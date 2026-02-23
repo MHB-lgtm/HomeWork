@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Inter } from 'next/font/google';
 import { EvaluationResult, RubricEvaluationResult } from '@hg/shared-schemas';
 import { RubricCriterionRow } from '../components/RubricCriterionRow';
 import { listExams, ExamSummary } from '../lib/examsClient';
@@ -21,6 +22,11 @@ interface HealthStatus {
   heartbeatAgeMs: number | null;
 }
 
+const DEFAULT_GRADING_MODE: 'GENERAL' = 'GENERAL';
+const DEFAULT_GRADING_SCOPE: 'DOCUMENT' = 'DOCUMENT';
+const DEFAULT_SUBMISSION_MODE: 'pdf' = 'pdf';
+const inter = Inter({ subsets: ['latin'], display: 'swap' });
+
 function getStatusBadgeVariant(status: string | null): 'default' | 'secondary' | 'outline' | 'destructive' {
   switch (status) {
     case 'DONE':
@@ -36,14 +42,15 @@ function getStatusBadgeVariant(status: string | null): 'default' | 'secondary' |
 }
 
 export default function Home() {
-  const [examId, setExamId] = useState('exam-001');
-  const [questionId, setQuestionId] = useState('q1');
+  const [examId, setExamId] = useState('');
+  const [questionId, setQuestionId] = useState('');
   const [questionFile, setQuestionFile] = useState<File | null>(null);
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
-  const [submissionMode, setSubmissionMode] = useState<'image' | 'pdf'>('image');
-  const [gradingMode, setGradingMode] = useState<'RUBRIC' | 'GENERAL'>('RUBRIC');
-  const [gradingScope, setGradingScope] = useState<'QUESTION' | 'DOCUMENT'>('QUESTION');
+  const [submissionMode, setSubmissionMode] = useState<'image' | 'pdf'>(DEFAULT_SUBMISSION_MODE);
+  const [gradingMode, setGradingMode] = useState<'RUBRIC' | 'GENERAL'>(DEFAULT_GRADING_MODE);
+  const [gradingScope, setGradingScope] = useState<'QUESTION' | 'DOCUMENT'>(DEFAULT_GRADING_SCOPE);
   const [notes, setNotes] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<EvaluationResult | null>(null);
@@ -53,6 +60,7 @@ export default function Home() {
   const [workerAlive, setWorkerAlive] = useState<boolean | null>(null);
   const [availableExams, setAvailableExams] = useState<ExamSummary[]>([]);
   const [isLoadingExams, setIsLoadingExams] = useState(false);
+  const [copiedJobId, setCopiedJobId] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +75,7 @@ export default function Home() {
 
     // Validation based on grading mode and scope
     if (!examId.trim()) {
-      setError('Please provide examId');
+      setError('Please select an exam');
       setIsSubmitting(false);
       return;
     }
@@ -75,7 +83,7 @@ export default function Home() {
     // Question ID required for Rubric mode or General + Question scope
     if (gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')) {
       if (!questionId.trim()) {
-        setError('Please provide questionId');
+        setError('Please provide a question');
         setIsSubmitting(false);
         return;
       }
@@ -201,8 +209,36 @@ export default function Home() {
   };
 
   const showWorkerWarning = workerAlive === false;
-  const examCount = availableExams.length;
   const hasFailure = status === 'FAILED';
+
+  const copyJobId = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedJobId(value);
+      window.setTimeout(() => {
+        setCopiedJobId((prev) => (prev === value ? null : prev));
+      }, 1200);
+    } catch {
+      setCopiedJobId(null);
+    }
+  };
+
+  const setSimpleDefaults = () => {
+    setGradingMode(DEFAULT_GRADING_MODE);
+    setGradingScope(DEFAULT_GRADING_SCOPE);
+    setSubmissionMode(DEFAULT_SUBMISSION_MODE);
+    setQuestionId('');
+    setQuestionFile(null);
+    setNotes('');
+  };
+
+  const handleAdvancedToggle = (enabled: boolean) => {
+    setShowAdvanced(enabled);
+    if (!enabled) {
+      setSimpleDefaults();
+    }
+  };
+
   const statusSteps = [
     {
       key: 'created',
@@ -227,136 +263,96 @@ export default function Home() {
     },
   ];
 
-  return (
-    <main className="min-h-screen review-page-bg text-slate-900">
-      <div className="max-w-7xl mx-auto px-4 py-8 md:py-12">
-        {/* Hero Header */}
-        <div className="mb-8 rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 p-6 md:p-8">
-            <div className="space-y-3">
-              <p className="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">
-                Dashboard
-              </p>
-              <div className="flex items-center flex-wrap gap-3">
-                <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Homework Grader</h1>
-                <Badge variant={showWorkerWarning ? 'destructive' : 'secondary'}>
-                  {showWorkerWarning ? 'Worker offline' : 'Worker healthy'}
-                </Badge>
-              </div>
-              <p className="text-slate-600 max-w-2xl">
-                Create grading jobs, monitor status, and jump into reviews in one place.
-              </p>
-              {showWorkerWarning && (
-                <Alert variant="default" className="max-w-2xl border-amber-200 bg-amber-50/80 text-amber-900">
-                  <AlertTitle>Worker is not running</AlertTitle>
-                  <AlertDescription>Jobs will stay pending until the worker is up.</AlertDescription>
-                </Alert>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Link href="/exams">
-                <Button variant="outline" size="sm">
-                  Manage Exams
-                </Button>
-              </Link>
-              <Link href="/courses">
-                <Button variant="outline" size="sm">
-                  Manage Courses
-                </Button>
-              </Link>
-              <Link href="/rubrics">
-                <Button variant="outline" size="sm">
-                  Edit Rubrics
-                </Button>
-              </Link>
-              <Link href="/reviews">
-                <Button variant="outline" size="sm">
-                  All Reviews
-                </Button>
-              </Link>
-            </div>
-          </div>
+  const homeFontStyle = {
+    '--font-body': inter.style.fontFamily,
+    '--font-heading': inter.style.fontFamily,
+    fontFamily: inter.style.fontFamily,
+  } as React.CSSProperties;
 
-          <div className="border-t border-slate-200/70 px-6 md:px-8 py-5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">System</p>
-                  <p className="text-sm font-semibold text-slate-900">Worker</p>
-                </div>
-                <Badge variant={showWorkerWarning ? 'destructive' : 'default'}>
-                  {showWorkerWarning ? 'Offline' : 'Ready'}
-                </Badge>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Library</p>
-                  <p className="text-sm font-semibold text-slate-900">
-                    {examCount > 0 ? `${examCount} exams available` : 'No exams loaded'}
-                  </p>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {isLoadingExams ? 'Loading' : 'Sync\u2009ready'}
-                </Badge>
-              </div>
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 flex items-center justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Current setup</p>
-                  <p className="text-sm font-semibold text-slate-900">
-                    {gradingMode === 'RUBRIC' ? 'Rubric' : 'General'} / {gradingScope.toLowerCase()}
-                  </p>
-                </div>
-                <Badge variant="secondary" className="text-xs capitalize">
-                  {submissionMode === 'pdf' ? 'PDF' : 'Image'}
-                </Badge>
-              </div>
-            </div>
+  return (
+    <main
+      className={`${inter.className} min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.44),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.38),rgba(56,189,248,0)_70%),radial-gradient(1000px_540px_at_50%_100%,rgba(244,114,182,0.42),rgba(244,114,182,0)_76%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#ffe8f4_100%)]`}
+      style={homeFontStyle}
+    >
+      <div className="mx-auto flex min-h-screen w-full flex-col px-4 pb-8 pt-20 md:px-6 md:pb-10 md:pt-24">
+        <div className="flex w-full justify-center">
+          <header className="w-[88vw] max-w-[1180px] rounded-full border border-slate-200/80 bg-white/95 px-5 py-2.5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur-md md:w-[84vw] md:px-7">
+          <div className="flex items-center justify-between gap-4">
+            <Link href="/" className="flex items-center gap-3">
+              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-cyan-500 to-indigo-500 text-sm font-bold text-white shadow-sm">
+                HG
+              </span>
+              <span className="font-heading text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Homework Grader</span>
+            </Link>
+
+            <nav className="hidden items-center gap-8 text-base font-medium text-slate-900 md:flex">
+              <Link href="/exams" className="transition-colors hover:text-slate-700">
+                Exams
+              </Link>
+              <Link href="/rubrics" className="transition-colors hover:text-slate-700">
+                Rubrics
+              </Link>
+              <Link href="/reviews" className="transition-colors hover:text-slate-700">
+                Reviews
+              </Link>
+              <Link href="/courses" className="transition-colors hover:text-slate-700">
+                Courses
+              </Link>
+            </nav>
           </div>
+          </header>
         </div>
 
-        {/* Centered single-column layout */}
-        <div className="flex flex-col items-center gap-6">
+        <section className="mx-auto mt-16 flex w-full max-w-3xl flex-col items-center space-y-4 text-center md:mt-20">
+          <h1 className="font-heading text-5xl font-bold tracking-tight text-slate-900 md:text-6xl">
+            Grade Exams With Clarity
+          </h1>
+          <p className="mx-auto max-w-2xl text-lg text-slate-700 md:text-2xl">
+            Upload one student sheet, review focused feedback, and keep your workflow simple.
+          </p>
+          {showWorkerWarning && (
+            <Alert variant="default" className="mx-auto max-w-2xl border-amber-200 bg-amber-50/85 text-amber-900 text-left">
+              <AlertTitle>Worker is not running</AlertTitle>
+              <AlertDescription>Jobs will stay pending until the worker is up.</AlertDescription>
+            </Alert>
+          )}
+        </section>
+
+        <div className="mt-1 flex w-full flex-col items-center gap-6 md:mt-2">
           {/* Left Panel: Create Grading Job */}
-          <Card className="w-full max-w-4xl rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xl font-semibold text-slate-900">Create Grading Job</CardTitle>
-              <p className="text-sm text-slate-600">Pick an exam, choose how to grade, and upload the submission.</p>
-            </CardHeader>
-            <CardContent className="space-y-5">
+          <Card
+            id="create-review"
+            className="mx-auto w-full max-w-3xl rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40"
+          >
+            <CardContent className="space-y-8 pt-6">
               {!jobId ? (
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 space-y-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">Exam selection</p>
-                        <p className="text-xs text-slate-500">Pick an exam and the question you want graded.</p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">Required</Badge>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="space-y-8">
+                  <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6">
+                    <div className="space-y-2">
+                      <label htmlFor="examId" className="sr-only text-slate-900">
+                        Exam
+                      </label>
                       <div className="space-y-2">
-                        <label htmlFor="examId" className="text-sm font-medium">
-                          Exam ID:
-                        </label>
-                        <div className="flex gap-2">
-                          {availableExams.length > 0 && (
-                            <select
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  setExamId(e.target.value);
-                                }
-                              }}
-                              value=""
-                              className="flex h-10 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm cursor-pointer"
-                            >
-                              <option value="">Select exam...</option>
-                              {availableExams.map((exam) => (
-                                <option key={exam.examId} value={exam.examId}>
-                                  {exam.title} ({exam.examId})
-                                </option>
-                              ))}
-                            </select>
-                          )}
+                        {availableExams.length > 0 ? (
+                          <select
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                setExamId(e.target.value);
+                              }
+                            }}
+                            value={examId}
+                            className="flex h-11 w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                          >
+                            <option value="">Choose exam...</option>
+                            {availableExams.map((exam) => (
+                              <option key={exam.examId} value={exam.examId}>
+                                {exam.title}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                        <details className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-xs text-slate-600">
+                          <summary className="cursor-pointer font-medium text-slate-700">Use exam ID instead</summary>
                           <Input
                             id="examId"
                             type="text"
@@ -364,169 +360,177 @@ export default function Home() {
                             onChange={(e) => setExamId(e.target.value)}
                             required
                             placeholder={isLoadingExams ? 'Loading exams...' : 'Enter exam ID'}
-                            className="flex-1"
+                            className="mt-2 h-9 flex-1 border-slate-200 font-mono text-xs text-slate-900 focus-visible:border-slate-900 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:ring-offset-0"
+                          />
+                        </details>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 space-y-4">
+                    <p className="text-sm font-medium text-slate-900">Student sheet</p>
+                    <input
+                      type="file"
+                      id="submission"
+                      accept={submissionMode === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
+                      onChange={(e) => setSubmissionFile(e.target.files?.[0] || null)}
+                      required
+                      className="sr-only"
+                    />
+                    <label
+                      htmlFor="submission"
+                      className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/80 px-4 py-8 text-center transition-colors hover:border-slate-400 hover:bg-slate-50"
+                    >
+                      <span className="text-base font-medium text-slate-900">
+                        {submissionMode === 'pdf' ? 'Click to upload a PDF sheet' : 'Click to upload an image'}
+                      </span>
+                      <span className="mt-2 text-sm text-slate-600">
+                        {submissionFile ? submissionFile.name : 'No file selected'}
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-6 space-y-4">
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                      <input
+                        type="checkbox"
+                        checked={showAdvanced}
+                        onChange={(e) => handleAdvancedToggle(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-slate-900 focus-visible:ring-2 focus-visible:ring-slate-900"
+                      />
+                      Advanced options
+                    </label>
+                    {!showAdvanced ? (
+                      <p className="text-sm text-slate-500">
+                        Default setup is already selected.
+                      </p>
+                    ) : null}
+
+                    {showAdvanced ? (
+                      <div className="space-y-5 border-t border-slate-200 pt-5">
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Mode</p>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant={gradingMode === 'RUBRIC' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setGradingMode('RUBRIC')}
+                            >
+                              Rubric
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={gradingMode === 'GENERAL' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => setGradingMode('GENERAL')}
+                            >
+                              General
+                            </Button>
+                          </div>
+                        </div>
+
+                        {gradingMode === 'GENERAL' ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Scope</p>
+                            <div className="flex gap-2">
+                              <Button
+                                type="button"
+                                variant={gradingScope === 'QUESTION' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setGradingScope('QUESTION')}
+                              >
+                                Question
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={gradingScope === 'DOCUMENT' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setGradingScope('DOCUMENT')}
+                              >
+                                Document
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">File type</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant={submissionMode === 'image' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => {
+                                setSubmissionMode('image');
+                                setSubmissionFile(null);
+                              }}
+                            >
+                              Image
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={submissionMode === 'pdf' ? 'default' : 'outline'}
+                              size="sm"
+                              onClick={() => {
+                                setSubmissionMode('pdf');
+                                setSubmissionFile(null);
+                              }}
+                            >
+                              PDF
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <label htmlFor="questionId" className="text-sm font-medium text-slate-900">
+                              Question ID
+                              {(gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')) && (
+                                <span className="text-red-600"> *</span>
+                              )}
+                            </label>
+                            <Input
+                              id="questionId"
+                              type="text"
+                              value={questionId}
+                              onChange={(e) => setQuestionId(e.target.value)}
+                              required={gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')}
+                              disabled={gradingMode === 'GENERAL' && gradingScope === 'DOCUMENT'}
+                              placeholder={gradingMode === 'GENERAL' && gradingScope === 'DOCUMENT' ? 'Optional in Document scope' : ''}
+                              className="border-slate-200 text-slate-900 focus-visible:border-slate-900 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:ring-offset-0"
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <label htmlFor="question" className="text-sm font-medium text-slate-900">
+                              Question file
+                            </label>
+                            <Input
+                              type="file"
+                              id="question"
+                              accept="image/*,.pdf"
+                              onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
+                              className="border-slate-200 text-slate-900 focus-visible:border-slate-900 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:ring-offset-0"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label htmlFor="notes" className="text-sm font-medium text-slate-900">
+                            Additional context
+                          </label>
+                          <Textarea
+                            id="notes"
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            rows={3}
+                            placeholder="Optional notes"
+                            className="border-slate-200 text-slate-900 focus-visible:border-slate-900 focus-visible:ring-1 focus-visible:ring-slate-900 focus-visible:ring-offset-0"
                           />
                         </div>
                       </div>
-
-                      <div className="space-y-2">
-                        <label htmlFor="questionId" className="text-sm font-medium">
-                          Question ID:
-                          {(gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')) && (
-                            <span className="text-red-600"> *</span>
-                          )}
-                        </label>
-                        <Input
-                          id="questionId"
-                          type="text"
-                          value={questionId}
-                          onChange={(e) => setQuestionId(e.target.value)}
-                          required={gradingMode === 'RUBRIC' || (gradingMode === 'GENERAL' && gradingScope === 'QUESTION')}
-                          disabled={gradingMode === 'GENERAL' && gradingScope === 'DOCUMENT'}
-                          placeholder={gradingMode === 'GENERAL' && gradingScope === 'DOCUMENT' ? 'Optional for Document scope' : ''}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">Grading options</p>
-                      <Badge variant="secondary" className="text-xs capitalize">{gradingMode.toLowerCase()}</Badge>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Grading Mode: <span className="text-red-600">*</span>
-                      </label>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant={gradingMode === 'RUBRIC' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setGradingMode('RUBRIC')}
-                        >
-                          Rubric
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={gradingMode === 'GENERAL' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setGradingMode('GENERAL')}
-                        >
-                          General
-                        </Button>
-                      </div>
-                    </div>
-
-                    {gradingMode === 'GENERAL' && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Scope: <span className="text-red-600">*</span>
-                        </label>
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant={gradingScope === 'QUESTION' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setGradingScope('QUESTION')}
-                          >
-                            Question
-                          </Button>
-                          <Button
-                            type="button"
-                            variant={gradingScope === 'DOCUMENT' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setGradingScope('DOCUMENT')}
-                          >
-                            Document
-                          </Button>
-                        </div>
-                        <p className="text-xs text-slate-500">
-                          Document scope lets you grade an entire submission without specifying a question.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">Upload</p>
-                      <Badge variant="outline" className="text-xs capitalize">{submissionMode}</Badge>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Submission Type: <span className="text-red-600">*</span>
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant={submissionMode === 'image' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => {
-                            setSubmissionMode('image');
-                            setSubmissionFile(null);
-                          }}
-                        >
-                          Upload Image (existing)
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={submissionMode === 'pdf' ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => {
-                            setSubmissionMode('pdf');
-                            setSubmissionFile(null);
-                          }}
-                        >
-                          Upload Sheet (PDF)
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label htmlFor="submission" className="text-sm font-medium">
-                        Submission File: <span className="text-red-600">*</span>
-                      </label>
-                      <Input
-                        type="file"
-                        id="submission"
-                        accept={submissionMode === 'pdf' ? '.pdf,application/pdf' : 'image/*'}
-                        onChange={(e) => setSubmissionFile(e.target.files?.[0] || null)}
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label htmlFor="question" className="text-sm font-medium">
-                        Optional Question Image (fallback):
-                      </label>
-                      <Input
-                        type="file"
-                        id="question"
-                        accept="image/*,.pdf"
-                        onChange={(e) => setQuestionFile(e.target.files?.[0] || null)}
-                      />
-                      <p className="text-xs text-slate-500">
-                        The exam file is the primary source. Add this only if the question image helps clarify.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-2xl border border-slate-200/80 bg-white p-4 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">Notes</p>
-                      <Badge variant="outline" className="text-xs">Optional</Badge>
-                    </div>
-                    <label htmlFor="notes" className="text-sm font-medium text-slate-700">
-                      Additional context for the grader
-                    </label>
-                    <Textarea
-                      id="notes"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={3}
-                      placeholder="Share anything the reviewer should know (language, formatting, edge cases)."
-                    />
+                    ) : null}
                   </div>
 
                   {error && !jobId && (
@@ -536,90 +540,30 @@ export default function Home() {
                     </Alert>
                   )}
 
-                  <Button type="submit" disabled={isSubmitting} className="w-full">
-                    {isSubmitting ? 'Submitting...' : 'Submit for Grading'}
+                  <Button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="h-12 w-full rounded-xl bg-slate-900 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+                  >
+                    {isSubmitting ? 'Checking...' : 'Check Exam'}
                   </Button>
                 </form>
               ) : (
                 <div className="text-center py-8 text-slate-500">
-                  Job created. Check the status panel below.
+                  Review created successfully. Check progress below.
                 </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Guidance + Snapshot stacked under the form */}
-          <div className="w-full max-w-4xl space-y-6">
-            <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-semibold text-slate-900">How grading works</CardTitle>
-                <p className="text-sm text-slate-600">Quick refresher before starting a new job.</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 h-8 w-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-semibold">1</div>
-                  <div>
-                    <p className="font-semibold text-slate-900">Set exam and question</p>
-                    <p className="text-sm text-slate-600">Use the selector or type the exam and question IDs you want to grade.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 h-8 w-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-semibold">2</div>
-                  <div>
-                    <p className="font-semibold text-slate-900">Choose grading style</p>
-                    <p className="text-sm text-slate-600">Rubric uses structured criteria. General lets you grade a question or the whole document.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 h-8 w-8 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-semibold">3</div>
-                  <div>
-                    <p className="font-semibold text-slate-900">Upload and submit</p>
-                    <p className="text-sm text-slate-600">Drop a PDF or images. You can add notes for context; results will open in Reviews.</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold text-slate-900">System snapshot</CardTitle>
-                  <Badge variant={showWorkerWarning ? 'destructive' : 'secondary'}>
-                    {showWorkerWarning ? 'Worker offline' : 'Worker healthy'}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">Exams</p>
-                  <p className="text-sm text-slate-600">
-                    {examCount > 0 ? `${examCount} exams detected` : 'No exams detected yet'}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
-                  <p className="text-sm font-semibold text-slate-900">Default submission</p>
-                  <p className="text-sm text-slate-600 capitalize">{submissionMode}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Link href="/exams">
-                    <Button variant="outline" size="sm">Go to Exams</Button>
-                  </Link>
-                  <Link href="/rubrics">
-                    <Button variant="outline" size="sm">Go to Rubrics</Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Job Status & Results stacked below */}
+          {/* Review Status & Results */}
           {jobId && (
             <div className="w-full max-w-4xl space-y-6">
               {/* Job Status Card */}
               <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-semibold text-slate-900">Job Status</CardTitle>
+                    <CardTitle className="text-lg font-semibold text-slate-900">Review Status</CardTitle>
                     {status && (
                       <Badge variant={getStatusBadgeVariant(status)}>
                         {status}
@@ -628,10 +572,23 @@ export default function Home() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm text-slate-600">Job ID:</p>
-                    <p className="font-mono text-sm">{jobId}</p>
-                  </div>
+                  <details className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3 text-xs text-slate-600">
+                    <summary className="cursor-pointer font-medium text-slate-700">Technical details</summary>
+                    {jobId && (
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className="font-mono">Job ID: {jobId}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={() => copyJobId(jobId)}
+                        >
+                          {copiedJobId === jobId ? 'Copied' : 'Copy'}
+                        </Button>
+                      </div>
+                    )}
+                  </details>
 
                   <div className="space-y-3">
                     <p className="text-sm font-semibold text-slate-900">Progress</p>
@@ -697,16 +654,19 @@ export default function Home() {
                       setResult(null);
                       setRubricEvaluation(null);
                       setError(null);
-                      setExamId('exam-001');
-                      setQuestionId('q1');
+                      setExamId('');
+                      setQuestionId('');
                       setQuestionFile(null);
                       setSubmissionFile(null);
-                      setSubmissionMode('image');
+                      setSubmissionMode(DEFAULT_SUBMISSION_MODE);
+                      setGradingMode(DEFAULT_GRADING_MODE);
+                      setGradingScope(DEFAULT_GRADING_SCOPE);
                       setNotes('');
+                      setShowAdvanced(false);
                     }}
                     className="w-full"
                   >
-                    Start New Grading
+                    Check Another Exam
                   </Button>
                 </CardContent>
               </Card>

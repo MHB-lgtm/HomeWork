@@ -2,9 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { RubricSpec } from '@hg/shared-schemas';
-import Link from 'next/link';
 import { listExams, ExamSummary } from '../../lib/examsClient';
 import { listRubricQuestionIds } from '../../lib/rubricsClient';
+import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
+import { Button } from '../../components/ui/button';
+import { EmptyState } from '../../components/ui/empty-state';
+import { Input } from '../../components/ui/input';
+import { PageHeader } from '../../components/ui/page-header';
+import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
+import { StatusBadge } from '../../components/ui/status-badge';
+import { Textarea } from '../../components/ui/textarea';
+import { CardSkeleton } from '../../components/ui/skeleton';
+import { cn } from '../../lib/utils';
 
 type Criterion = {
   id: string;
@@ -30,15 +39,13 @@ export default function RubricsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  
-  // Exam and question selection state
+
   const [availableExams, setAvailableExams] = useState<ExamSummary[]>([]);
   const [isLoadingExams, setIsLoadingExams] = useState(false);
   const [availableQuestionIds, setAvailableQuestionIds] = useState<string[]>([]);
   const [isLoadingQuestionIds, setIsLoadingQuestionIds] = useState(false);
   const [noRubricMessage, setNoRubricMessage] = useState<string | null>(null);
 
-  // Validation
   const getCriterionErrors = (criterion: Criterion): string[] => {
     const errors: string[] = [];
     if (!criterion.label.trim()) {
@@ -53,8 +60,8 @@ export default function RubricsPage() {
   const allCriteriaValid = criteria.every((c) => getCriterionErrors(c).length === 0);
   const totalMaxPoints = criteria.reduce((sum, c) => sum + (c.maxPoints || 0), 0);
   const canSave = allCriteriaValid && examId.trim() && questionId.trim();
+  const hasTargetSelection = Boolean(examId.trim() && questionId.trim());
 
-  // Load exams on mount
   useEffect(() => {
     const loadExams = async () => {
       setIsLoadingExams(true);
@@ -67,7 +74,6 @@ export default function RubricsPage() {
     loadExams();
   }, []);
 
-  // Load questionIds when examId changes
   useEffect(() => {
     if (!examId.trim()) {
       setAvailableQuestionIds([]);
@@ -85,10 +91,10 @@ export default function RubricsPage() {
         setAvailableQuestionIds([]);
       }
     };
+
     loadQuestionIds();
   }, [examId]);
 
-  // Auto-load rubric when examId + questionId are set
   useEffect(() => {
     if (!examId.trim() || !questionId.trim()) {
       setNoRubricMessage(null);
@@ -100,7 +106,7 @@ export default function RubricsPage() {
       setNoRubricMessage(null);
       try {
         const response = await fetch(`/api/rubrics/${examId.trim()}/${questionId.trim()}`);
-        
+
         if (response.status === 404) {
           setNoRubricMessage('No rubric yet for this question. Create and Save.');
           setTitle('');
@@ -128,23 +134,19 @@ export default function RubricsPage() {
           }))
         );
         setNoRubricMessage(null);
-      } catch (error) {
+      } catch {
         // Silently fail on auto-load errors
       } finally {
         setIsLoading(false);
       }
     };
 
-    // Debounce auto-load slightly
     const timeoutId = setTimeout(autoLoadRubric, 300);
     return () => clearTimeout(timeoutId);
   }, [examId, questionId]);
 
   const handleAddCriterion = () => {
-    setCriteria([
-      ...criteria,
-      { id: generateCriterionId(), label: '', kind: 'points', maxPoints: 10, guidance: '' },
-    ]);
+    setCriteria([...criteria, { id: generateCriterionId(), label: '', kind: 'points', maxPoints: 10, guidance: '' }]);
   };
 
   const handleRemoveCriterion = (id: string) => {
@@ -154,11 +156,7 @@ export default function RubricsPage() {
   };
 
   const handleCriterionChange = (id: string, field: keyof Criterion, value: string | number) => {
-    setCriteria(
-      criteria.map((c) =>
-        c.id === id ? { ...c, [field]: value } : c
-      )
-    );
+    setCriteria(criteria.map((c) => (c.id === id ? { ...c, [field]: value } : c)));
   };
 
   const handleLoad = async () => {
@@ -167,7 +165,7 @@ export default function RubricsPage() {
 
     try {
       const response = await fetch(`/api/rubrics/${examId}/${questionId}`);
-      
+
       if (response.status === 404) {
         setMessage({ type: 'error', text: 'Rubric not found' });
         setIsLoading(false);
@@ -203,7 +201,9 @@ export default function RubricsPage() {
   };
 
   const handleSave = async () => {
-    if (!canSave) return;
+    if (!canSave) {
+      return;
+    }
 
     setIsSaving(true);
     setMessage(null);
@@ -245,307 +245,255 @@ export default function RubricsPage() {
     }
   };
 
+  const editorStatus = isSaving ? 'saving' : message?.type === 'success' ? 'saved' : canSave ? 'ready' : 'incomplete';
+
   return (
-    <main style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '1rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-        <Link href="/" style={{ color: '#0070f3', textDecoration: 'none' }}>
-          ← Back to Home
-        </Link>
-        <span style={{ color: '#666' }}>|</span>
-        <Link href="/exams" style={{ color: '#0070f3', textDecoration: 'none' }}>
-          Manage Exams
-        </Link>
-      </div>
-
-      <h1>Rubric Editor</h1>
-
-      {message && (
-        <div
-          style={{
-            marginTop: '1rem',
-            padding: '1rem',
-            backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da',
-            border: `1px solid ${message.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
-            borderRadius: '4px',
-            color: message.type === 'success' ? '#155724' : '#721c24',
-          }}
-        >
-          {message.text}
-        </div>
-      )}
-
-      {noRubricMessage && (
-        <div
-          style={{
-            marginTop: '1rem',
-            padding: '1rem',
-            backgroundColor: '#fff3cd',
-            border: '1px solid #ffeaa7',
-            borderRadius: '4px',
-            color: '#856404',
-          }}
-        >
-          {noRubricMessage}
-        </div>
-      )}
-
-      <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-          <div>
-            <label htmlFor="examId" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Exam:
-            </label>
-            {isLoadingExams ? (
-              <div style={{ padding: '0.5rem', color: '#666' }}>Loading exams...</div>
-            ) : (
-              <select
-                id="examId"
-                value={examId}
-                onChange={(e) => setExamId(e.target.value)}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-              >
-                <option value="">Select an exam...</option>
-                {availableExams.map((exam) => (
-                  <option key={exam.examId} value={exam.examId}>
-                    {exam.title} ({exam.examId})
-                  </option>
-                ))}
-              </select>
-            )}
+    <main className="min-h-screen review-page-bg text-slate-900">
+      <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-6">
+      <PageHeader
+        title="Rubrics"
+        actions={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <StatusBadge status={hasTargetSelection ? 'DONE' : 'PENDING'} label={hasTargetSelection ? 'Target selected' : 'Select target'} />
+            <StatusBadge
+              status={editorStatus === 'saving' ? 'RUNNING' : editorStatus === 'saved' ? 'DONE' : 'PENDING'}
+              label={editorStatus === 'saving' ? 'Saving' : editorStatus === 'saved' ? 'Saved' : editorStatus === 'ready' ? 'Ready' : 'Incomplete'}
+              className={editorStatus === 'ready' ? 'bg-amber-100 text-amber-900' : undefined}
+            />
           </div>
+        }
+      />
 
-          <div>
-            <label htmlFor="questionId" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-              Question ID:
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
+      {message ? (
+        <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : undefined}>
+          <AlertTitle>{message.type === 'success' ? 'Success' : 'Error'}</AlertTitle>
+          <AlertDescription>{message.text}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {noRubricMessage ? (
+        <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTitle>No rubric found</AlertTitle>
+          <AlertDescription>{noRubricMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <Panel>
+          <PanelHeader>
+            <PanelTitle>Rubric target</PanelTitle>
+          </PanelHeader>
+          <PanelContent className="space-y-5">
+            <div className="space-y-2">
+              <label htmlFor="examId" className="text-sm font-medium text-slate-800">
+                Exam
+              </label>
+              {isLoadingExams ? (
+                <CardSkeleton lines={2} className="rounded-xl p-4 shadow-none" />
+              ) : (
+                <select
+                  id="examId"
+                  value={examId}
+                  onChange={(e) => setExamId(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                >
+                  <option value="">Select an exam...</option>
+                  {availableExams.map((exam) => (
+                    <option key={exam.examId} value={exam.examId}>
+                      {exam.title} ({exam.examId})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="questionId" className="text-sm font-medium text-slate-800">
+                Question ID
+              </label>
+              <Input
                 id="questionId"
                 type="text"
                 value={questionId}
                 onChange={(e) => setQuestionId(e.target.value)}
                 list="questionIdOptions"
                 placeholder={isLoadingQuestionIds ? 'Loading...' : 'Type or select question ID'}
-                style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
               />
-              {availableQuestionIds.length > 0 && (
+              {availableQuestionIds.length > 0 ? (
                 <datalist id="questionIdOptions">
                   {availableQuestionIds.map((qId) => (
                     <option key={qId} value={qId} />
                   ))}
                 </datalist>
-              )}
+              ) : null}
+              {isLoadingQuestionIds && examId ? <p className="text-xs text-slate-500">Loading existing question IDs...</p> : null}
             </div>
-            {isLoadingQuestionIds && examId && (
-              <small style={{ color: '#666', fontSize: '0.85em' }}>Loading existing questions...</small>
-            )}
-          </div>
-        </div>
 
-        <div>
-          <label htmlFor="title" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-            Title (optional):
-          </label>
-          <input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Rubric title"
-            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-          />
-        </div>
+            <div className="space-y-2">
+              <label htmlFor="title" className="text-sm font-medium text-slate-800">
+                Title (optional)
+              </label>
+              <Input
+                id="title"
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Rubric title"
+              />
+            </div>
 
-        <div>
-          <label htmlFor="generalGuidance" style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
-            General Guidance (optional):
-          </label>
-          <textarea
-            id="generalGuidance"
-            value={generalGuidance}
-            onChange={(e) => setGeneralGuidance(e.target.value)}
-            placeholder="General guidance for graders"
-            rows={3}
-            style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', fontFamily: 'inherit' }}
-          />
-        </div>
-      </div>
+            <div className="space-y-2">
+              <label htmlFor="generalGuidance" className="text-sm font-medium text-slate-800">
+                General guidance (optional)
+              </label>
+              <Textarea
+                id="generalGuidance"
+                value={generalGuidance}
+                onChange={(e) => setGeneralGuidance(e.target.value)}
+                placeholder="General guidance for graders"
+                rows={4}
+              />
+            </div>
 
-      <div style={{ marginTop: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h2>Criteria</h2>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <span style={{ fontWeight: 'bold' }}>Total Max Points: {totalMaxPoints}</span>
-            <button
-              onClick={handleAddCriterion}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              Add Criterion
-            </button>
-          </div>
-        </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={handleLoad} disabled={isLoading || isSaving} variant="outline">
+                {isLoading ? 'Loading...' : 'Load'}
+              </Button>
+              <Button onClick={handleSave} disabled={!canSave || isSaving || isLoading}>
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {criteria.map((criterion, index) => {
-            const errors = getCriterionErrors(criterion);
-            return (
-              <div
-                key={criterion.id}
-                style={{
-                  padding: '1rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  backgroundColor: errors.length > 0 ? '#fff5f5' : '#fff',
-                }}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '1rem', alignItems: 'start' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9em', fontWeight: 'bold' }}>
-                      Label *
-                    </label>
-                    <input
-                      type="text"
-                      value={criterion.label}
-                      onChange={(e) => handleCriterionChange(criterion.id, 'label', e.target.value)}
-                      placeholder="Criterion label"
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem',
-                        border: errors.some((e) => e.includes('Label')) ? '2px solid #dc3545' : '1px solid #ccc',
-                        borderRadius: '4px',
-                      }}
-                    />
-                    {errors.some((e) => e.includes('Label')) && (
-                      <div style={{ color: '#dc3545', fontSize: '0.85em', marginTop: '0.25rem' }}>
-                        Label is required
-                      </div>
-                    )}
-                  </div>
+            {!canSave ? (
+              <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+                <AlertTitle>Cannot save yet</AlertTitle>
+                <AlertDescription>Pick exam + question and resolve criterion validation errors before saving.</AlertDescription>
+              </Alert>
+            ) : null}
+          </PanelContent>
+        </Panel>
 
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9em', fontWeight: 'bold' }}>
-                      Kind
-                    </label>
-                    <select
-                      value={criterion.kind}
-                      onChange={(e) => handleCriterionChange(criterion.id, 'kind', e.target.value as 'points' | 'binary')}
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-                    >
-                      <option value="points">points</option>
-                      <option value="binary">binary</option>
-                    </select>
-                  </div>
+        <Panel>
+          <PanelHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <PanelTitle>Criteria</PanelTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <StatusBadge status="DONE" label={`Total ${totalMaxPoints} pts`} className="bg-slate-800 text-white" />
+              <Button onClick={handleAddCriterion} size="sm">
+                Add criterion
+              </Button>
+            </div>
+          </PanelHeader>
 
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9em', fontWeight: 'bold' }}>
-                      Max Points *
-                    </label>
-                    <input
-                      type="number"
-                      value={criterion.maxPoints || ''}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value, 10);
-                        handleCriterionChange(criterion.id, 'maxPoints', isNaN(value) ? 0 : value);
-                      }}
-                      min="1"
-                      step="1"
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem',
-                        border: errors.some((e) => e.includes('Max Points')) ? '2px solid #dc3545' : '1px solid #ccc',
-                        borderRadius: '4px',
-                      }}
-                    />
-                    {errors.some((e) => e.includes('Max Points')) && (
-                      <div style={{ color: '#dc3545', fontSize: '0.85em', marginTop: '0.25rem' }}>
-                        Must be a positive integer
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9em', fontWeight: 'bold' }}>
-                      Guidance
-                    </label>
-                    <input
-                      type="text"
-                      value={criterion.guidance}
-                      onChange={(e) => handleCriterionChange(criterion.id, 'guidance', e.target.value)}
-                      placeholder="Optional guidance"
-                      style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
-                    />
-                  </div>
-
-                  <div style={{ paddingTop: '1.5rem' }}>
-                    <button
-                      onClick={() => handleRemoveCriterion(criterion.id)}
-                      disabled={criteria.length === 1}
-                      style={{
-                        padding: '0.5rem 1rem',
-                        backgroundColor: criteria.length === 1 ? '#ccc' : '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: criteria.length === 1 ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
+          <PanelContent>
+            {isLoading ? (
+              <div className="space-y-3">
+                <CardSkeleton lines={3} />
+                <CardSkeleton lines={3} />
               </div>
-            );
-          })}
-        </div>
+            ) : (
+              <div className="space-y-4">
+                {!hasTargetSelection ? (
+                  <EmptyState
+                    title="Select exam and question"
+                    className="py-6"
+                  />
+                ) : null}
+
+                {noRubricMessage ? (
+                  <EmptyState
+                    title="No rubric exists yet"
+                    className="py-6"
+                  />
+                ) : null}
+
+                {criteria.map((criterion, index) => {
+                  const errors = getCriterionErrors(criterion);
+                  return (
+                    <article
+                      key={criterion.id}
+                      className={cn(
+                        'rounded-xl border bg-white p-4 shadow-sm transition-colors hover:border-slate-300',
+                        errors.length > 0 ? 'border-red-200 bg-red-50/40' : 'border-slate-200'
+                      )}
+                    >
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <h3 className="font-heading text-sm font-semibold text-slate-900">Criterion {index + 1}</h3>
+                        <Button
+                          onClick={() => handleRemoveCriterion(criterion.id)}
+                          disabled={criteria.length === 1}
+                          variant="outline"
+                          size="sm"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold tracking-wide text-slate-600 uppercase">Label *</label>
+                          <Input
+                            type="text"
+                            value={criterion.label}
+                            onChange={(e) => handleCriterionChange(criterion.id, 'label', e.target.value)}
+                            placeholder="Criterion label"
+                            className={errors.some((e) => e.includes('Label')) ? 'border-red-300 focus-visible:ring-red-500' : undefined}
+                          />
+                          {errors.some((e) => e.includes('Label')) ? (
+                            <p className="text-xs text-red-700">Label is required.</p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold tracking-wide text-slate-600 uppercase">Kind</label>
+                          <select
+                            value={criterion.kind}
+                            onChange={(e) => handleCriterionChange(criterion.id, 'kind', e.target.value as 'points' | 'binary')}
+                            className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                          >
+                            <option value="points">points</option>
+                            <option value="binary">binary</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold tracking-wide text-slate-600 uppercase">Max points *</label>
+                          <Input
+                            type="number"
+                            value={criterion.maxPoints || ''}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value, 10);
+                              handleCriterionChange(criterion.id, 'maxPoints', Number.isNaN(value) ? 0 : value);
+                            }}
+                            min="1"
+                            step="1"
+                            className={errors.some((e) => e.includes('Max Points')) ? 'border-red-300 focus-visible:ring-red-500' : undefined}
+                          />
+                          {errors.some((e) => e.includes('Max Points')) ? (
+                            <p className="text-xs text-red-700">Must be a positive integer.</p>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div className="mt-4 space-y-2">
+                        <label className="text-xs font-semibold tracking-wide text-slate-600 uppercase">Guidance</label>
+                        <Input
+                          type="text"
+                          value={criterion.guidance}
+                          onChange={(e) => handleCriterionChange(criterion.id, 'guidance', e.target.value)}
+                          placeholder="Optional guidance"
+                        />
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </PanelContent>
+        </Panel>
       </div>
-
-      <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
-        <button
-          onClick={handleLoad}
-          disabled={isLoading || isSaving}
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: isLoading ? '#ccc' : '#0070f3',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: isLoading || isSaving ? 'not-allowed' : 'pointer',
-            fontSize: '1rem',
-          }}
-        >
-          {isLoading ? 'Loading...' : 'Load'}
-        </button>
-
-        <button
-          onClick={handleSave}
-          disabled={!canSave || isSaving || isLoading}
-          style={{
-            padding: '0.75rem 1.5rem',
-            backgroundColor: !canSave ? '#ccc' : '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: !canSave || isSaving || isLoading ? 'not-allowed' : 'pointer',
-            fontSize: '1rem',
-          }}
-        >
-          {isSaving ? 'Saving...' : 'Save'}
-        </button>
       </div>
-
-      {!canSave && (
-        <div style={{ marginTop: '1rem', padding: '0.75rem', backgroundColor: '#fff3cd', borderRadius: '4px', color: '#856404' }}>
-          Please fix validation errors before saving.
-        </div>
-      )}
     </main>
   );
 }
-
