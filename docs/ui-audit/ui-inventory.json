@@ -1,0 +1,201 @@
+{
+  "uiStack": {
+    "framework": "next-app-router",
+    "nextVersion": "^14.0.0",
+    "reactVersion": "^18.2.0",
+    "tailwind": true,
+    "tailwindVersion": "^4.1.18",
+    "shadcn": false,
+    "shadcnStyleComponentsPattern": true,
+    "radix": false,
+    "lucideReact": false,
+    "nextThemes": false,
+    "framerMotion": false,
+    "reactPdf": true,
+    "fontSystem": "next/font/google (Manrope + Space Grotesk)"
+  },
+  "routes": [
+    {
+      "route": "/",
+      "pageFile": "apps/web/src/app/page.tsx",
+      "layouts": [
+        "apps/web/src/app/layout.tsx"
+      ],
+      "components": [
+        "apps/web/src/components/RubricCriterionRow.tsx",
+        "apps/web/src/components/ui/button.tsx",
+        "apps/web/src/components/ui/card.tsx",
+        "apps/web/src/components/ui/badge.tsx",
+        "apps/web/src/components/ui/alert.tsx",
+        "apps/web/src/components/ui/input.tsx",
+        "apps/web/src/components/ui/textarea.tsx",
+        "apps/web/src/components/ui/table.tsx"
+      ]
+    },
+    {
+      "route": "/exams",
+      "pageFile": "apps/web/src/app/exams/page.tsx",
+      "layouts": [
+        "apps/web/src/app/layout.tsx"
+      ],
+      "components": []
+    },
+    {
+      "route": "/rubrics",
+      "pageFile": "apps/web/src/app/rubrics/page.tsx",
+      "layouts": [
+        "apps/web/src/app/layout.tsx"
+      ],
+      "components": []
+    },
+    {
+      "route": "/reviews",
+      "pageFile": "apps/web/src/app/reviews/page.tsx",
+      "layouts": [
+        "apps/web/src/app/layout.tsx"
+      ],
+      "components": [
+        "apps/web/src/components/ui/card.tsx",
+        "apps/web/src/components/ui/badge.tsx",
+        "apps/web/src/components/ui/button.tsx",
+        "apps/web/src/components/ui/alert.tsx",
+        "apps/web/src/components/ui/input.tsx"
+      ]
+    },
+    {
+      "route": "/reviews/[jobId]",
+      "pageFile": "apps/web/src/app/reviews/[jobId]/page.tsx",
+      "layouts": [
+        "apps/web/src/app/layout.tsx"
+      ],
+      "components": [
+        "apps/web/src/components/review/pdf/PDFViewer.tsx",
+        "apps/web/src/components/review/StudyPointersPanel.tsx",
+        "apps/web/src/components/ui/card.tsx",
+        "apps/web/src/components/ui/badge.tsx",
+        "apps/web/src/components/ui/alert.tsx"
+      ]
+    },
+    {
+      "route": "/courses",
+      "pageFile": "apps/web/src/app/courses/page.tsx",
+      "layouts": [
+        "apps/web/src/app/layout.tsx"
+      ],
+      "components": [
+        "apps/web/src/components/courses/CreateCourseCard.tsx",
+        "apps/web/src/components/courses/CoursesTable.tsx",
+        "apps/web/src/components/ui/alert.tsx",
+        "apps/web/src/components/ui/badge.tsx",
+        "apps/web/src/components/ui/button.tsx"
+      ]
+    },
+    {
+      "route": "/courses/[courseId]",
+      "pageFile": "apps/web/src/app/courses/[courseId]/page.tsx",
+      "layouts": [
+        "apps/web/src/app/layout.tsx"
+      ],
+      "components": [
+        "apps/web/src/components/courses/LectureUploadForm.tsx",
+        "apps/web/src/components/courses/LecturesTable.tsx",
+        "apps/web/src/components/courses/RagIndexPanel.tsx",
+        "apps/web/src/components/courses/RagTestPanel.tsx",
+        "apps/web/src/components/ui/alert.tsx",
+        "apps/web/src/components/ui/badge.tsx",
+        "apps/web/src/components/ui/button.tsx",
+        "apps/web/src/components/ui/card.tsx"
+      ]
+    }
+  ],
+  "components": [
+    {
+      "name": "Alert",
+      "path": "apps/web/src/components/ui/alert.tsx",
+      "type": "primitive"
+    },
+    {
+      "name": "Badge",
+      "path": "apps/web/src/components/ui/badge.tsx",
+      "type": "primitive"
+    },
+    {
+      "name": "Button",
+      "path": "apps/web/src/components/ui/button.tsx",
+      "type": "primitive"
+    },
+    {
+      "name": "Card",
+      "path": "apps/web/src/components/ui/card.tsx",
+      "type": "primitive"
+    },
+    {
+      "name": "Input",
+      "path": "apps/web/src/components/ui/input.tsx",
+      "type": "primitive"
+    },
+    {
+      "name": "Table",
+      "path": "apps/web/src/components/ui/table.tsx",
+      "type": "primitive"
+    },
+    {
+      "name": "Textarea",
+      "path": "apps/web/src/components/ui/textarea.tsx",
+      "type": "primitive"
+    },
+    {
+      "name": "CreateCourseCard",
+      "path": "apps/web/src/components/courses/CreateCourseCard.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "CoursesTable",
+      "path": "apps/web/src/components/courses/CoursesTable.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "LectureUploadForm",
+      "path": "apps/web/src/components/courses/LectureUploadForm.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "LecturesTable",
+      "path": "apps/web/src/components/courses/LecturesTable.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "RagIndexPanel",
+      "path": "apps/web/src/components/courses/RagIndexPanel.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "RagTestPanel",
+      "path": "apps/web/src/components/courses/RagTestPanel.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "StudyPointersPanel",
+      "path": "apps/web/src/components/review/StudyPointersPanel.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "PDFViewer",
+      "path": "apps/web/src/components/review/pdf/PDFViewer.tsx",
+      "type": "feature"
+    },
+    {
+      "name": "RubricCriterionRow",
+      "path": "apps/web/src/components/RubricCriterionRow.tsx",
+      "type": "page-only"
+    }
+  ],
+  "styles": {
+    "globals": "apps/web/src/app/globals.css",
+    "tailwindConfig": "apps/web/tailwind.config.ts",
+    "postcssConfig": "apps/web/postcss.config.js",
+    "themeProvider": "none",
+    "darkMode": "no-next-themes; no .dark strategy; light-only CSS variables in :root",
+    "layout": "apps/web/src/app/layout.tsx"
+  }
+}

@@ -51,7 +51,7 @@ type GeneralEvaluatePerQuestionResult = { type: 'general'; result: GeneralEvalua
 
 /**
  * Evaluate submission per-question in General mode
- * For each questionId: maps pages, extracts mini-PDF if needed, and evaluates with >=3 findings
+ * For each questionId: maps pages, extracts mini-PDF if needed, and evaluates with >=1 finding
  */
 export async function generalEvaluatePerQuestion(job: JobRecord): Promise<GeneralEvaluatePerQuestionResult> {
   const gradingMode = job.inputs.gradingMode || 'RUBRIC';
@@ -86,9 +86,9 @@ IMPORTANT:
 ${scopeInstruction}
 
 CRITICAL REQUIREMENTS:
-1) You MUST return at least 3 findings.
-2) You MUST include at least 1 finding with kind="strength" (what the student did well).
-3) You MUST include at least 1 finding with kind="issue" (mistakes/problems).
+1) You MUST return at least 1 finding.
+2) Use kind="issue" for mistakes/problems and kind="strength" for positive points.
+3) If no issues are found, return at least one meaningful strength finding.
 4) For issues: include severity ("critical", "major", or "minor").
 5) For strengths: severity is optional/ignored.
 6) Confidence: 0.0 to 1.0 (how certain you are about this finding).
@@ -283,9 +283,9 @@ IMPORTANT:
 ${scopeInstruction}
 
 CRITICAL REQUIREMENTS:
-1) You MUST return at least 3 findings.
-2) You MUST include at least 1 finding with kind="strength" (what the student did well).
-3) You MUST include at least 1 finding with kind="issue" (mistakes/problems).
+1) You MUST return at least 1 finding.
+2) Use kind="issue" for mistakes/problems and kind="strength" for positive points.
+3) If no issues are found, return at least one meaningful strength finding.
 4) For issues: include severity ("critical", "major", or "minor").
 5) For strengths: severity is optional/ignored.
 6) Confidence: 0.0 to 1.0 (how certain you are about this finding).
@@ -358,30 +358,18 @@ Return the JSON now:`;
 
         // Validate findings array
         const findingsArray = Array.isArray(parsedObj.findings) ? parsedObj.findings : [];
-        if (findingsArray.length < 3) {
+        if (findingsArray.length < 1) {
           if (attempt === 0) {
             // Retry with repair prompt
-            const repairPrompt = `${prompt}\n\nIMPORTANT: You must return at least 3 findings, including at least 1 strength and 1 issue. Please try again.`;
+            const repairPrompt = `${prompt}\n\nIMPORTANT: You must return at least 1 finding. If there are no issues, return at least one meaningful strength finding. Please try again.`;
             parts[0] = { text: repairPrompt };
             continue;
           }
-          throw new Error(`Invalid findings: must have at least 3 findings, got ${findingsArray.length}`);
+          throw new Error(`Invalid findings: must have at least 1 finding, got ${findingsArray.length}`);
         }
 
         // Validate each finding
         const findings = findingsArray.map((f: unknown) => FindingSchema.parse(f));
-        const strengths = findings.filter((f) => f.kind === 'strength');
-        const issues = findings.filter((f) => f.kind !== 'strength'); // includes undefined (defaults to issue)
-
-        if (strengths.length < 1 || issues.length < 1) {
-          if (attempt === 0) {
-            // Retry with repair prompt
-            const repairPrompt = `${prompt}\n\nIMPORTANT: You must include at least 1 finding with kind="strength" and at least 1 finding with kind="issue". Please try again.`;
-            parts[0] = { text: repairPrompt };
-            continue;
-          }
-          throw new Error(`Invalid findings: must include at least 1 strength and 1 issue. Got ${strengths.length} strengths and ${issues.length} issues.`);
-        }
 
         // Build question evaluation with metadata
         questionEval = {

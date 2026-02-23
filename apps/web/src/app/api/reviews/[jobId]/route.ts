@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as path from 'path';
 import { ReviewRecordSchema, ReviewRecord } from '@hg/shared-schemas';
 import { getOrCreateReview, saveReview } from '@hg/local-job-store';
 
@@ -100,6 +99,91 @@ export async function PUT(
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       { ok: false, error: `Failed to save review: ${errorMessage}` },
+      { status: 500 }
+    );
+  }
+}
+
+type UpdateReviewDisplayNamePayload = {
+  displayName?: string | null;
+};
+
+function parseUpdateReviewDisplayNamePayload(body: unknown):
+  | { ok: true; data: UpdateReviewDisplayNamePayload }
+  | { ok: false; error: string } {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return { ok: false, error: 'Payload must be an object' };
+  }
+
+  const record = body as Record<string, unknown>;
+  if (!Object.prototype.hasOwnProperty.call(record, 'displayName')) {
+    return { ok: true, data: {} };
+  }
+
+  const value = record.displayName;
+  if (value !== null && typeof value !== 'string') {
+    return { ok: false, error: 'displayName must be a string or null' };
+  }
+
+  if (typeof value === 'string' && value.trim().length > 120) {
+    return { ok: false, error: 'displayName must be at most 120 characters' };
+  }
+
+  return { ok: true, data: { displayName: value as string | null } };
+}
+
+/**
+ * PATCH /api/reviews/[jobId]
+ * Update review metadata (currently displayName only)
+ */
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ jobId: string }> }
+) {
+  try {
+    const dataDir = process.env.HG_DATA_DIR;
+    if (!dataDir) {
+      return NextResponse.json(
+        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
+        { status: 500 }
+      );
+    }
+
+    const { jobId } = await params;
+    if (!jobId) {
+      return NextResponse.json(
+        { ok: false, error: 'jobId is required' },
+        { status: 400 }
+      );
+    }
+
+    const body = await request.json();
+
+    const parsedPayload = parseUpdateReviewDisplayNamePayload(body);
+    if (!parsedPayload.ok) {
+      return NextResponse.json(
+        { ok: false, error: `Invalid payload: ${parsedPayload.error}` },
+        { status: 400 }
+      );
+    }
+
+    const review = await getOrCreateReview(jobId);
+    const nextDisplayName = parsedPayload.data.displayName?.trim() || undefined;
+
+    if (nextDisplayName) {
+      review.displayName = nextDisplayName;
+    } else {
+      delete review.displayName;
+    }
+    review.updatedAt = new Date().toISOString();
+
+    await saveReview(review);
+
+    return NextResponse.json({ ok: true, data: review });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { ok: false, error: `Failed to update review: ${errorMessage}` },
       { status: 500 }
     );
   }

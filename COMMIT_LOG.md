@@ -13,6 +13,33 @@ This file tracks exactly what each project commit is about, so we can quickly tr
 ## Entries
 
 ### 2026-02-23
+- `Commit Message`: `feat: polish review workflow for demo and capture UI redesign context`
+- `Goal`: stabilize the review UX for presentation and document current UI state before redesign work.
+- `Main Changes`:
+  - `apps/web/src/app/reviews/[jobId]/page.tsx`
+    - adjusted right-sidebar auto-scroll to center the selected finding/annotation instead of clipping near top.
+  - `apps/web/src/app/reviews/page.tsx`
+    - added inline review naming UX (add/edit custom display name in All Reviews).
+  - `apps/web/src/lib/reviewsClient.ts`
+    - added client helper for review display name update.
+  - `apps/web/src/app/api/reviews/[jobId]/route.ts`
+    - added `PATCH /api/reviews/[jobId]` for review metadata update (`displayName`).
+  - `apps/web/src/app/api/reviews/route.ts`
+    - list response now includes `displayName` when available.
+  - `packages/shared-schemas/src/review/v1/schemas.ts`
+    - extended `ReviewRecord` with optional `displayName`.
+  - `packages/shared-schemas/src/general/v1/schemas.ts`
+    - changed per-question findings minimum from 3 to 1 and removed strict strength+issue combination requirement.
+  - `apps/worker/src/core/generalEvaluatePerQuestion.ts`
+    - updated prompts/validation to enforce at least 1 finding (not 3), while still allowing multiple findings.
+  - `docs/ui-audit/*`
+    - added UI Context Pack: current-state report, inventory JSON, screenshot plan, and redesign target brief.
+- `Validation`:
+  - `pnpm --filter @hg/shared-schemas build` (success).
+  - `pnpm --filter worker build` (success).
+  - `pnpm --filter web exec tsc -p tsconfig.json --noEmit` (success).
+
+### 2026-02-23
 - `Commit Message`: `chore: freeze demo baseline with english exam indexing and UI audit docs`
 - `Goal`: lock a minimal, presentable checkpoint before the next UI polish cycle, with clear rollback reference.
 - `Main Changes`:

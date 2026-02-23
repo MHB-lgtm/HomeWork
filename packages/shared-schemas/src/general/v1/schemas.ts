@@ -37,22 +37,16 @@ export const QuestionEvaluationSchema = z.object({
   promptText: z.string().optional(), // from examIndex (optional to store; recommended)
   pageIndices: z.array(z.number().int().nonnegative()).optional(), // from mapping (0-based for original submission)
   mappingConfidence: z.number().min(0).max(1).optional(), // 0..1
-  findings: z.array(FindingSchema).min(3), // must have >=3 findings
+  findings: z.array(FindingSchema).min(1), // must have >=1 finding
   overallSummary: z.string().optional(),
 }).refine(
   (data) => {
     // Ensure findingId uniqueness within question
     const ids = data.findings.map((f) => f.findingId);
-    if (new Set(ids).size !== ids.length) {
-      return false;
-    }
-    // Must include at least 1 strength and 1 issue
-    const strengths = data.findings.filter((f) => f.kind === 'strength');
-    const issues = data.findings.filter((f) => f.kind !== 'strength'); // includes undefined (defaults to issue)
-    return strengths.length >= 1 && issues.length >= 1;
+    return new Set(ids).size === ids.length;
   },
   {
-    message: 'findings must be unique and include at least 1 strength and 1 issue',
+    message: 'findingId values must be unique',
   }
 );
 

@@ -351,11 +351,16 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       offsetTop += current.offsetTop;
       current = current.offsetParent as HTMLElement | null;
     }
-    
-    const padding = 8; // Small padding from top
-    
+
+    // Center the target element in the sidebar viewport and clamp to scroll bounds.
+    const targetHeight = targetElement.offsetHeight;
+    const containerHeight = container.clientHeight;
+    const desiredTop = offsetTop - (containerHeight - targetHeight) / 2;
+    const maxScrollTop = Math.max(0, container.scrollHeight - containerHeight);
+    const clampedTop = Math.min(Math.max(0, desiredTop), maxScrollTop);
+
     container.scrollTo({
-      top: offsetTop - padding,
+      top: clampedTop,
       behavior: 'smooth',
     });
   };

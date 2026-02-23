@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 
 type ReviewSummary = {
   jobId: string;
+  displayName?: string | null;
   status: string;
   examId?: string;
   questionId?: string;
@@ -72,6 +73,7 @@ export async function GET() {
 
       summaries.push({
         jobId,
+        displayName: review?.displayName ?? null,
         status: job?.status || 'UNKNOWN',
         examId: job?.inputs?.examId,
         questionId: job?.inputs?.questionId,

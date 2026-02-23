@@ -1,6 +1,7 @@
 export type ReviewRecordV1 = {
   version: string;
   jobId: string;
+  displayName?: string;
   createdAt: string;
   updatedAt: string;
   annotations: any[];
@@ -8,6 +9,7 @@ export type ReviewRecordV1 = {
 
 export type ReviewSummary = {
   jobId: string;
+  displayName?: string | null;
   status: string;
   examId?: string;
   questionId?: string;
@@ -86,6 +88,47 @@ export async function listReviews(): Promise<
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Failed to fetch reviews',
+    };
+  }
+}
+
+/**
+ * Update display name for a review
+ */
+export async function updateReviewDisplayName(
+  jobId: string,
+  displayName: string | null
+): Promise<
+  | { ok: true; review: ReviewRecordV1 }
+  | { ok: false; error: string; status?: number }
+> {
+  try {
+    const response = await fetch(`/api/reviews/${jobId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ displayName }),
+    });
+
+    const data = await response.json().catch(() => ({
+      ok: false,
+      error: 'Failed to parse response',
+    }));
+
+    if (!response.ok || !data.ok) {
+      return {
+        ok: false,
+        error: data.error || 'Failed to update review name',
+        status: response.status,
+      };
+    }
+
+    return { ok: true, review: data.data as ReviewRecordV1 };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to update review name',
     };
   }
 }

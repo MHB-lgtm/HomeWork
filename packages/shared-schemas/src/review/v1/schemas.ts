@@ -43,6 +43,7 @@ export type Annotation = z.infer<typeof AnnotationSchema>;
 export const ReviewRecordSchema = z.object({
   version: z.literal('1.0.0'),
   jobId: z.string(),
+  displayName: z.string().trim().max(120).optional(),
   createdAt: z.string(), // ISO string
   updatedAt: z.string(), // ISO string
   annotations: z.array(AnnotationSchema),

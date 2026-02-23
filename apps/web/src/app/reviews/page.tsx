@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { listReviews, ReviewSummary } from '../../lib/reviewsClient';
+import { listReviews, ReviewSummary, updateReviewDisplayName } from '../../lib/reviewsClient';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -37,6 +37,10 @@ export default function ReviewsListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingNameJobId, setSavingNameJobId] = useState<string | null>(null);
+  const [renameError, setRenameError] = useState<{ jobId: string; message: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -59,6 +63,7 @@ export default function ReviewsListPage() {
     return reviews.filter((item) => {
       return (
         item.jobId.toLowerCase().includes(q) ||
+        (item.displayName && item.displayName.toLowerCase().includes(q)) ||
         (item.examId && item.examId.toLowerCase().includes(q)) ||
         (item.questionId && item.questionId.toLowerCase().includes(q)) ||
         (item.gradingMode && item.gradingMode.toLowerCase().includes(q))
@@ -68,6 +73,46 @@ export default function ReviewsListPage() {
 
   const totalAnnotations = reviews.reduce((sum, r) => sum + (r.annotationCount || 0), 0);
   const withResults = reviews.filter((r) => r.hasResult).length;
+
+  const startEditingName = (review: ReviewSummary) => {
+    setEditingJobId(review.jobId);
+    setNameDraft(review.displayName || '');
+    setRenameError(null);
+  };
+
+  const cancelEditingName = () => {
+    setEditingJobId(null);
+    setNameDraft('');
+    setRenameError(null);
+  };
+
+  const saveName = async (jobId: string) => {
+    const trimmed = nameDraft.trim();
+    setSavingNameJobId(jobId);
+    setRenameError(null);
+
+    const result = await updateReviewDisplayName(jobId, trimmed.length > 0 ? trimmed : null);
+    if (!result.ok) {
+      setRenameError({ jobId, message: result.error || 'Failed to update name' });
+      setSavingNameJobId(null);
+      return;
+    }
+
+    setReviews((prev) =>
+      prev.map((review) =>
+        review.jobId === jobId
+          ? {
+              ...review,
+              displayName: result.review.displayName || null,
+              updatedAt: result.review.updatedAt || review.updatedAt,
+            }
+          : review
+      )
+    );
+    setEditingJobId(null);
+    setNameDraft('');
+    setSavingNameJobId(null);
+  };
 
   return (
     <main className="min-h-screen review-page-bg text-slate-900">
@@ -103,7 +148,7 @@ export default function ReviewsListPage() {
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by job, exam, question, or mode"
+                  placeholder="Search by name, job, exam, question, or mode"
                   className="w-64"
                 />
               </div>
@@ -130,11 +175,16 @@ export default function ReviewsListPage() {
                     key={review.jobId}
                     className="border border-slate-200/80 bg-white hover:shadow-lg transition-shadow"
                   >
-                    <CardHeader className="pb-2">
+                    <CardHeader className="pb-2 space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                        <CardTitle className="text-base font-semibold text-slate-900">
-                          {review.jobId}
-                        </CardTitle>
+                        <div className="min-w-0 space-y-1">
+                          <CardTitle className="text-base font-semibold text-slate-900 break-all">
+                            {review.jobId}
+                          </CardTitle>
+                          <p className={`text-sm truncate ${review.displayName ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>
+                            {review.displayName || 'No custom name'}
+                          </p>
+                        </div>
                         <Badge variant={getStatusBadgeVariant(review.status)}>
                           {review.status}
                         </Badge>
@@ -142,6 +192,47 @@ export default function ReviewsListPage() {
                       <p className="text-xs text-slate-600">
                         Updated: {formatDate(review.updatedAt)}
                       </p>
+                      {editingJobId === review.jobId ? (
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                              value={nameDraft}
+                              onChange={(e) => setNameDraft(e.target.value)}
+                              placeholder="Add review name"
+                              maxLength={120}
+                              className="h-8 text-sm"
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => saveName(review.jobId)}
+                              disabled={savingNameJobId === review.jobId}
+                            >
+                              {savingNameJobId === review.jobId ? 'Saving...' : 'Save'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={cancelEditingName}
+                              disabled={savingNameJobId === review.jobId}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                          {renameError?.jobId === review.jobId && (
+                            <p className="text-xs text-red-600">{renameError.message}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => startEditingName(review)}
+                          >
+                            {review.displayName ? 'Edit name' : 'Add name'}
+                          </Button>
+                        </div>
+                      )}
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="flex flex-wrap gap-2 text-sm text-slate-700">
