@@ -35,7 +35,7 @@ async function runExamIndexGeneration(examId: string): Promise<ExamIndexingResul
   const workspaceRoot = findWorkspaceRoot(process.cwd());
 
   return new Promise((resolve) => {
-    const args = ['--filter', 'worker', 'exam:index', '--', '--examId', examId];
+    const args = ['--filter', 'worker', 'exam:index', '--examId', examId];
     const child = spawn('pnpm', args, {
       cwd: workspaceRoot,
       env: process.env,

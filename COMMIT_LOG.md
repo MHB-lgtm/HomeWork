@@ -12,6 +12,24 @@ This file tracks exactly what each project commit is about, so we can quickly tr
 
 ## Entries
 
+### 2026-02-23
+- `Commit Message`: `chore: freeze demo baseline with english exam indexing and UI audit docs`
+- `Goal`: lock a minimal, presentable checkpoint before the next UI polish cycle, with clear rollback reference.
+- `Main Changes`:
+  - `apps/worker/src/scripts/generateExamIndex.ts`
+    - enforced English output for indexed question text fields (`displayLabel`, `aliases`, `promptText`).
+    - added automatic retry/repair when non-English (Hebrew) text is detected in generated question metadata.
+  - `apps/web/src/app/api/exams/route.ts`
+    - fixed auto-index command argument format to call worker indexing reliably from exam upload flow.
+  - `ARCHITECTURE.md`
+    - replaced with a focused "current-state" architecture document aligned to active runtime flows.
+  - `docs/ui-current-state.md`
+    - added discovery audit of current UI stack, route composition, component inventory, and redesign pain points.
+  - `docs/ui-inventory.json`
+    - added machine-readable UI inventory (routes, stack flags, component index).
+- `Validation`:
+  - `pnpm --filter worker build` (success).
+
 ### 2026-02-22
 - `Commit Message`: `fix: stabilize review status badge and add presentation smoke runbook`
 - `Goal`: make the review UI status reliable and create a repeatable pre-presentation smoke flow.

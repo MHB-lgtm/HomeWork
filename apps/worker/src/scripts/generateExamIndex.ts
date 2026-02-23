@@ -92,6 +92,23 @@ function extractJsonFromText(text: string): string {
   return cleaned.substring(firstBrace, lastBrace + 1);
 }
 
+function containsHebrew(text: string): boolean {
+  return /[\u0590-\u05FF]/.test(text);
+}
+
+function hasNonEnglishQuestionText(questions: Array<{
+  displayLabel: string;
+  aliases: string[];
+  promptText: string;
+}>): boolean {
+  return questions.some((question) => {
+    if (containsHebrew(question.displayLabel) || containsHebrew(question.promptText)) {
+      return true;
+    }
+    return question.aliases.some((alias) => containsHebrew(alias));
+  });
+}
+
 interface ExamRecord {
   examId: string;
   title: string;
@@ -184,12 +201,14 @@ IMPORTANT: Return ONLY valid JSON. No markdown. No explanations.
 REQUIREMENTS:
 - Use stable internal IDs: q1, q2, q3, ... qN (where N is the number of questions)
 - order must be 1, 2, 3, ... N (contiguous starting from 1)
-- displayLabel should match the exam's visible label (e.g., "Question 1", "Problem 2", "Exercise 3", etc.)
-- aliases should include common variations (e.g., ["Q1", "1)", "Question 1"] for "Question 1")
+- displayLabel must be in English (e.g., "Question 1", "Problem 2", "Exercise 3")
+- aliases should include common English variations (e.g., ["Q1", "1)", "Question 1"] for "Question 1")
 - promptText must contain the actual question statement/instructions (required, non-empty, trimmed, max 800 chars)
-  - Extract the exact question text from the exam document
-  - If exact extraction is impossible, provide a faithful paraphrase
+  - Extract the question meaning from the exam document and write it in English
+  - If the original exam is not in English, translate faithfully to English
+  - If exact extraction is impossible, provide a faithful English paraphrase
   - Keep it concise: truncate to 800 chars if longer
+- All textual fields in output must be English-only: displayLabel, aliases, promptText
 - Keep it simple: do NOT create subquestions (q2a, q2b) unless they are clearly labeled as separate top-level questions in the exam
 - Minimum 1 question required
 
@@ -277,13 +296,32 @@ Return the JSON now:`;
           questions: parsedObj.questions || [],
         };
 
-        examIndex = ExamIndexSchema.parse(examIndexData);
+        const candidateExamIndex = ExamIndexSchema.parse(examIndexData);
+
+        const requiresEnglishRepair = hasNonEnglishQuestionText(
+          candidateExamIndex.questions.map((question) => ({
+            displayLabel: question.displayLabel,
+            aliases: question.aliases,
+            promptText: question.promptText,
+          }))
+        );
+
+        if (requiresEnglishRepair) {
+          if (attempt === 0) {
+            const englishRepairPrompt = `${prompt}\n\nIMPORTANT: The previous response included non-English text. Rewrite ALL text fields in English only:\n- displayLabel must be English\n- aliases must be English\n- promptText must be English\n- Preserve question meaning and order\n- Return ONLY valid JSON.`;
+            parts[0] = { text: englishRepairPrompt };
+            continue;
+          }
+          throw new Error('Gemini response still contains non-English text in question metadata');
+        }
+
+        examIndex = candidateExamIndex;
         break;
       } catch (error) {
         const validationError = error instanceof Error ? error.message : String(error);
         if (attempt === 0) {
           // Retry with repair prompt
-          const repairPrompt = `${prompt}\n\nIMPORTANT: The previous response was invalid. Please ensure:\n- questions array has at least 1 item\n- Each question has: id (q1..qN), order (1..N contiguous), displayLabel (non-empty string), aliases (array of strings), promptText (non-empty string, max 800 chars)\n- promptText must contain the actual question statement/instructions\n- All ids are unique\n- All order values are unique and contiguous starting from 1\n- Return ONLY valid JSON.`;
+          const repairPrompt = `${prompt}\n\nIMPORTANT: The previous response was invalid. Please ensure:\n- questions array has at least 1 item\n- Each question has: id (q1..qN), order (1..N contiguous), displayLabel (non-empty English string), aliases (array of English strings), promptText (non-empty English string, max 800 chars)\n- promptText must contain the question statement/instructions in English\n- All ids are unique\n- All order values are unique and contiguous starting from 1\n- Return ONLY valid JSON.`;
           parts[0] = { text: repairPrompt };
           continue;
         }
