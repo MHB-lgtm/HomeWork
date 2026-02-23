@@ -274,14 +274,10 @@ export default function Home() {
       className={`${inter.className} min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.44),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.38),rgba(56,189,248,0)_70%),radial-gradient(1000px_540px_at_50%_100%,rgba(244,114,182,0.42),rgba(244,114,182,0)_76%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#ffe8f4_100%)]`}
       style={homeFontStyle}
     >
-      <div className="mx-auto flex min-h-screen w-full flex-col px-4 pb-8 pt-20 md:px-6 md:pb-10 md:pt-24">
-        <div className="flex w-full justify-center">
-          <header className="w-[88vw] max-w-[1180px] rounded-full border border-slate-200/80 bg-white/95 px-5 py-2.5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] backdrop-blur-md md:w-[84vw] md:px-7">
-          <div className="flex items-center justify-between gap-4">
+      <div className="mx-auto flex min-h-screen w-full flex-col px-4 pb-8 pt-28 md:px-6 md:pb-10 md:pt-32">
+        <header className="fixed top-4 inset-x-0 z-50 flex justify-center px-4 md:px-6">
+          <div className="flex w-full max-w-[1180px] items-center justify-between rounded-full bg-white px-8 py-3 md:px-10 shadow-md">
             <Link href="/" className="flex items-center gap-3">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 via-cyan-500 to-indigo-500 text-sm font-bold text-white shadow-sm">
-                HG
-              </span>
               <span className="font-heading text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Homework Grader</span>
             </Link>
 
@@ -300,25 +296,26 @@ export default function Home() {
               </Link>
             </nav>
           </div>
-          </header>
-        </div>
+        </header>
 
-        <section className="mx-auto mt-16 flex w-full max-w-3xl flex-col items-center space-y-4 text-center md:mt-20">
-          <h1 className="font-heading text-5xl font-bold tracking-tight text-slate-900 md:text-6xl">
-            Grade Exams With Clarity
-          </h1>
-          <p className="mx-auto max-w-2xl text-lg text-slate-700 md:text-2xl">
-            Upload one student sheet, review focused feedback, and keep your workflow simple.
-          </p>
-          {showWorkerWarning && (
-            <Alert variant="default" className="mx-auto max-w-2xl border-amber-200 bg-amber-50/85 text-amber-900 text-left">
-              <AlertTitle>Worker is not running</AlertTitle>
-              <AlertDescription>Jobs will stay pending until the worker is up.</AlertDescription>
-            </Alert>
-          )}
-        </section>
+        <div className="flex flex-1 items-center justify-center py-10 md:py-14">
+          <div className="mx-auto flex w-full max-w-3xl flex-col items-center">
+          <section className="flex w-full flex-col items-center gap-4 text-center">
+            <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
+              Grade Exams
+            </h1>
+            <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
+              Upload student sheet, review focused feedback, and keep your workflow simple.
+            </p>
+            {showWorkerWarning && (
+              <Alert variant="default" className="mx-auto max-w-2xl border-amber-200 bg-amber-50/85 text-amber-900 text-left">
+                <AlertTitle>Worker is not running</AlertTitle>
+                <AlertDescription>Jobs will stay pending until the worker is up.</AlertDescription>
+              </Alert>
+            )}
+          </section>
 
-        <div className="mt-1 flex w-full flex-col items-center gap-6 md:mt-2">
+          <div className="mx-auto mt-16 flex w-full flex-col items-center gap-6 md:mt-20">
           {/* Left Panel: Create Grading Job */}
           <Card
             id="create-review"
@@ -400,12 +397,6 @@ export default function Home() {
                       />
                       Advanced options
                     </label>
-                    {!showAdvanced ? (
-                      <p className="text-sm text-slate-500">
-                        Default setup is already selected.
-                      </p>
-                    ) : null}
-
                     {showAdvanced ? (
                       <div className="space-y-5 border-t border-slate-200 pt-5">
                         <div className="space-y-2">
@@ -761,6 +752,8 @@ export default function Home() {
               )}
             </div>
           )}
+          </div>
+          </div>
         </div>
       </div>
     </main>
