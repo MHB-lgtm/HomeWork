@@ -9,6 +9,7 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Input } from '../../components/ui/input';
+import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
 
 type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 
@@ -141,19 +142,19 @@ export default function ReviewsListPage() {
   };
 
   return (
-    <main className="min-h-screen review-page-bg text-slate-900">
-      <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 md:py-12">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold tracking-[0.24em] text-slate-500 uppercase">Reviews</p>
-            <h1 className="text-3xl font-bold tracking-tight md:text-4xl">All Reviews</h1>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{reviews.length} reviews</Badge>
-              <Badge variant="outline">{totalAnnotations} annotations</Badge>
-              <Badge variant="outline">{withResults} with results</Badge>
-            </div>
+    <ImmersiveShell>
+      <div className="mx-auto w-full max-w-6xl space-y-8">
+        <section className="flex w-full flex-col items-center gap-4 text-center">
+          <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">All Reviews</h1>
+          <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
+            Monitor review progress, rename jobs, and jump into detailed feedback.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Badge variant="secondary">{reviews.length} reviews</Badge>
+            <Badge variant="outline">{totalAnnotations} annotations</Badge>
+            <Badge variant="outline">{withResults} with results</Badge>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             <Link href="/">
               <Button variant="outline" size="sm">
                 Back to Dashboard
@@ -163,9 +164,9 @@ export default function ReviewsListPage() {
               <Button size="sm">Create Review</Button>
             </Link>
           </div>
-        </div>
+        </section>
 
-        <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+        <Card className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-lg font-semibold text-slate-900">Review Library</CardTitle>
@@ -295,6 +296,6 @@ export default function ReviewsListPage() {
           </CardContent>
         </Card>
       </div>
-    </main>
+    </ImmersiveShell>
   );
 }

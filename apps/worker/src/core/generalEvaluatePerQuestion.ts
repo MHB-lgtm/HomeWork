@@ -49,6 +49,61 @@ function extractJsonFromText(text: string): string {
 
 type GeneralEvaluatePerQuestionResult = { type: 'general'; result: GeneralEvaluation };
 
+const MIN_FINDINGS_PER_QUESTION = 1;
+const MAX_FINDINGS_PER_QUESTION = 2;
+const MAX_FINDING_TITLE_CHARS = 60;
+const MAX_FINDING_DESCRIPTION_CHARS = 120;
+const MAX_FINDING_SUGGESTION_CHARS = 100;
+const MAX_SUMMARY_CHARS = 420;
+const MAX_SUMMARY_LINES = 3;
+
+function compactInlineText(text: string, maxChars: number): string {
+  return text.replace(/\s+/g, ' ').trim().slice(0, maxChars).trim();
+}
+
+function compactSummaryText(summary: string): string {
+  const lines = summary
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .slice(0, MAX_SUMMARY_LINES);
+  return lines.join('\n').slice(0, MAX_SUMMARY_CHARS).trim();
+}
+
+function normalizeFindingTextFields<T extends { title: string; description: string; suggestion?: string }>(
+  finding: T
+): T {
+  const normalized = {
+    ...finding,
+    title: compactInlineText(finding.title, MAX_FINDING_TITLE_CHARS),
+    description: compactInlineText(finding.description, MAX_FINDING_DESCRIPTION_CHARS),
+  };
+
+  if (finding.suggestion) {
+    normalized.suggestion = compactInlineText(finding.suggestion, MAX_FINDING_SUGGESTION_CHARS);
+  }
+
+  return normalized;
+}
+
+function buildFallbackSummary(questionId: string, findings: Array<{ title: string; description: string }>): string {
+  const points = findings
+    .map((finding) => compactInlineText(finding.title || finding.description, 90))
+    .filter(Boolean)
+    .slice(0, MAX_SUMMARY_LINES);
+
+  if (points.length === 0) {
+    return compactSummaryText(`Summary for ${questionId}: review completed.`);
+  }
+
+  if (points.length === 1) {
+    return compactSummaryText(`Main point: ${points[0]}`);
+  }
+
+  return compactSummaryText(points.join('\n'));
+}
+
 /**
  * Evaluate submission per-question in General mode
  * For each questionId: maps pages, extracts mini-PDF if needed, and evaluates with >=1 finding
@@ -74,25 +129,29 @@ export async function generalEvaluatePerQuestion(job: JobRecord): Promise<Genera
     const submissionMimeType = job.inputs.submissionMimeType || inferMimeType(job.inputs.submissionFilePath);
     const submissionBase64 = submissionBuffer.toString('base64');
     const scopeInstruction = 'Evaluate the ENTIRE submission document. Look for mistakes across all questions.';
-    const prompt = `You are a strict exam evaluator. Your task is to find ALL mistakes and strengths in the student's submission.
+    const prompt = `You are a strict exam evaluator. Your task is to find the most important mistakes and strengths in the student's submission.
 
 IMPORTANT:
 - Return ONLY valid JSON (no markdown, no code fences, no explanations).
 - NO scoring. Only list findings (mistakes/issues and strengths).
-- Be strict: list every mistake and strength you can find.
+- Be concise and specific.
 - No duplicates: merge similar issues into a single finding.
-- Use stable IDs: DOCUMENT-F1, DOCUMENT-F2, DOCUMENT-F3, ... (prefixed with DOCUMENT).
+- Use stable IDs: DOCUMENT-F1, DOCUMENT-F2 (prefixed with DOCUMENT).
 
 ${scopeInstruction}
 
 CRITICAL REQUIREMENTS:
-1) You MUST return at least 1 finding.
+1) You MUST return at least 1 finding and at most 2 findings.
 2) Use kind="issue" for mistakes/problems and kind="strength" for positive points.
 3) If no issues are found, return at least one meaningful strength finding.
 4) For issues: include severity ("critical", "major", or "minor").
 5) For strengths: severity is optional/ignored.
 6) Confidence: 0.0 to 1.0 (how certain you are about this finding).
 7) Suggestion (optional): How to fix or improve.
+8) Each finding must be short and to the point:
+   - title: short phrase (keep it brief)
+   - description: one short, focused sentence
+9) "overallSummary" is REQUIRED and can be up to 3 short lines.
 
 JSON format (strict):
 {
@@ -101,15 +160,14 @@ JSON format (strict):
     {
       "findingId": "DOCUMENT-F1",
       "title": "<short title>",
-      "description": "<detailed description>",
+      "description": "<one short focused sentence>",
       "kind": "issue" | "strength",
       "severity": "critical" | "major" | "minor",
       "confidence": <number 0..1>,
       "suggestion": "<optional suggestion>"
-    },
-    ...
+    }
   ],
-  "overallSummary": "<optional summary>"
+  "overallSummary": "<required summary, up to 3 short lines>"
 }
 
 Return the JSON now:`;
@@ -123,8 +181,20 @@ Return the JSON now:`;
     const geminiService = new GeminiService();
     const rawOutput = await geminiService.generateFromParts(parts);
     const jsonText = extractJsonFromText(rawOutput);
-    const parsed = JSON.parse(jsonText);
-    const findings = Array.isArray(parsed.findings) ? parsed.findings.map((f: unknown) => FindingSchema.parse(f)) : [];
+    const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+    const findingsArray = Array.isArray(parsed.findings) ? parsed.findings : [];
+    if (findingsArray.length < MIN_FINDINGS_PER_QUESTION) {
+      throw new Error(
+        `Invalid findings: must have at least ${MIN_FINDINGS_PER_QUESTION} finding, got ${findingsArray.length}`
+      );
+    }
+
+    const findings = findingsArray
+      .slice(0, MAX_FINDINGS_PER_QUESTION)
+      .map((f: unknown) => normalizeFindingTextFields(FindingSchema.parse(f)));
+    const overallSummary =
+      compactSummaryText(typeof parsed.overallSummary === 'string' ? parsed.overallSummary : '') ||
+      buildFallbackSummary('DOCUMENT', findings);
     
     const result: GeneralEvaluation = {
       examId: 'unknown',
@@ -132,7 +202,7 @@ Return the JSON now:`;
       questions: [{
         questionId: 'DOCUMENT',
         findings,
-        overallSummary: typeof parsed.overallSummary === 'string' ? parsed.overallSummary : undefined,
+        overallSummary,
       }],
     };
 
@@ -271,25 +341,29 @@ Return the JSON now:`;
         ? `Focus ONLY on this specific question from the exam:\n\nQUESTION: ${promptText}\n\n${displayLabel ? `(Label: ${displayLabel})` : `(Question ID: ${questionId})`}\n\nDo NOT evaluate other questions.`
         : `Focus ONLY on questionId="${questionId}"${displayLabel ? ` (${displayLabel})` : ''} from the exam file. Do NOT evaluate other questions.`;
 
-    const prompt = `You are a strict exam evaluator. Your task is to find ALL mistakes and strengths in the student's submission for a specific question.
+    const prompt = `You are a strict exam evaluator. Your task is to find the most important mistakes and strengths in the student's submission for a specific question.
 
 IMPORTANT:
 - Return ONLY valid JSON (no markdown, no code fences, no explanations).
 - NO scoring. Only list findings (mistakes/issues and strengths).
-- Be strict: list every mistake and strength you can find.
+- Be concise and specific.
 - No duplicates: merge similar issues into a single finding.
-- Use stable IDs: ${questionId}-F1, ${questionId}-F2, ${questionId}-F3, ... (prefixed with questionId).
+- Use stable IDs: ${questionId}-F1, ${questionId}-F2 (prefixed with questionId).
 
 ${scopeInstruction}
 
 CRITICAL REQUIREMENTS:
-1) You MUST return at least 1 finding.
+1) You MUST return at least 1 finding and at most 2 findings.
 2) Use kind="issue" for mistakes/problems and kind="strength" for positive points.
 3) If no issues are found, return at least one meaningful strength finding.
 4) For issues: include severity ("critical", "major", or "minor").
 5) For strengths: severity is optional/ignored.
 6) Confidence: 0.0 to 1.0 (how certain you are about this finding).
 7) Suggestion (optional): How to fix or improve.
+8) Each finding must be short and to the point:
+   - title: short phrase (keep it brief)
+   - description: one short, focused sentence
+9) "overallSummary" is REQUIRED and can be up to 3 short lines.
 
 JSON format (strict):
 {
@@ -298,15 +372,14 @@ JSON format (strict):
     {
       "findingId": "${questionId}-F1",
       "title": "<short title>",
-      "description": "<detailed description>",
+      "description": "<one short focused sentence>",
       "kind": "issue" | "strength",
       "severity": "critical" | "major" | "minor",  // required for issues, optional for strengths
       "confidence": <number 0..1>,
       "suggestion": "<optional suggestion>"
-    },
-    ...
+    }
   ],
-  "overallSummary": "<optional summary for this question>"
+  "overallSummary": "<required summary for this question, up to 3 short lines>"
 }
 
 Return the JSON now:`;
@@ -358,18 +431,39 @@ Return the JSON now:`;
 
         // Validate findings array
         const findingsArray = Array.isArray(parsedObj.findings) ? parsedObj.findings : [];
-        if (findingsArray.length < 1) {
+        if (
+          findingsArray.length < MIN_FINDINGS_PER_QUESTION ||
+          findingsArray.length > MAX_FINDINGS_PER_QUESTION
+        ) {
           if (attempt === 0) {
             // Retry with repair prompt
-            const repairPrompt = `${prompt}\n\nIMPORTANT: You must return at least 1 finding. If there are no issues, return at least one meaningful strength finding. Please try again.`;
+            const repairPrompt = `${prompt}\n\nIMPORTANT REPAIR: Return 1-2 findings only and include required overallSummary (up to 3 short lines).`;
             parts[0] = { text: repairPrompt };
             continue;
           }
-          throw new Error(`Invalid findings: must have at least 1 finding, got ${findingsArray.length}`);
+          if (findingsArray.length < MIN_FINDINGS_PER_QUESTION) {
+            throw new Error(
+              `Invalid findings: must have at least ${MIN_FINDINGS_PER_QUESTION} finding, got ${findingsArray.length}`
+            );
+          }
         }
 
         // Validate each finding
-        const findings = findingsArray.map((f: unknown) => FindingSchema.parse(f));
+        const findings = findingsArray
+          .slice(0, MAX_FINDINGS_PER_QUESTION)
+          .map((f: unknown) => normalizeFindingTextFields(FindingSchema.parse(f)));
+
+        let overallSummary = compactSummaryText(
+          typeof parsedObj.overallSummary === 'string' ? parsedObj.overallSummary : ''
+        );
+        if (!overallSummary) {
+          if (attempt === 0) {
+            const repairPrompt = `${prompt}\n\nIMPORTANT REPAIR: overallSummary is required and should be up to 3 short lines.`;
+            parts[0] = { text: repairPrompt };
+            continue;
+          }
+          overallSummary = buildFallbackSummary(questionId, findings);
+        }
 
         // Build question evaluation with metadata
         questionEval = {
@@ -380,7 +474,7 @@ Return the JSON now:`;
           pageIndices,
           mappingConfidence,
           findings,
-          overallSummary: typeof parsedObj.overallSummary === 'string' ? parsedObj.overallSummary : undefined,
+          overallSummary,
         };
 
         // Success - break out of retry loop

@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
 import { EmptyState } from '../../components/ui/empty-state';
 import { Input } from '../../components/ui/input';
-import { PageHeader } from '../../components/ui/page-header';
+import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
 import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
 import { StatusBadge } from '../../components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
@@ -179,21 +179,14 @@ export default function ExamsPage() {
   };
 
   return (
-    <main className="min-h-screen review-page-bg text-slate-900">
-      <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-6">
-      <PageHeader
-        title="Exams"
-        actions={
-          <Button
-            type="submit"
-            form="create-exam-form"
-            disabled={isCreating}
-            className="h-auto w-fit rounded-md px-4 py-2 text-sm font-medium transition-colors"
-          >
-            {isCreating ? 'Creating...' : 'Upload Exam'}
-          </Button>
-        }
-      />
+    <ImmersiveShell>
+      <div className="mx-auto w-full max-w-6xl space-y-8">
+      <section className="flex w-full flex-col items-center gap-4 text-center">
+        <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Exams</h1>
+        <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
+          Upload and manage exam templates for grading.
+        </p>
+      </section>
 
       {message ? (
         <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={cn('rounded-xl', alertTone)}>
@@ -225,7 +218,8 @@ export default function ExamsPage() {
         </Alert>
       ) : null}
 
-      <Panel id="upload-exam">
+      <div className="mx-auto w-full max-w-3xl">
+      <Panel id="upload-exam" className="rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
         <PanelHeader>
           <PanelTitle>Upload exam</PanelTitle>
         </PanelHeader>
@@ -268,13 +262,18 @@ export default function ExamsPage() {
             </div>
 
             <div className="flex justify-end">
-              <Button type="submit" disabled={isCreating} className="h-auto w-auto rounded-md px-4 py-2 text-sm font-medium transition-colors">
+              <Button
+                type="submit"
+                disabled={isCreating}
+                className="h-12 w-full rounded-xl bg-slate-900 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
+              >
                 {isCreating ? 'Creating...' : 'Create Exam'}
               </Button>
             </div>
           </form>
         </PanelContent>
       </Panel>
+      </div>
 
       <Panel>
         <PanelHeader>
@@ -360,6 +359,6 @@ export default function ExamsPage() {
         </PanelContent>
       </Panel>
       </div>
-    </main>
+    </ImmersiveShell>
   );
 }

@@ -589,11 +589,11 @@ export default function Home() {
                         const tone = cn(
                           'flex h-10 w-10 items-center justify-center rounded-2xl border text-sm font-semibold',
                           step.complete
-                            ? 'bg-blue-600 text-white border-blue-600'
+                            ? 'bg-slate-100 text-slate-700 border-slate-300'
                             : hasFailure && step.key === 'processing'
                               ? 'bg-red-50 text-red-700 border-red-200'
                               : step.active
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                ? 'bg-slate-100 text-slate-700 border-slate-300'
                                 : 'bg-slate-50 text-slate-500 border-slate-200'
                         );
 

@@ -19,6 +19,18 @@ import { cn } from '../../../lib/utils';
 import { PDFViewer } from '../../../components/review/pdf/PDFViewer';
 import { StudyPointersPanel } from '../../../components/review/StudyPointersPanel';
 
+const MAX_RIGHT_PANEL_TITLE_CHARS = 90;
+const MAX_RIGHT_PANEL_TEXT_CHARS = 180;
+const MAX_RIGHT_PANEL_SUGGESTION_CHARS = 140;
+
+function toShortText(value: string, maxChars: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}...`;
+}
+
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
@@ -447,7 +459,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const reviewTitle = review?.displayName?.trim() || 'Review details';
   if (loading) {
     return (
-      <main className="min-h-screen review-page-bg text-slate-900">
+      <main className="min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
         <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
           <p className="text-slate-600">Loading...</p>
         </div>
@@ -457,7 +469,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
   if (error) {
     return (
-      <main className="min-h-screen review-page-bg text-slate-900">
+      <main className="min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
         <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Error</AlertTitle>
@@ -472,9 +484,9 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   }
 
   return (
-    <main className="h-screen review-page-bg flex flex-col overflow-hidden text-slate-900">
+    <main className="h-screen flex flex-col overflow-hidden text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
       {/* Header - Fixed height */}
-      <div className="shrink-0 p-4 md:p-8 border-b border-slate-200/80 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70 shadow-sm">
+      <div className="shrink-0 border-b border-slate-200/80 bg-white/90 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-white/80 md:p-8">
         <div className="max-w-[1600px] mx-auto">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-1">
@@ -673,7 +685,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                   )}
                                 </div>
                                 <Badge variant="secondary" className="text-xs shrink-0">
-                                  {qEval.findings.length} finding{qEval.findings.length !== 1 ? 's' : ''}
+                                  {qEval.visibleFindings.length} finding{qEval.visibleFindings.length !== 1 ? 's' : ''}
                                 </Badge>
                               </div>
                             </div>
@@ -721,7 +733,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                   >
                                     <div className="flex items-start justify-between gap-2 mb-1">
                                       <div className="font-semibold text-sm flex-1">
-                                        {finding.title}
+                                        {toShortText(finding.title, MAX_RIGHT_PANEL_TITLE_CHARS)}
                                       </div>
                                       <div className="flex gap-1 shrink-0">
                                         {isStrength ? (
@@ -753,12 +765,14 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                       )}
                                     </div>
                                     <div className="text-sm text-slate-700 mb-2">
-                                      {finding.description}
+                                      {toShortText(finding.description, MAX_RIGHT_PANEL_TEXT_CHARS)}
                                     </div>
                                     {finding.suggestion && (
                                       <div className="mt-2 pt-2 border-t border-slate-200">
                                         <div className="text-xs font-medium text-slate-700 mb-1">Suggestion:</div>
-                                        <div className="text-sm text-slate-600">{finding.suggestion}</div>
+                                        <div className="text-sm text-slate-600">
+                                          {toShortText(finding.suggestion, MAX_RIGHT_PANEL_SUGGESTION_CHARS)}
+                                        </div>
                                       </div>
                                     )}
                                     {isSelected && <StudyPointersPanel pointers={activePointers} />}
@@ -870,7 +884,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                           >
                             <div className="flex items-start justify-between gap-2 mb-1">
                               <div className="font-semibold text-sm flex-1">
-                                {ann.label || getCriterionLabel(ann.criterionId)}
+                                {toShortText(ann.label || getCriterionLabel(ann.criterionId), MAX_RIGHT_PANEL_TITLE_CHARS)}
                               </div>
                               {ann.confidence !== undefined && (
                                 <Badge variant="secondary" className="text-xs shrink-0">
@@ -899,7 +913,9 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             {isSelected && ann.comment && (
                               <div className="mt-3 pt-3 border-t border-slate-200">
                                 <div className="text-xs font-medium text-slate-700 mb-1">Comment:</div>
-                                <div className="text-sm text-slate-600">{ann.comment}</div>
+                                <div className="text-sm text-slate-600">
+                                  {toShortText(ann.comment, MAX_RIGHT_PANEL_TEXT_CHARS)}
+                                </div>
                               </div>
                             )}
                             {isSelected && <StudyPointersPanel pointers={activePointers} />}

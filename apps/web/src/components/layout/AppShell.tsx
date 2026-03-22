@@ -57,11 +57,13 @@ const getRouteTitle = (pathname: string): string => {
   return typeof matched.title === 'function' ? matched.title(pathname) : matched.title;
 };
 
+const immersivePrefixes = ['/exams', '/rubrics', '/reviews', '/courses'];
+
 const isImmersiveRoutePath = (pathname: string): boolean => {
   if (pathname === '/') {
     return true;
   }
-  return /^\/reviews\/[^/]+$/.test(pathname);
+  return immersivePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 };
 
 type AppShellProps = {

@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
 import { EmptyState } from '../../components/ui/empty-state';
 import { Input } from '../../components/ui/input';
-import { PageHeader } from '../../components/ui/page-header';
+import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
 import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
 import { StatusBadge } from '../../components/ui/status-badge';
 import { Textarea } from '../../components/ui/textarea';
@@ -248,21 +248,22 @@ export default function RubricsPage() {
   const editorStatus = isSaving ? 'saving' : message?.type === 'success' ? 'saved' : canSave ? 'ready' : 'incomplete';
 
   return (
-    <main className="min-h-screen review-page-bg text-slate-900">
-      <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-6">
-      <PageHeader
-        title="Rubrics"
-        actions={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <StatusBadge status={hasTargetSelection ? 'DONE' : 'PENDING'} label={hasTargetSelection ? 'Target selected' : 'Select target'} />
-            <StatusBadge
-              status={editorStatus === 'saving' ? 'RUNNING' : editorStatus === 'saved' ? 'DONE' : 'PENDING'}
-              label={editorStatus === 'saving' ? 'Saving' : editorStatus === 'saved' ? 'Saved' : editorStatus === 'ready' ? 'Ready' : 'Incomplete'}
-              className={editorStatus === 'ready' ? 'bg-amber-100 text-amber-900' : undefined}
-            />
-          </div>
-        }
-      />
+    <ImmersiveShell>
+      <div className="mx-auto w-full max-w-6xl space-y-8">
+      <section className="flex w-full flex-col items-center gap-4 text-center">
+        <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Rubrics</h1>
+        <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
+          Define consistent grading criteria and guidance per question.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <StatusBadge status={hasTargetSelection ? 'DONE' : 'PENDING'} label={hasTargetSelection ? 'Target selected' : 'Select target'} />
+          <StatusBadge
+            status={editorStatus === 'saving' ? 'RUNNING' : editorStatus === 'saved' ? 'DONE' : 'PENDING'}
+            label={editorStatus === 'saving' ? 'Saving' : editorStatus === 'saved' ? 'Saved' : editorStatus === 'ready' ? 'Ready' : 'Incomplete'}
+            className={editorStatus === 'ready' ? 'bg-amber-100 text-amber-900' : undefined}
+          />
+        </div>
+      </section>
 
       {message ? (
         <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : undefined}>
@@ -279,7 +280,7 @@ export default function RubricsPage() {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <Panel>
+        <Panel className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
           <PanelHeader>
             <PanelTitle>Rubric target</PanelTitle>
           </PanelHeader>
@@ -295,7 +296,7 @@ export default function RubricsPage() {
                   id="examId"
                   value={examId}
                   onChange={(e) => setExamId(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                  className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
                 >
                   <option value="">Select an exam...</option>
                   {availableExams.map((exam) => (
@@ -373,7 +374,7 @@ export default function RubricsPage() {
           </PanelContent>
         </Panel>
 
-        <Panel>
+        <Panel className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
           <PanelHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <PanelTitle>Criteria</PanelTitle>
@@ -450,7 +451,7 @@ export default function RubricsPage() {
                           <select
                             value={criterion.kind}
                             onChange={(e) => handleCriterionChange(criterion.id, 'kind', e.target.value as 'points' | 'binary')}
-                            className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
                           >
                             <option value="points">points</option>
                             <option value="binary">binary</option>
@@ -494,6 +495,6 @@ export default function RubricsPage() {
         </Panel>
       </div>
       </div>
-    </main>
+    </ImmersiveShell>
   );
 }
