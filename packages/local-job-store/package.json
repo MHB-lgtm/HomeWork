@@ -11,6 +11,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "@hg/domain-workflow": "workspace:*",
     "@hg/shared-schemas": "workspace:*"
   },
   "devDependencies": {
