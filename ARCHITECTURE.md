@@ -1,84 +1,141 @@
-# Homework Grader Architecture (Current)
+# Homework Grader Architecture
 
-Last updated: 2026-02-22
-Scope: current implementation in this repository (not planned/future behavior)
+Last updated: 2026-03-23
+Status: canonical architecture document for this repository
+Scope: current implementation, target product architecture, gap analysis, and phased migration path
 
-## 1. Product Focus Right Now
+## 1. Executive Summary
 
-The current product priority is:
+This repository currently implements a monorepo-based grading system with:
 
-- Lecturer uploads an exam file once.
-- Lecturer uploads student submission(s).
-- System grades with minimal setup.
-- Course RAG/study pointers are optional and non-blocking.
+- `apps/web` as the main Next.js App Router application for UI and HTTP APIs.
+- `apps/worker` as the background worker for grading and exam indexing jobs.
+- `packages/domain-workflow` as a storage-agnostic domain foundation package for canonical workflow contracts.
+- file-backed persistence under `HG_DATA_DIR`.
+- no production database, no ORM, and no implemented authentication layer.
 
-This document reflects that priority and the latest implementation.
+The current system is exam-first and review-first. It can upload exams, index questions, create grading jobs, process jobs in a worker, persist review records, and optionally attach course study pointers from a file-backed RAG index. It now also has a storage-agnostic domain foundation layer, but runtime adoption of that layer is still zero by design. The product does not yet implement a course-centric academic platform with students, course memberships, weekly assignments, published results, analytics, notifications, or full audit trails.
 
-## 2. Monorepo Structure
+The target product architecture is materially broader:
+
+- the product becomes course-centric rather than exam-centric,
+- each course is managed by its own lecturer or course admin,
+- students can belong to multiple courses,
+- the system supports two academic modules: Assignments and Exams,
+- results are reviewed, published, audited, exported, and surfaced back to students through a learning dashboard.
+
+Near-term architecture work is narrower than the full target vision. The approved near-term authentication foundation is Auth.js inside `apps/web`. The longer-term product platform direction from the product spec points to Firebase Auth, Firestore, Storage, Functions/Jobs/Triggers, and notifications. That target platform is not implemented in this repository today and should not be treated as current state.
+
+## 2. Current Repository Architecture (As-Is)
+
+### 2.1 Repository shape
+
+This repository is a pnpm monorepo:
 
 ```text
 HomeWork/
 |-- apps/
-|   |-- web/                     # Next.js app (UI + API)
-|   `-- worker/                  # Background grading worker + scripts
+|   |-- web/                       # Next.js App Router app
+|   `-- worker/                    # Background worker and scripts
 |-- packages/
-|   |-- shared-schemas/          # Shared Zod schemas + TS types
-|   |-- local-job-store/         # File-based jobs, reviews, examIndex store
-|   `-- local-course-store/      # File-based courses, lectures, RAG index
-|-- data/                        # Runtime data root (via HG_DATA_DIR)
+|   |-- shared-schemas/            # Shared Zod schemas and TS types
+|   |-- domain-workflow/           # Canonical domain entities, rules, and projections
+|   |-- local-job-store/           # File-backed job/review/exam-index persistence
+|   `-- local-course-store/        # File-backed course/lecture/RAG persistence
 |-- scripts/
-|   `-- presentation-smoke.ps1   # End-to-end smoke script
-`-- .env
+|-- data/                          # Local runtime data root when HG_DATA_DIR points here
+|-- ARCHITECTURE.md
+`-- pnpm-workspace.yaml
 ```
 
-## 3. Runtime Components
+Workspace definition:
 
-### 3.1 Web App (`apps/web`)
+- `pnpm-workspace.yaml` includes `apps/*` and `packages/*`.
 
-- Next.js App Router UI pages (`/`, `/exams`, `/rubrics`, `/reviews`, `/courses`).
-- API routes under `apps/web/src/app/api/*`.
-- Handles exam creation, job creation, review read/write, and course/RAG APIs.
+### 2.2 Runtime components
 
-### 3.2 Worker (`apps/worker`)
+#### `apps/web`
 
-- Consumes jobs from file queue.
-- Executes grading pipeline (RUBRIC or GENERAL).
-- Writes results and annotations.
-- Optionally attaches study pointers (best-effort).
+`apps/web` is the main product application.
 
-Important:
+- Framework: Next.js App Router
+- Responsibilities:
+  - render the current UI routes,
+  - expose product APIs under `apps/web/src/app/api/**`,
+  - write uploaded files to the local data directory,
+  - create exam and grading records through local store packages.
 
-- Actual worker loop command is `pnpm --filter worker job:run-loop`.
-- Single pass command is `pnpm --filter worker job:run-once`.
-- `pnpm --filter worker start` currently runs `dist/index.js` (contract smoke), not the queue loop.
+Current page routes:
 
-### 3.3 Shared Packages
+- `/`
+- `/exams`
+- `/rubrics`
+- `/reviews`
+- `/reviews/[jobId]`
+- `/courses`
+- `/courses/[courseId]`
 
-- `packages/shared-schemas`: canonical contracts (`RubricSpec`, `GeneralEvaluation`, `ExamIndex`, `ReviewRecord`, course/RAG schemas).
-- `packages/local-job-store`: queue state transitions, review storage, examIndex storage.
-- `packages/local-course-store`: course + lecture + lexical RAG index.
+Current API route groups:
 
-### 3.4 External Dependency
+- `apps/web/src/app/api/exams/**`
+- `apps/web/src/app/api/jobs/**`
+- `apps/web/src/app/api/reviews/**`
+- `apps/web/src/app/api/rubrics/**`
+- `apps/web/src/app/api/courses/**`
+- `apps/web/src/app/api/health/route.ts`
 
-- Gemini API via `apps/worker/src/services/geminiService.ts`.
-- Model defaults to `GEMINI_MODEL` env var or `gemini-3-pro-preview`.
+#### `apps/worker`
 
-## 4. Environment and Storage
+`apps/worker` is the background worker.
 
-### 4.1 Required Environment Variables
+- Responsibility:
+  - claim pending grading jobs,
+  - run grading and localization pipelines,
+  - write results and review annotations,
+  - generate exam indices,
+  - optionally attach study pointers from the course RAG index.
 
-- `HG_DATA_DIR`: required for all file-backed storage.
-- `GEMINI_API_KEY`: required for Gemini calls.
-- `GEMINI_MODEL`: optional override.
+Important operational detail:
 
-### 4.2 Data Layout Under `HG_DATA_DIR`
+- `pnpm --filter worker job:run-loop` is the actual queue loop.
+- `pnpm --filter worker start` runs `dist/index.js`, which is not the queue loop and should not be treated as the production worker entrypoint.
+
+#### Shared packages
+
+`packages/shared-schemas`
+
+- canonical Zod schemas and TypeScript contracts for grading, reviews, courses, and exam index artifacts.
+
+`packages/domain-workflow`
+
+- storage-agnostic canonical domain entities, lifecycle models, repository contracts, services, and gradebook publication rules.
+- currently used as a foundation package only; it is not wired into `apps/web` or `apps/worker` runtime flows yet.
+
+`packages/local-job-store`
+
+- file-backed job queue, review persistence, and exam index persistence.
+- includes thin adapters that map current file-backed review and asset data into domain-workflow contracts.
+
+`packages/local-course-store`
+
+- file-backed course, lecture, and RAG index persistence.
+- includes thin adapters that map current course and lecture assets into domain-workflow contracts.
+
+### 2.3 Current persistence model
+
+The current system is file-backed. There is no production database or ORM layer.
+
+Primary data root:
+
+- `HG_DATA_DIR`
+
+Current persisted data layout:
 
 ```text
 <HG_DATA_DIR>/
 |-- uploads/
-|   |-- <copied files used by jobs>
-|   `-- derived/
-|       `-- <jobId>/questions/<questionId>.pdf      # mini-PDF per question
+|   |-- <job file copies>
+|   `-- derived/<jobId>/questions/<questionId>.pdf
 |-- jobs/
 |   |-- pending/
 |   |-- running/
@@ -101,340 +158,795 @@ Important:
 `-- worker/heartbeat.json
 ```
 
-### 4.3 Job Queue Semantics
+### 2.4 Current domain shape
 
-Implemented in `packages/local-job-store/src/fileJobStore.ts`:
+The current repo has the following durable first-class concepts:
 
-- Create job -> write JSON to `jobs/pending`.
-- Claim job -> atomic rename `pending -> running`.
-- Success -> write final JSON in `done`, delete from `running`.
-- Failure -> write final JSON in `failed`, delete from `running`.
+- `Exam`
+- `ExamIndex`
+- `Rubric`
+- `JobRecord`
+- `ReviewRecord`
+- `Course`
+- `Lecture`
+- `RagManifest` and lexical RAG chunks
 
-## 5. Core Contracts
+Important absences in current state:
 
-### 5.1 JobRecord
+- no `User` model,
+- no `Course Membership`,
+- no `Week`,
+- no `Assignment`,
+- no first-class `Submission` entity,
+- no first-class `Exam Batch`,
+- no first-class `Flag`,
+- no first-class `Audit Event`,
+- no first-class `Analytics Snapshot`,
+- no implemented roles or authorization boundaries.
 
-File: `packages/local-job-store/src/types.ts`
+The repo now also contains canonical domain definitions for these concepts in `packages/domain-workflow`, but those definitions are not yet the active runtime persistence model.
 
-Key inputs:
+### 2.5 Current grading system behavior
 
-- `courseId?`
-- `examId?` (now set by web API; fallback inference still exists in worker)
-- `examFilePath`
-- `questionId` (empty string allowed for `GENERAL + DOCUMENT`)
-- `submissionFilePath`
-- `submissionMimeType?`
-- `questionFilePath?`
-- `gradingMode?: 'RUBRIC' | 'GENERAL'`
-- `gradingScope?: 'QUESTION' | 'DOCUMENT'`
+Current grading is job-oriented, not course-lifecycle-oriented.
 
-### 5.2 ExamIndex
+- A grading run is represented by a `JobRecord` in `packages/local-job-store/src/types.ts`.
+- A student submission currently exists as a file path inside job inputs, not as a durable domain entity with history or publish state.
+- A review currently exists as a `ReviewRecord` in `packages/shared-schemas/src/review/v1/schemas.ts`.
+- Review records contain `jobId`, `displayName`, timestamps, and `annotations[]`.
+- Annotation `createdBy` currently distinguishes `'human'` and `'ai'`; it is not a user identity model.
+- Publish-boundary concepts such as `ReviewVersion`, `PublishedResult`, and `GradebookEntry` now exist in `packages/domain-workflow`, but they are not yet persisted or exposed through runtime APIs.
 
-File: `packages/shared-schemas/src/exam-index/v1/schemas.ts`
+### 2.6 Current auth and security state
 
-- `examId`
-- `status: 'proposed' | 'confirmed'`
-- `questions[]` each with:
-- `id` (`q1`, `q2`, ...)
-- `order` (contiguous 1..N)
-- `displayLabel`
-- `aliases[]`
-- `promptText` (required, max 800 chars)
+Current state is unauthenticated.
 
-### 5.3 General Evaluation
+- No auth/session middleware is implemented.
+- Product APIs currently accept requests without login.
+- Sensitive routes such as job creation, raw submission access, exam upload, review mutation, and course index rebuild are currently open at the HTTP layer.
 
-File: `packages/shared-schemas/src/general/v1/schemas.ts`
+Near-term approved direction:
 
-Supports:
+- Auth.js in `apps/web` as the first authentication foundation.
 
-- Legacy: top-level `findings[]`
-- Current preferred: `questions[]` with per-question findings, optional `pageIndices`, optional `mappingConfidence`
+That direction is planned but not yet implemented in the current runtime.
 
-### 5.4 ReviewRecord
+## 3. Target Product Architecture (To-Be)
 
-File: `packages/shared-schemas/src/review/v1/schemas.ts`
+### 3.1 Product shape
 
-- `jobId`
-- `annotations[]` (bbox normalized, `pageIndex`, `status`, metadata)
+The target product is course-centric.
+
+- A `Course` is the primary academic container.
+- Each `Course` is managed by one or more lecturers or course admins.
+- A student can belong to multiple courses through `Course Membership`.
+- Each course exposes two academic modules:
+  - `Assignments`
+  - `Exams`
 
-## 6. Web API Surface (Current)
+The target product is not just a grading console. It is a course operations and student learning platform.
 
-### 6.1 Exams
+### 3.2 Target runtime architecture
 
-- `POST /api/exams` -> create exam, then auto-trigger exam indexing.
-- `GET /api/exams` -> list exams.
-- `GET /api/exams/[examId]` -> fetch exam metadata.
-- `GET /api/exams/[examId]/index` -> fetch examIndex (or `null`).
-- `PUT /api/exams/[examId]/index` -> update examIndex manually.
+The target platform direction from the product spec is:
 
-### 6.2 Jobs
+- Firebase Auth
+- Firestore
+- Storage
+- Functions / Jobs / Triggers
+- Notifications
+
+The intended architectural shape is:
 
-- `POST /api/jobs` -> create grading job.
-- `GET /api/jobs/[id]` -> status/result/error + mode/scope + submission mime.
-- `GET /api/jobs/[id]/submission` -> image-only view endpoint (PNG/JPG/JPEG).
-- `GET /api/jobs/[id]/submission-raw` -> raw submission (PDF or image).
+- web application surface for lecturer and student workflows,
+- centralized identity service,
+- persistent operational data store,
+- object storage for uploaded academic files,
+- background job execution for grading, analytics, notifications, and exports,
+- explicit audit and publication boundaries.
+
+This should not be read as already implemented. It is the target platform direction.
+
+### 3.3 Target academic modules
+
+#### Assignments module
+
+Assignments are course-week scoped.
+
+- Lecturer creates weekly assignments inside a `Week`.
+- Each assignment has:
+  - open date,
+  - deadline,
+  - assignment file,
+  - model solution or evaluation source,
+  - optional rubric or grading instructions.
+- Students download assignments and upload PDF submissions.
+- Resubmission is allowed until the deadline.
+- No grading happens before the deadline.
+- At deadline, an automated grading job runs for the final effective submission.
+- Lecturer reviews and can edit the result.
+- Students see only published results.
+
+#### Exams module
+
+Exams are lecturer-operated batch workflows.
+
+- Lecturer uploads:
+  - original exam,
+  - model solution,
+  - folder or batch of student submissions.
+- The system processes the batch and produces:
+  - final grades,
+  - per-question breakdown,
+  - flags,
+  - class analytics,
+  - exportable outputs.
+
+### 3.4 Target user experiences
+
+#### Student experience
+
+Students should have:
+
+- assignment list and statuses,
+- final scores,
+- technical feedback,
+- per-question breakdown,
+- general summary,
+- learning recommendations,
+- personal dashboard with:
+  - progress over time,
+  - strengths and weaknesses,
+  - weak topics,
+  - previous grades,
+  - submission status comparison.
+
+#### Lecturer experience
+
+Lecturers should have:
+
+- course management,
+- weekly assignment structure,
+- submissions viewer,
+- edit and approve results,
+- flagged-submission filtering,
+- analytics by week, assignment, and course,
+- score distribution,
+- hard-question analysis,
+- common-error analysis,
+- weakest-student analysis,
+- weak-topic and weak-question analysis.
+
+## 4. Core Domains and Entities
 
-### 6.3 Rubrics
+### 4.1 Canonical terminology
 
-- `GET /api/rubrics?examId=<id>` -> list rubric question IDs.
-- `POST /api/rubrics` -> create/update rubric.
-- `GET /api/rubrics/[examId]/[questionId]` -> fetch rubric.
+This document uses the following normalized terms:
 
-### 6.4 Reviews
+- `Course`
+- `Course Membership`
+- `Week`
+- `Assignment`
+- `Submission`
+- `Review`
+- `Exam Batch`
+- `Flag`
+- `Audit Event`
+- `Audit Trail`
+- `Analytics Snapshot`
 
-- `GET /api/reviews` -> list review summaries.
-- `GET /api/reviews/[jobId]` -> get review (creates empty record if missing).
-- `PUT /api/reviews/[jobId]` -> save review.
+### 4.2 Core entity model
 
-### 6.5 Courses and RAG (Optional Path)
+| Entity | Purpose | Current repo status | Target status |
+| --- | --- | --- | --- |
+| `Course` | Academic container owned by lecturers/admins | Exists in minimal form | Remains core aggregate |
+| `Course Membership` | Links users to a course with role and status | Missing | Required |
+| `Week` | Organizes assignments inside a course timeline | Missing | Required |
+| `Assignment` | Weekly task definition with dates and source files | Missing | Required |
+| `Submission` | Student attempt against an assignment | Not first-class; currently only a job input file | Required |
+| `Review` | Human-editable result and annotation surface | Exists, but limited | Required with richer states and audit |
+| `Exam Batch` | Lecturer-operated bulk exam processing unit | Missing | Required |
+| `Flag` | AI, lecturer, or rule-generated issue marker | Missing as first-class entity | Required |
+| `Audit Event` | Immutable event for result lineage | Missing | Required |
+| `Analytics Snapshot` | Materialized aggregate metrics | Missing | Required |
 
-- `GET/POST /api/courses`
-- `GET /api/courses/[courseId]`
-- `GET/POST /api/courses/[courseId]/lectures`
-- `POST /api/courses/[courseId]/rag/rebuild`
-- `GET /api/courses/[courseId]/rag/manifest`
-- `POST /api/courses/[courseId]/rag/query`
-- `POST /api/courses/[courseId]/rag/suggest`
+### 4.3 Supporting grading artifacts
 
-### 6.6 Health
+The target model also needs explicit support for grading artifacts that are only partially modeled today:
 
-- `GET /api/health` -> reads `worker/heartbeat.json`, worker considered alive if heartbeat age < 10s.
+- exam source document,
+- model solution,
+- rubric,
+- question map / parsed structure,
+- grading configuration,
+- export artifact.
 
-## 7. End-to-End Flows
+Current state:
 
-### 7.1 Exam Upload and Auto-Index (Latest)
+- `Exam`, `ExamIndex`, and `Rubric` exist.
+- model solution is not consistently modeled as a distinct persistent entity.
+- exports are not modeled.
+
+### 4.4 Lifecycle states
+
+Recommended target lifecycle states:
+
+| Entity | Target lifecycle |
+| --- | --- |
+| `Assignment` | `draft -> open -> closed -> processing -> reviewed -> published` |
+| `Submission` | `uploaded -> superseded -> queued -> processed -> lecturer-edited -> published` |
+| `Exam Batch` | `uploaded -> processing -> reviewed -> exported` |
+
+These states are not currently implemented as durable state machines in the repo.
+
+## 5. Roles and Authorization Model
+
+### 5.1 Roles
 
-Main code:
+Target roles:
+
+- `Student`
+- `Lecturer`
+- `Super Admin`
 
-- `apps/web/src/app/api/exams/route.ts`
-- `apps/web/src/lib/exams.ts`
-- `apps/worker/src/scripts/generateExamIndex.ts`
+### 5.2 Authorization principles
 
-Flow:
+Authorization should be course-scoped by default.
+
+- Lecturer authority is not global by default.
+- A lecturer should act only within courses where they have lecturer or admin membership.
+- A student should access only their own course memberships, submissions, and published outcomes.
+- `Super Admin` is the only role with system-wide operational authority.
 
-1. Lecturer uploads exam in `/exams`.
-2. API saves exam file + `exam.json`.
-3. API immediately runs:
-- `pnpm --filter worker exam:index -- --examId <examId>`
-4. Indexing result returned in API response (`indexing.ok`, `indexing.message`, `details?`).
-5. UI shows success/warning based on indexing outcome.
+### 5.3 Separation of concerns
 
-Current behavior details:
+Authentication and authorization must remain separate from grading domain logic.
 
-- Auto-index runs inside request lifecycle with 3-minute timeout.
-- Exam creation succeeds even if indexing fails.
+- auth identifies the caller,
+- authorization resolves whether that caller can read or mutate a specific course-scoped resource,
+- grading services operate on authorized domain work items and should not contain user-facing access decisions.
 
-### 7.2 Job Creation
+### 5.4 Current state versus target state
 
-Main code: `apps/web/src/app/api/jobs/route.ts`
+Current repository state:
 
-Flow:
+- no implemented `User` entity,
+- no implemented course memberships,
+- no implemented auth layer,
+- no role enforcement.
 
-1. Validate form (`examId`, submission, mode/scope, question requirements).
-2. Resolve exam metadata via `getExam`.
-3. Load rubric only when `gradingMode='RUBRIC'`.
-4. Write upload(s) under `HG_DATA_DIR/uploads`.
-5. Call `createJob` in local-job-store.
+Near-term state:
 
-Important storage note:
+- Auth.js in `apps/web` to establish login/session boundaries.
 
-- API writes submission file once.
-- `createJob` then copies exam/submission into canonical job upload names.
+Longer-term target direction:
 
-### 7.3 Worker Dispatch
+- Firebase Auth or an explicitly chosen converged identity model that supports the course-scoped authorization layer.
 
-Main code: `apps/worker/src/lib/processNextPendingJob.ts`
+## 6. End-to-End Flows
 
-Flow:
+### 6.1 Assignment flow
 
-1. Claim oldest pending job.
-2. Branch by `gradingMode`.
-3. Produce `resultJson`.
-4. Save review annotations.
-5. Attach study pointers (best-effort).
-6. Complete job or fail job.
+Target flow:
 
-### 7.4 RUBRIC Mode
+1. Lecturer creates a `Course`.
+2. Lecturer configures `Week` structures.
+3. Lecturer creates an `Assignment` inside a week.
+4. Lecturer uploads the assignment file and grading source material.
+5. Assignment opens at the configured open date.
+6. Student downloads the assignment and uploads a PDF `Submission`.
+7. Student may resubmit until the deadline.
+8. At deadline, the system identifies the final active submission per student.
+9. Automated grading runs after deadline, not before it.
+10. The grading pipeline performs OCR/parsing, question-level analysis, comparison to model solution, scoring, feedback generation, and flag generation.
+11. Lecturer reviews the `Review`, edits scores or feedback if needed, and approves publication.
+12. Only after publish does the student see the final result.
 
-Main code:
+Current repository coverage:
 
-- `apps/worker/src/core/gradeSubmission.ts`
-- `apps/worker/src/core/localizeMistakes.ts`
+- only a partial subset exists,
+- there is no `Assignment`,
+- there is no deadline-triggered release model,
+- there is no publish boundary for student visibility,
+- there is no student-facing workflow.
 
-Flow:
+### 6.2 Exam flow
 
-1. Gemini grades one question against rubric criteria.
-2. Localization runs for rubric misses.
-3. Annotations saved to review.
+Target flow:
 
-### 7.5 GENERAL Mode (Current Core)
+1. Lecturer creates or selects a `Course`.
+2. Lecturer uploads:
+  - original exam,
+  - model solution,
+  - folder or batch of student submissions.
+3. System creates an `Exam Batch`.
+4. Batch processing runs OCR/parsing, question mapping, per-question scoring, flags, and aggregate metrics.
+5. Lecturer reviews the batch, adjusts individual results where needed, and exports outputs.
+6. System provides:
+  - final grades,
+  - per-question breakdown,
+  - flags,
+  - class analytics,
+  - export files.
 
-Main code:
+Current repository coverage:
 
-- `apps/worker/src/core/generalEvaluatePerQuestion.ts`
-- `apps/worker/src/core/loadExamIndex.ts`
-- `apps/worker/src/core/mapQuestionPages.ts`
-- `apps/worker/src/core/extractMiniPdf.ts`
-- `apps/worker/src/core/localizeFindingsPerQuestion.ts`
+- current grading is mostly single-submission job processing,
+- `POST /api/jobs` creates one grading job at a time,
+- there is no first-class `Exam Batch`,
+- there is no batch-level review workflow,
+- there is no class analytics or export subsystem.
 
-Flow for `GENERAL + DOCUMENT`:
+### 6.3 Student learning flow
 
-1. Resolve `examId` (prefer `job.inputs.examId`, fallback infer from `examFilePath`).
-2. Build question list in this order:
-- `examIndex.questions` if present.
-- Else rubric question IDs (`rubrics/<examId>/*.json`).
-- Else single synthetic `DOCUMENT` question.
-3. For each question:
-- Map answer pages (`mapQuestionPages`), using full exam file + full submission file.
-- Try extracting mini-PDF pages.
-- Evaluate findings for that question (again with exam file + mini/original submission).
-- Localize finding boxes.
-4. Aggregate all question evaluations and annotations.
+Target flow:
 
-Flow for `GENERAL + QUESTION`:
+1. Student signs in and lands in a personal dashboard.
+2. Student sees assignments and exams relevant to their courses.
+3. Student sees current statuses, final published scores, per-question breakdowns, summaries, and recommendations.
+4. Student tracks performance over time and can compare weak topics, previous grades, and submission outcomes.
 
-- Evaluates only the provided `questionId`.
+Current repository coverage:
 
-## 8. ExamIndex Usage Semantics
+- no student identity,
+- no student-facing UI,
+- no course membership model,
+- no personal dashboard,
+- no publication boundary separating internal review from student-visible results.
 
-`examIndex` is the key to reliable per-question document grading.
+## 7. AI Processing and Review Pipeline
 
-What it enables:
+### 7.1 Current pipeline
 
-- Stable question set (`q1..qN`).
-- Better page mapping context (`displayLabel`, `aliases`, `promptText`).
-- Stronger "focus only this question" prompts.
+The current worker pipeline is implemented in `apps/worker` and is job-driven.
 
-What happens without it:
+Current high-level stages:
 
-- Fallback to rubric question IDs (less context).
-- If no rubrics either -> single `DOCUMENT` evaluation (no real split).
+1. exam upload and optional exam index generation,
+2. job creation through `POST /api/jobs`,
+3. queue claim from file-backed `jobs/pending`,
+4. grading in `RUBRIC` or `GENERAL` mode,
+5. annotation localization,
+6. review persistence,
+7. optional study pointer attachment.
 
-It does not replace the exam file:
+Current grading characteristics:
 
-- Worker still attaches the exam file in Gemini calls that require exam context.
+- `GENERAL` mode can map pages and evaluate per question using `ExamIndex` when present.
+- `RUBRIC` mode grades one question against a rubric.
+- annotations are persisted in review records.
+- course study pointers are best-effort and non-blocking.
 
-## 9. AI Call Model and Context
+### 7.2 Target pipeline
 
-Gemini calls are stateless across requests.
+The target pipeline needs to become domain-aware rather than single-job-oriented.
 
-Meaning:
+Target stages for assignments and exams:
 
-- Model does not persist prior request context.
-- System re-attaches required files each call.
+1. ingestion and file registration,
+2. OCR and parsing,
+3. question segmentation and answer mapping,
+4. model-solution or rubric comparison,
+5. score calculation,
+6. flag generation,
+7. review record creation,
+8. lecturer edits,
+9. publication,
+10. analytics materialization,
+11. notifications and export generation.
 
-Current GENERAL+DOCUMENT pattern per question:
+### 7.3 Review authority
 
-- 1 mapping call (exam + full submission)
-- 1 evaluation call (exam + mini/original submission)
-- 1 localization call (submission side, often mini/original only)
+AI output is not the final published truth.
 
-Total calls scale with number of questions.
+- AI produces candidate results.
+- Lecturer can review and edit.
+- Publish creates the student-visible final result.
+- The system must preserve both AI output and the lecturer-edited result in the audit trail.
 
-## 10. Reviews and UI
+Current repo status:
 
-### 10.1 Main Pages
+- worker-generated results exist,
+- review annotations can be edited,
+- there is not yet a formal publish boundary or immutable published result snapshot.
 
-- `/` -> centered single-column dashboard with:
-- Create Grading Job
-- How grading works
-- System snapshot
-- `/exams` -> exam upload + list + indexing feedback
-- `/rubrics` -> rubric management
-- `/reviews` -> all reviews list
-- `/reviews/[jobId]` -> detailed review viewer with PDF/image overlays
-- `/courses` and `/courses/[courseId]` -> optional course assistant tooling
+## 8. Data Architecture
 
-### 10.2 Review Viewer Highlights
+### 8.1 Current file-backed model
 
-Main code: `apps/web/src/app/reviews/[jobId]/page.tsx`
+Current persistence is local and file-backed.
 
-- Supports RUBRIC and GENERAL result rendering.
-- Uses `submission-raw` endpoint for PDFs.
-- Status badges mapped to real job statuses (`PENDING`, `RUNNING`, `DONE`, `FAILED`).
-- Shows study pointers when attached.
+Properties of the current model:
 
-## 11. Optional Course Assistant (Non-Blocking)
+- simple to inspect and demo,
+- easy to run locally,
+- low operational complexity,
+- no concurrent multi-user guarantees beyond file semantics,
+- no relational or document query layer,
+- weak fit for role-based course-scoped product growth,
+- weak fit for analytics, notifications, and audit-heavy workflows.
 
-Main code:
+Current store coupling:
 
-- `packages/local-course-store/src/fileCourseRagIndex.ts`
-- `apps/worker/src/core/attachStudyPointers.ts`
+- route handlers in `apps/web` call local store packages directly,
+- worker code also calls the same local store packages directly.
 
-Behavior:
+### 8.2 Target persistent model
 
-- If `courseId` exists, worker tries to attach pointers.
-- Missing index (`IndexNotBuiltError`) or missing course does not fail the job.
-- Core grading remains independent from RAG.
+The target system needs a persistent operational data model that supports:
 
-## 12. Recent Changes Incorporated Here
+- users and course memberships,
+- assignment and submission histories,
+- exam batch processing,
+- review and publish state,
+- flags and audit events,
+- analytics snapshots,
+- notifications,
+- exports.
 
-### 12.1 Auto-index after exam upload
+Target platform direction from the spec:
 
-- `apps/web/src/app/api/exams/route.ts` now triggers worker exam indexing immediately.
-- `apps/web/src/app/exams/page.tsx` surfaces indexing success/warning.
-- `apps/web/src/lib/examsClient.ts` returns indexing payload.
+- Firestore as the main persistent operational store,
+- Storage for uploaded files and derived artifacts,
+- Functions / Jobs / Triggers for asynchronous and scheduled execution.
 
-### 12.2 Review stability and demo readiness
+Recommended target logical collections or aggregates:
 
-- `/reviews` list page is active and wired to `GET /api/reviews`.
-- `/reviews/[jobId]` status badge logic aligned with real statuses.
-- `scripts/presentation-smoke.ps1` added for repeatable end-to-end smoke run.
+- `users`
+- `courses`
+- `courseMemberships`
+- `weeks`
+- `assignments`
+- `submissions`
+- `reviews`
+- `examBatches`
+- `flags`
+- `auditEvents`
+- `analyticsSnapshots`
+- `notifications`
+- `exports`
 
-## 13. Operational Commands
+This collection model is a target direction, not an implemented Firestore schema.
 
-### 13.1 Start Services
+### 8.3 Migration principle
 
-```powershell
-pnpm --filter web dev
-pnpm --filter worker job:run-loop
-```
+Do not migrate directly from file-path-coupled route handlers to full target architecture in one step.
 
-### 13.2 One-time Worker Run
+Recommended migration principle:
 
-```powershell
-pnpm --filter worker job:run-once
-```
+- first establish auth and request boundaries,
+- then isolate storage concerns behind clearer repository/service boundaries,
+- then migrate durable state from file-backed storage to the target persistent model.
 
-### 13.3 Manual Exam Index Build
+## 9. Storage and File Handling
 
-```powershell
-pnpm --filter worker exam:index -- --examId <EXAM_ID>
-```
+### 9.1 Current state
 
-### 13.4 Health and Status Checks
+Current file handling is local:
 
-```powershell
-curl.exe http://localhost:3000/api/health
-curl.exe http://localhost:3000/api/jobs/<JOB_ID>
-curl.exe http://localhost:3000/api/reviews
-```
+- uploads are written under `HG_DATA_DIR/uploads`,
+- exams are stored under `HG_DATA_DIR/exams/<examId>`,
+- review JSON lives under `HG_DATA_DIR/reviews`,
+- course assets and RAG artifacts live under `HG_DATA_DIR/courses/<courseId>`.
 
-### 13.5 Smoke Script
+This is workable for local development and demos but not the target product storage model.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/presentation-smoke.ps1
-```
+### 9.2 Target state
 
-## 14. Known Limitations and Risks
+Target file handling should move to object storage with explicit metadata references in the persistent data model.
 
-- Auto-index currently runs inside `POST /api/exams` request; long indexing can delay response.
-- GENERAL mapping re-sends full exam and submission per question (latency/cost scale with question count).
-- `/api/jobs/[id]/submission` is image-only; PDFs must use `/submission-raw`.
-- If examIndex and rubrics are both missing, GENERAL DOCUMENT falls back to single `DOCUMENT` pass.
-- Worker `start` script does not run queue loop; operational docs should use `job:run-loop`.
+Target file categories:
 
-## 15. Active vs Legacy Paths
+- assignment source files,
+- model solutions,
+- exam source files,
+- student submissions,
+- OCR/parsing derivatives,
+- export bundles,
+- notification attachments where applicable.
 
-Active grading paths:
+Storage rules should be authorization-aware and course-scoped.
 
-- `gradeSubmission` (RUBRIC)
-- `generalEvaluatePerQuestion` (GENERAL)
-- `localizeMistakes` and `localizeFindingsPerQuestion`
+### 9.3 File lineage requirements
 
-Legacy/backward-compatible code still present:
+The target system should preserve file lineage:
 
-- `apps/worker/src/core/generalEvaluateSubmission.ts`
-- `apps/worker/src/core/localizeFindings.ts`
+- original upload,
+- latest active submission,
+- derived parsed outputs,
+- published export outputs.
 
-These are not the primary runtime path in `processNextPendingJob`.
+That lineage is currently only partial and mostly implicit through file paths and timestamps.
+
+## 10. Jobs, Triggers, and Background Processing
+
+### 10.1 Current state
+
+Current job execution is file-queue-driven:
+
+- pending jobs are JSON files,
+- worker claims jobs by renaming files,
+- result status is persisted in `pending`, `running`, `done`, and `failed` directories,
+- worker liveness is exposed through `worker/heartbeat.json` and `/api/health`.
+
+Current background tasks include:
+
+- grading jobs,
+- review annotation generation,
+- exam indexing,
+- optional course RAG rebuild and study pointer attachment.
+
+### 10.2 Target state
+
+The target system needs multiple asynchronous execution patterns:
+
+- deadline-triggered assignment grading,
+- exam batch processing,
+- analytics materialization,
+- export generation,
+- notification dispatch,
+- maintenance or repair tasks.
+
+Target platform direction:
+
+- Functions / Jobs / Triggers rather than a local file queue as the primary production execution model.
+
+### 10.3 Scheduling principles
+
+Key target rules:
+
+- assignments are not graded before deadline,
+- only the latest active submission should be graded unless policy explicitly says otherwise,
+- batch exam processing should support lecturer review before export and publication,
+- background processing must be idempotent and auditable.
+
+## 11. Notifications and Export
+
+### 11.1 Current state
+
+Current repository state:
+
+- no notification subsystem,
+- no export subsystem,
+- users currently inspect status via UI polling and review pages.
+
+### 11.2 Target state
+
+Notifications are required.
+
+Required target notification categories:
+
+- assignment opened,
+- assignment deadline approaching,
+- grading complete and ready for lecturer review,
+- published result available to student,
+- flag escalation,
+- export ready,
+- processing failure or operational intervention required.
+
+Export is also required.
+
+Target export categories:
+
+- grade sheets,
+- batch exam results,
+- per-question breakdowns,
+- flag reports,
+- analytics snapshots.
+
+Notification channels are still a design decision.
+
+## 12. Audit Trail and Versioning
+
+### 12.1 Target requirement
+
+The audit trail must include:
+
+- AI-generated result,
+- lecturer edits,
+- timestamps,
+- what was ultimately published.
+
+Flags can originate from:
+
+- AI-generated sources,
+- lecturer-generated sources,
+- rule-generated sources.
+
+### 12.2 Current state
+
+Current repository state is partial:
+
+- `JobRecord` stores timestamps and result payloads,
+- `ReviewRecord` stores timestamps and annotations,
+- there is no immutable `Audit Event` stream,
+- there is no formal version history for lecturer edits,
+- there is no published-result snapshot model,
+- there is no first-class `Flag` entity.
+
+### 12.3 Target versioning principle
+
+The target system should separate:
+
+- AI draft result,
+- reviewer-edited working result,
+- published result,
+- immutable audit events that explain how the published result was produced.
+
+## 13. Security and Auth Boundaries
+
+### 13.1 Current state
+
+Current repository state is not production-safe from an access-control perspective.
+
+- product pages are not protected,
+- product APIs are not protected,
+- raw submission access is currently open at the API boundary,
+- no user or course-scoped authorization exists.
+
+### 13.2 Near-term direction
+
+Near-term approved direction:
+
+- Auth.js in `apps/web`,
+- private-by-default app behavior,
+- centralized request boundaries,
+- secure server-side protection for sensitive routes and APIs,
+- no changes to worker behavior or file-backed stores in the first auth milestone.
+
+### 13.3 Target state
+
+The target product must enforce:
+
+- authenticated users,
+- course-scoped authorization,
+- student-only access to published personal outcomes,
+- lecturer-only access to course management and result editing,
+- super-admin access to platform administration,
+- secure storage boundaries for academic files,
+- service-to-service execution boundaries for background jobs.
+
+### 13.4 Onboarding note
+
+If bulk user onboarding is later introduced, CSV import with generated passwords should not be treated as an approved secure design by default.
+
+Preferred safer direction:
+
+- invitation flows,
+- password setup links,
+- reset-link onboarding,
+- institution-backed identity where available.
+
+Any CSV-plus-generated-password design would require explicit security review.
+
+## 14. Gap Analysis: Current vs Target
+
+| Area | Current repository | Target architecture | Gap |
+| --- | --- | --- | --- |
+| Product center of gravity | Exam-first, job-first | Course-centric with assignments and exams | Large |
+| Identity | No auth implemented | Authenticated platform with role-aware access | Large |
+| Authorization | No course memberships or roles | Course-scoped authorization | Large |
+| Persistence | File-backed local stores | Persistent data model with Firestore and Storage direction | Large |
+| Assignment module | Missing | Full weekly assignment lifecycle | Large |
+| Submission model | File path inside job inputs | First-class submission history with publish semantics | Large |
+| Exam processing | Single-job flow with exam upload and review | Lecturer-managed exam batch workflow | Large |
+| Review lifecycle | Review JSON and annotations only | Review, edit, publish, audit, export | Large |
+| Flags | Implicit, not first-class | AI, lecturer, and rule-generated flags | Large |
+| Analytics | Minimal or absent | Course, assignment, exam, and student analytics snapshots | Large |
+| Notifications | Absent | Required | Large |
+| Export | Absent | Required | Large |
+| Audit trail | Partial timestamps only | Full audit events and published-result lineage | Large |
+
+## 15. Recommended Phased Roadmap
+
+### Phase 0: Stabilize and document current architecture
+
+Goals:
+
+- maintain the current local file-backed system,
+- document actual runtime boundaries,
+- keep the worker and grading pipeline understandable and demoable.
+
+### Phase 1: Authentication foundation in `apps/web`
+
+Goals:
+
+- introduce Auth.js in `apps/web`,
+- make the app private by default,
+- protect sensitive pages and APIs on the server side,
+- keep auth separate from grading domain logic,
+- keep worker and file-backed stores unchanged.
+
+This phase is near-term and narrower than the full target product architecture.
+
+### Phase 2: Persistent domain foundation
+
+Goals:
+
+- introduce the first production persistence layer,
+- define durable domain entities for:
+  - users,
+  - course memberships,
+  - assignments,
+  - submissions,
+  - reviews,
+  - exam batches,
+  - flags,
+  - audit events,
+  - analytics snapshots.
+- move file references into explicit metadata records rather than direct route-handler path assumptions.
+
+Target direction:
+
+- Firestore plus Storage.
+
+### Phase 3: Course and authorization model
+
+Goals:
+
+- implement course-scoped lecturer and student access,
+- add `Course Membership`,
+- define lecturer/admin versus student capabilities,
+- introduce secure course-level navigation and data filtering.
+
+### Phase 4: Assignment module
+
+Goals:
+
+- add `Week`,
+- add `Assignment`,
+- add `Submission` lifecycle and deadline rules,
+- queue grading only after deadline,
+- support lecturer review and publish flow for assignments.
+
+### Phase 5: Exam batch module
+
+Goals:
+
+- add `Exam Batch`,
+- support bulk ingestion,
+- support class-level analytics,
+- support export,
+- support lecturer review before final export or publication.
+
+### Phase 6: Audit, analytics, notifications, and hardening
+
+Goals:
+
+- materialize analytics snapshots,
+- add first-class flags,
+- add immutable audit events,
+- add notification flows,
+- harden operational observability and failure recovery.
+
+## 16. Open Questions / Decisions
+
+1. Identity convergence:
+   - Near-term auth is Auth.js in `apps/web`.
+   - Target platform direction is Firebase Auth.
+   - A future decision is required on whether Auth.js remains the web session layer, is bridged to Firebase identity, or is replaced by Firebase Auth as the primary identity layer.
+
+2. Lecturer authority model:
+   - Does each course allow one lecturer, multiple lecturers, lecturer plus assistants, or lecturer plus graders?
+   - This affects `Course Membership`, approval flows, and analytics visibility.
+
+3. Submission policy:
+   - At deadline, should only the latest active submission be graded, while older ones remain archived?
+   - This is the recommended direction, but it should be confirmed explicitly.
+
+4. Model-solution versus rubric structure:
+   - Should model solutions and rubrics be separate first-class versioned artifacts, or can one derive the other in some modules?
+
+5. Review publishing semantics:
+   - Is publication per submission, per assignment, per exam batch, or both?
+   - The answer affects student visibility and notification triggers.
+
+6. Notification channels:
+   - Email, in-app, push, institution LMS integration, or a mix?
+
+7. Analytics ownership:
+   - Which analytics are computed on demand versus materialized as `Analytics Snapshot` records?
+
+8. Migration strategy:
+   - Should the file-backed stores be wrapped behind repository interfaces before data migration, or migrated directly route-by-route?
+   - The recommended direction is to introduce clearer repository/service boundaries first.
