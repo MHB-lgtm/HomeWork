@@ -1,5 +1,10 @@
 export { getPrismaClient, disconnectPrismaClient } from './client';
-export type { ImportFileBackedOptions, ImportFileBackedSummary, LegacyJobRecord } from './types';
+export type {
+  ImportFileBackedOptions,
+  ImportFileBackedSummary,
+  LegacyJobRecord,
+  LegacyReviewSummaryRecord,
+} from './types';
 export { PrismaCourseRepository } from './repos/course-repository';
 export { PrismaMaterialRepository } from './repos/material-repository';
 export { PrismaSubmissionRepository } from './repos/submission-repository';

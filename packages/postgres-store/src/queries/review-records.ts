@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
 import type { ReviewRecord } from '@hg/shared-schemas';
+import type { LegacyReviewSummaryRecord } from '../types';
 import {
   actorKindFromReviewRecord,
   createLegacyReviewResultEnvelope,
@@ -38,6 +39,86 @@ const getSubmissionWithReview = async (prisma: ReviewStorePrisma, jobId: string)
 
 export class PrismaLegacyReviewRecordStore {
   constructor(private readonly prisma: ReviewStorePrisma) {}
+
+  async listReviewSummariesByLegacyJobId(): Promise<LegacyReviewSummaryRecord[]> {
+    const submissions = await this.prisma.submission.findMany({
+      where: {
+        legacyJobId: { not: null },
+        review: { isNot: null },
+      },
+      select: {
+        legacyJobId: true,
+        currentPublishedResultId: true,
+        review: {
+          select: {
+            createdAt: true,
+            updatedAt: true,
+            currentVersionId: true,
+            versions: {
+              select: {
+                id: true,
+                rawPayload: true,
+              },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+
+    const currentVersionIds = submissions
+      .map((submission) => submission.review?.currentVersionId ?? null)
+      .filter((versionId): versionId is string => Boolean(versionId));
+
+    const currentVersions =
+      currentVersionIds.length > 0
+        ? await this.prisma.reviewVersion.findMany({
+            where: { id: { in: currentVersionIds } },
+            select: {
+              id: true,
+              rawPayload: true,
+            },
+          })
+        : [];
+
+    const currentVersionById = new Map(
+      currentVersions.map((version) => [version.id, version.rawPayload] as const)
+    );
+
+    return submissions
+      .flatMap((submission) => {
+        const jobId = submission.legacyJobId;
+        const review = submission.review;
+        if (!jobId || !review) {
+          return [];
+        }
+
+        const rawPayload =
+          (review.currentVersionId
+            ? currentVersionById.get(review.currentVersionId)
+            : undefined) ?? review.versions[0]?.rawPayload;
+
+        const reviewRecord = reviewRecordFromStoredPayload(
+          jobId,
+          rawPayload,
+          toIsoString(review.createdAt),
+          toIsoString(review.updatedAt)
+        );
+
+        return [
+          {
+            jobId,
+            displayName: reviewRecord.displayName ?? null,
+            createdAt: toIsoString(review.createdAt),
+            updatedAt: toIsoString(review.updatedAt),
+            annotationCount: reviewRecord.annotations.length,
+            hasResult: Boolean(submission.currentPublishedResultId),
+          } satisfies LegacyReviewSummaryRecord,
+        ];
+      })
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
 
   async hasLegacySubmission(jobId: string): Promise<boolean> {
     const submission = await this.prisma.submission.findUnique({

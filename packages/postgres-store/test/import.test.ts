@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import {
+  importFileBackedData,
   PLACEHOLDER_COURSE_DOMAIN_ID,
 } from '../src';
 import {
@@ -37,6 +41,176 @@ const humanReview: ReviewRecord = {
   ],
 };
 
+const silentLogger = {
+  log: () => undefined,
+  warn: () => undefined,
+};
+
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    tempDirs.splice(0).map((dirPath) => fs.rm(dirPath, { recursive: true, force: true }))
+  );
+});
+
+const pickSelectedFields = (row: Record<string, unknown>, select?: Record<string, boolean>) => {
+  if (!select) {
+    return row;
+  }
+
+  return Object.fromEntries(
+    Object.entries(select)
+      .filter(([, enabled]) => enabled)
+      .map(([key]) => [key, row[key]])
+  );
+};
+
+const createFakeModel = (uniqueKey: string, label: string) => {
+  const rows = new Map<string, Record<string, unknown>>();
+  let sequence = 0;
+
+  const getByWhere = (where: Record<string, unknown>) => {
+    if (typeof where.id === 'string') {
+      return [...rows.values()].find((row) => row.id === where.id) ?? null;
+    }
+
+    const uniqueValue = where[uniqueKey];
+    if (typeof uniqueValue !== 'string') {
+      return null;
+    }
+
+    return rows.get(uniqueValue) ?? null;
+  };
+
+  return {
+    rows,
+    async findUnique(args: { where: Record<string, unknown>; select?: Record<string, boolean> }) {
+      const row = getByWhere(args.where);
+      return row ? pickSelectedFields(row, args.select) : null;
+    },
+    async create(args: { data: Record<string, unknown>; select?: Record<string, boolean> }) {
+      const row = {
+        id: `${label}-row-${++sequence}`,
+        ...args.data,
+      };
+      rows.set(String(row[uniqueKey]), row);
+      return pickSelectedFields(row, args.select);
+    },
+    async update(args: {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+      select?: Record<string, boolean>;
+    }) {
+      const current = getByWhere(args.where);
+      if (!current) {
+        throw new Error(`${label} row not found`);
+      }
+
+      const next = { ...current, ...args.data };
+      rows.set(String(next[uniqueKey]), next);
+      return pickSelectedFields(next, args.select);
+    },
+  };
+};
+
+const createFakePrisma = () => {
+  const course = createFakeModel('domainId', 'course');
+  const storedAsset = createFakeModel('assetKey', 'asset');
+  const courseMaterial = createFakeModel('domainId', 'material');
+  const submission = createFakeModel('domainId', 'submission');
+  const review = createFakeModel('domainId', 'review');
+  const reviewVersion = createFakeModel('domainId', 'review-version');
+  const publishedResult = createFakeModel('domainId', 'published-result');
+  const gradebookEntry = createFakeModel('domainId', 'gradebook-entry');
+
+  const prisma: any = {
+    course,
+    storedAsset,
+    courseMaterial,
+    submission,
+    review,
+    reviewVersion,
+    publishedResult,
+    gradebookEntry,
+    async $transaction(fn: (tx: any) => Promise<unknown>) {
+      return fn({
+        review,
+        reviewVersion,
+        publishedResult,
+        gradebookEntry,
+        submission,
+      });
+    },
+  };
+
+  return {
+    prisma,
+    stores: {
+      course: course.rows,
+      storedAsset: storedAsset.rows,
+      courseMaterial: courseMaterial.rows,
+      submission: submission.rows,
+      review: review.rows,
+      reviewVersion: reviewVersion.rows,
+      publishedResult: publishedResult.rows,
+      gradebookEntry: gradebookEntry.rows,
+    },
+  };
+};
+
+const createImportFixture = async (): Promise<string> => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hg-postgres-import-'));
+  tempDirs.push(tempDir);
+
+  const writeJson = async (relativePath: string, value: unknown) => {
+    const absolutePath = path.join(tempDir, relativePath);
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, JSON.stringify(value, null, 2), 'utf-8');
+  };
+
+  await writeJson('courses/course-1/course.json', {
+    version: '1.0.0',
+    courseId: 'course-1',
+    title: 'Course 1',
+    createdAt: '2026-03-26T10:00:00.000Z',
+    updatedAt: '2026-03-26T10:05:00.000Z',
+  });
+
+  await writeJson('jobs/done/job-1.json', {
+    id: 'job-1',
+    status: 'DONE',
+    createdAt: '2026-03-26T10:00:00.000Z',
+    updatedAt: '2026-03-26T10:05:00.000Z',
+    inputs: {
+      courseId: 'course-1',
+      examId: 'exam-1',
+      questionId: 'q-1',
+      submissionFilePath: 'uploads/job-1.pdf',
+      submissionMimeType: 'application/pdf',
+    },
+    resultJson: {
+      mode: 'RUBRIC',
+      rubricEvaluation: {
+        sectionScore: 91,
+        sectionMaxPoints: 100,
+        overallFeedback: 'Strong work',
+      },
+    },
+  });
+
+  await writeJson('reviews/job-1.json', aiReview);
+  await writeJson('reviews/missing-job.json', {
+    ...aiReview,
+    jobId: 'missing-job',
+  });
+
+  await fs.mkdir(path.join(tempDir, 'uploads'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, 'uploads', 'job-1.pdf'), 'fixture', 'utf-8');
+
+  return tempDir;
+};
+
 describe('legacy import helpers', () => {
   it('uses a placeholder course when legacy jobs have no courseId', () => {
     expect(getCourseDomainIdForLegacyJob()).toBe(PLACEHOLDER_COURSE_DOMAIN_ID);
@@ -66,5 +240,89 @@ describe('legacy import helpers', () => {
     ).toBe('lecturer_edited');
     expect(deriveReviewStateFromLegacy(aiReview, false)).toBe('ready_for_review');
     expect(deriveReviewStateFromLegacy(humanReview, false)).toBe('lecturer_edited');
+  });
+});
+
+describe('importFileBackedData', () => {
+  it('supports dry-run without mutating the database and emits structured reporting', async () => {
+    const dataDir = await createImportFixture();
+    const { prisma, stores } = createFakePrisma();
+
+    const summary = await importFileBackedData(prisma, {
+      dataDir,
+      dryRun: true,
+      logger: silentLogger,
+    });
+
+    expect(summary).toMatchObject({
+      dryRun: true,
+      importedCourses: 1,
+      importedLectureAssets: 0,
+      importedSubmissions: 1,
+      importedReviews: 1,
+      importedPublishedResults: 1,
+      updatedRecords: 0,
+      skippedRecords: 0,
+      unresolvedRecords: 1,
+      failedRecords: 0,
+    });
+    expect(summary.warningCounts).toMatchObject({
+      missing_job: 1,
+    });
+    expect(summary.warnings).toContain('Skipping review without matching job: missing-job');
+
+    expect(stores.course.size).toBe(0);
+    expect(stores.submission.size).toBe(0);
+    expect(stores.review.size).toBe(0);
+    expect(stores.publishedResult.size).toBe(0);
+  });
+
+  it('reruns safely and reports updates on the second import', async () => {
+    const dataDir = await createImportFixture();
+    const { prisma, stores } = createFakePrisma();
+
+    const firstRun = await importFileBackedData(prisma, {
+      dataDir,
+      logger: silentLogger,
+    });
+    const secondRun = await importFileBackedData(prisma, {
+      dataDir,
+      logger: silentLogger,
+    });
+
+    expect(firstRun).toMatchObject({
+      dryRun: false,
+      importedCourses: 1,
+      importedSubmissions: 1,
+      importedReviews: 1,
+      importedPublishedResults: 1,
+      unresolvedRecords: 1,
+      failedRecords: 0,
+    });
+    expect(secondRun).toMatchObject({
+      dryRun: false,
+      importedCourses: 1,
+      importedSubmissions: 1,
+      importedReviews: 1,
+      importedPublishedResults: 1,
+      unresolvedRecords: 1,
+      failedRecords: 0,
+    });
+    expect(secondRun.updatedRecords).toBeGreaterThan(0);
+    expect(secondRun.warningCounts).toMatchObject({
+      missing_job: 1,
+    });
+
+    expect(stores.course.size).toBe(2);
+    expect(stores.storedAsset.size).toBe(1);
+    expect(stores.courseMaterial.size).toBe(1);
+    expect(stores.submission.size).toBe(1);
+    expect(stores.review.size).toBe(1);
+    expect(stores.reviewVersion.size).toBe(1);
+    expect(stores.publishedResult.size).toBe(1);
+    expect(stores.gradebookEntry.size).toBe(1);
+    expect(stores.submission.get(getSubmissionDomainId('job-1'))?.currentPublishedResultId).toBe(
+      stores.publishedResult.get(getPublishedResultDomainId('job-1'))?.id
+    );
   });
 });

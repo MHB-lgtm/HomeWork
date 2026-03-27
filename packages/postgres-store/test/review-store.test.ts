@@ -31,6 +31,10 @@ const createFakePrisma = () => {
           return null;
         }
 
+        if (args.select?.id) {
+          return { id: row.id };
+        }
+
         if (args.include?.review) {
           const review = row.review ? reviews.get(row.review) : null;
           return {
@@ -48,6 +52,42 @@ const createFakePrisma = () => {
         }
 
         return row;
+      },
+      async findMany(args: any) {
+        return [...submissions.values()]
+          .filter((row) => {
+            if (args.where?.legacyJobId?.not === null && !row.legacyJobId) {
+              return false;
+            }
+
+            if (args.where?.review?.isNot === null) {
+              return row.review !== null;
+            }
+
+            return true;
+          })
+          .map((row) => {
+            const review = row.review ? reviews.get(row.review) : null;
+            return {
+              legacyJobId: row.legacyJobId,
+              currentPublishedResultId: row.currentPublishedResultId ?? null,
+              review: review
+                ? {
+                    createdAt: review.createdAt,
+                    updatedAt: review.updatedAt,
+                    currentVersionId: review.currentVersionId ?? null,
+                    versions: [...reviewVersions.values()]
+                      .filter((version) => version.reviewId === review.id)
+                      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+                      .slice(0, 1)
+                      .map((version) => ({
+                        id: version.id,
+                        rawPayload: version.rawPayload,
+                      })),
+                  }
+                : null,
+            };
+          });
       },
     },
     review: {
@@ -85,6 +125,15 @@ const createFakePrisma = () => {
         );
         return row ?? null;
       },
+      async findMany(args: any) {
+        const ids = new Set(args.where.id.in);
+        return [...reviewVersions.values()]
+          .filter((version) => ids.has(version.id))
+          .map((version) => ({
+            id: version.id,
+            rawPayload: version.rawPayload,
+          }));
+      },
     },
     async $transaction(fn: (tx: any) => Promise<unknown>) {
       return fn({
@@ -117,5 +166,26 @@ describe('PrismaLegacyReviewRecordStore', () => {
     const currentVersion = reviewVersions.get(reviewRow.currentVersionId);
 
     expect(currentVersion.rawPayload.displayName).toBe('Renamed');
+  });
+
+  it('lists DB-backed review summaries using the latest stored version', async () => {
+    const { prisma, submissions } = createFakePrisma();
+    const store = new PrismaLegacyReviewRecordStore(prisma);
+
+    await store.saveReviewRecordByLegacyJobId('job-1', makeReviewRecord('Imported name'));
+    await store.patchReviewDisplayNameByLegacyJobId('job-1', 'Renamed');
+    submissions.get('job-1').currentPublishedResultId = 'published-result-row-1';
+
+    const summaries = await store.listReviewSummariesByLegacyJobId();
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]).toMatchObject({
+      jobId: 'job-1',
+      displayName: 'Renamed',
+      annotationCount: 0,
+      hasResult: true,
+      createdAt: '2026-03-26T10:00:00.000Z',
+    });
+    expect(summaries[0].updatedAt).toBeTruthy();
   });
 });
