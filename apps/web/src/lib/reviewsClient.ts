@@ -39,6 +39,7 @@ export type ReviewSummary = {
   updatedAt?: string | null;
   annotationCount: number;
   hasResult: boolean;
+  publication?: ReviewPublicationV1;
 };
 
 /**

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { ReviewRecord } from '@hg/shared-schemas';
-import type { LegacyReviewSummaryRecord } from '@hg/postgres-store';
+import type { LegacyReviewPublicationRecord, LegacyReviewSummaryRecord } from '@hg/postgres-store';
 import type { JobRecord } from '@hg/local-job-store';
 import { getReviewDir, loadReview } from '@hg/local-job-store';
 import { getServerPersistence } from '@/lib/server/persistence';
@@ -22,6 +22,7 @@ type ReviewSummary = {
   updatedAt?: string | null;
   annotationCount: number;
   hasResult: boolean;
+  publication?: LegacyReviewPublicationRecord;
 };
 
 type LegacyJobMetadata = JobRecord | null;
@@ -160,6 +161,7 @@ const mergeDbSummary = (
   updatedAt: dbSummary.updatedAt,
   annotationCount: dbSummary.annotationCount,
   hasResult: dbSummary.hasResult,
+  publication: dbSummary.publication,
 });
 
 export async function GET() {

@@ -51,6 +51,14 @@ type ReviewStoreTx = Omit<ReviewStorePrisma, '$transaction'>;
 
 type SubmissionWithReview = Awaited<ReturnType<typeof getSubmissionWithReview>>;
 
+type EffectivePublicationRow = {
+  domainId: string;
+  publishedAt: Date;
+  finalScore: Parameters<typeof decimalToNumber>[0];
+  maxScore: Parameters<typeof decimalToNumber>[0];
+  summary: string | null;
+};
+
 const toPublicationRecord = (
   submission: SubmissionWithReview
 ): LegacyReviewPublicationRecord | undefined => {
@@ -68,6 +76,23 @@ const toPublicationRecord = (
       maxScore: null,
       summary: null,
     };
+  }
+
+  return {
+    isPublished: true,
+    publishedResultId: effective.domainId,
+    publishedAt: toIsoString(effective.publishedAt),
+    score: decimalToNumber(effective.finalScore) ?? null,
+    maxScore: decimalToNumber(effective.maxScore) ?? null,
+    summary: effective.summary ?? null,
+  };
+};
+
+const toEffectivePublicationSummary = (
+  effective: EffectivePublicationRow | undefined
+): LegacyReviewPublicationRecord | undefined => {
+  if (!effective) {
+    return undefined;
   }
 
   return {
@@ -160,7 +185,13 @@ export class PrismaLegacyReviewRecordStore {
           where: { status: 'EFFECTIVE' },
           orderBy: { publishedAt: 'desc' },
           take: 1,
-          select: { domainId: true },
+          select: {
+            domainId: true,
+            publishedAt: true,
+            finalScore: true,
+            maxScore: true,
+            summary: true,
+          },
         },
         review: {
           select: {
@@ -229,6 +260,7 @@ export class PrismaLegacyReviewRecordStore {
             hasResult: Boolean(
               submission.currentPublishedResultId ?? submission.publishedResults[0]?.domainId
             ),
+            publication: toEffectivePublicationSummary(submission.publishedResults[0]),
           } satisfies LegacyReviewSummaryRecord,
         ];
       })

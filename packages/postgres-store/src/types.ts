@@ -32,6 +32,7 @@ export interface LegacyReviewSummaryRecord {
   updatedAt: string | null;
   annotationCount: number;
   hasResult: boolean;
+  publication?: LegacyReviewPublicationRecord;
 }
 
 export interface LegacyReviewContextRecord {

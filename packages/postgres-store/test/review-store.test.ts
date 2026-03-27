@@ -150,6 +150,10 @@ const createFakePrisma = () => {
               currentPublishedResultId: row.currentPublishedResultId ?? null,
               publishedResults: effectivePublishedResults.map((publishedResult) => ({
                 domainId: publishedResult.domainId,
+                publishedAt: publishedResult.publishedAt,
+                finalScore: publishedResult.finalScore,
+                maxScore: publishedResult.maxScore,
+                summary: publishedResult.summary ?? null,
               })),
               review: review
                 ? {
@@ -223,7 +227,7 @@ const createFakePrisma = () => {
     },
   };
 
-  return { prisma, reviewVersions, reviews, submissions };
+  return { prisma, reviewVersions, reviews, submissions, publishedResults };
 };
 
 describe('PrismaLegacyReviewRecordStore', () => {
@@ -248,13 +252,25 @@ describe('PrismaLegacyReviewRecordStore', () => {
     expect(currentVersion.rawPayload.displayName).toBe('Renamed');
   });
 
-  it('lists DB-backed review summaries using the latest stored version', async () => {
-    const { prisma, submissions } = createFakePrisma();
+  it('lists DB-backed review summaries using the latest stored version and effective publication summary', async () => {
+    const { prisma, submissions, publishedResults } = createFakePrisma();
     const store = new PrismaLegacyReviewRecordStore(prisma);
 
     await store.saveReviewRecordByLegacyJobId('job-1', makeReviewRecord('Imported name'));
     await store.patchReviewDisplayNameByLegacyJobId('job-1', 'Renamed');
-    submissions.get('job-1').currentPublishedResultId = 'published-result-row-1';
+
+    const submission = submissions.get('job-1');
+    submission.currentPublishedResultId = 'published-result-row-1';
+    publishedResults.set('legacy-published-result:job-1:published', {
+      id: 'published-result-row-1',
+      domainId: 'legacy-published-result:job-1:published',
+      submissionId: submission.id,
+      publishedAt: new Date('2026-03-26T10:06:00.000Z'),
+      status: 'EFFECTIVE',
+      finalScore: 91,
+      maxScore: 100,
+      summary: 'Strong work',
+    });
 
     const summaries = await store.listReviewSummariesByLegacyJobId();
 
@@ -265,8 +281,29 @@ describe('PrismaLegacyReviewRecordStore', () => {
       annotationCount: 0,
       hasResult: true,
       createdAt: '2026-03-26T10:00:00.000Z',
+      publication: {
+        isPublished: true,
+        publishedResultId: 'legacy-published-result:job-1:published',
+        publishedAt: '2026-03-26T10:06:00.000Z',
+        score: 91,
+        maxScore: 100,
+        summary: 'Strong work',
+      },
     });
     expect(summaries[0].updatedAt).toBeTruthy();
+  });
+
+  it('omits publication summary when an imported review has no effective publication', async () => {
+    const { prisma } = createFakePrisma();
+    const store = new PrismaLegacyReviewRecordStore(prisma);
+
+    await store.saveReviewRecordByLegacyJobId('job-1', makeReviewRecord('Imported name'));
+
+    const summaries = await store.listReviewSummariesByLegacyJobId();
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0].publication).toBeUndefined();
+    expect(summaries[0].hasResult).toBe(false);
   });
 
   it('returns review detail context and submission asset for wrapped imported payloads', async () => {

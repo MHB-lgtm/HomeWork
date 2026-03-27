@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/input';
 import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
 
 type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
+type ReviewFilter = 'ALL' | 'PUBLISHED' | 'UNPUBLISHED';
 
 const getStatusBadgeVariant = (status: string | null): BadgeVariant => {
   switch (status) {
@@ -34,6 +35,14 @@ const formatDate = (value?: string | null) => {
   return date.toLocaleString();
 };
 
+const toShortText = (value: string, maxChars: number) => {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}...`;
+};
+
 export default function ReviewsListPage() {
   const [reviews, setReviews] = useState<ReviewSummary[]>([]);
   const [examNamesById, setExamNamesById] = useState<Record<string, string>>({});
@@ -45,6 +54,7 @@ export default function ReviewsListPage() {
   const [savingNameJobId, setSavingNameJobId] = useState<string | null>(null);
   const [renameError, setRenameError] = useState<{ jobId: string; message: string } | null>(null);
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [filter, setFilter] = useState<ReviewFilter>('ALL');
 
   useEffect(() => {
     const load = async () => {
@@ -74,22 +84,46 @@ export default function ReviewsListPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return reviews;
-
-    return reviews.filter((item) => {
+    const matchesQuery = (item: ReviewSummary) => {
       const examName = item.examId ? examNamesById[item.examId] : '';
-      return (
+      return Boolean(
         (item.displayName && item.displayName.toLowerCase().includes(q)) ||
         examName.toLowerCase().includes(q) ||
         (item.status && item.status.toLowerCase().includes(q)) ||
         (item.gradingMode && item.gradingMode.toLowerCase().includes(q)) ||
-        item.jobId.toLowerCase().includes(q)
+        item.jobId.toLowerCase().includes(q) ||
+        item.publication?.summary?.toLowerCase().includes(q)
       );
+    };
+
+    const matchesFilter = (item: ReviewSummary) => {
+      if (filter === 'PUBLISHED') {
+        return item.publication?.isPublished === true;
+      }
+
+      if (filter === 'UNPUBLISHED') {
+        return item.publication?.isPublished !== true;
+      }
+
+      return true;
+    };
+
+    return reviews.filter((item) => {
+      if (!matchesFilter(item)) {
+        return false;
+      }
+
+      if (!q) {
+        return true;
+      }
+
+      return matchesQuery(item);
     });
-  }, [reviews, query, examNamesById]);
+  }, [reviews, query, examNamesById, filter]);
 
   const totalAnnotations = reviews.reduce((sum, r) => sum + (r.annotationCount || 0), 0);
   const withResults = reviews.filter((r) => r.hasResult).length;
+  const publishedCount = reviews.filter((r) => r.publication?.isPublished === true).length;
 
   const startEditingName = (review: ReviewSummary) => {
     setEditingJobId(review.jobId);
@@ -153,6 +187,7 @@ export default function ReviewsListPage() {
             <Badge variant="secondary">{reviews.length} reviews</Badge>
             <Badge variant="outline">{totalAnnotations} annotations</Badge>
             <Badge variant="outline">{withResults} with results</Badge>
+            <Badge variant="outline">{publishedCount} published</Badge>
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             <Link href="/">
@@ -170,12 +205,35 @@ export default function ReviewsListPage() {
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-lg font-semibold text-slate-900">Review Library</CardTitle>
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name, exam, status"
-                className="w-64"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant={filter === 'ALL' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilter('ALL')}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={filter === 'PUBLISHED' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilter('PUBLISHED')}
+                >
+                  Published
+                </Button>
+                <Button
+                  variant={filter === 'UNPUBLISHED' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFilter('UNPUBLISHED')}
+                >
+                  Unpublished
+                </Button>
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search by name, exam, status"
+                  className="w-64"
+                />
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -189,7 +247,11 @@ export default function ReviewsListPage() {
             {loading ? (
               <div className="text-sm text-slate-600">Loading reviews...</div>
             ) : filtered.length === 0 ? (
-              <div className="text-sm text-slate-600">No reviews found. Start a grading job to see it here.</div>
+              <div className="text-sm text-slate-600">
+                {filter === 'ALL'
+                  ? 'No reviews found. Start a grading job to see it here.'
+                  : `No ${filter.toLowerCase()} reviews matched the current filters.`}
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {filtered.map((review) => {
@@ -260,7 +322,30 @@ export default function ReviewsListPage() {
                           <Badge variant="secondary" className="text-xs">
                             {review.annotationCount} annotations
                           </Badge>
+                          {review.publication?.isPublished ? (
+                            <Badge className="text-xs">Published</Badge>
+                          ) : null}
+                          {review.publication?.isPublished &&
+                          review.publication.score != null &&
+                          review.publication.maxScore != null ? (
+                            <Badge variant="outline" className="text-xs">
+                              {review.publication.score}/{review.publication.maxScore}
+                            </Badge>
+                          ) : null}
                         </div>
+
+                        {review.publication?.isPublished ? (
+                          <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-950">
+                            <p className="font-medium">
+                              Published: {formatDate(review.publication.publishedAt)}
+                            </p>
+                            {review.publication.summary ? (
+                              <p className="mt-1 text-xs text-emerald-900/80">
+                                {toShortText(review.publication.summary, 120)}
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
 
                         <details className="rounded-lg border border-slate-200/90 bg-slate-50/70 p-2 text-xs text-slate-600">
                           <summary className="cursor-pointer font-medium text-slate-700">Technical details</summary>
