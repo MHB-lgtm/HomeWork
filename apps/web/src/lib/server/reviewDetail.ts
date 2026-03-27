@@ -2,10 +2,20 @@ import * as fs from 'fs/promises';
 import { getJob, getOrCreateReview, type JobRecord } from '@hg/local-job-store';
 import type {
   LegacyReviewContextRecord,
+  LegacyReviewPublicationRecord,
   LegacySubmissionAssetRecord,
 } from '@hg/postgres-store';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import { getServerPersistence } from './persistence';
+
+export type ReviewPublicationContext = {
+  isPublished: boolean;
+  publishedResultId?: string | null;
+  publishedAt?: string | null;
+  score?: number | null;
+  maxScore?: number | null;
+  summary?: string | null;
+};
 
 export type ReviewRouteContext = {
   status: string;
@@ -15,6 +25,7 @@ export type ReviewRouteContext = {
   gradingMode: 'RUBRIC' | 'GENERAL' | null;
   gradingScope: 'QUESTION' | 'DOCUMENT' | null;
   source: 'postgres' | 'file';
+  publication?: ReviewPublicationContext;
 };
 
 export type ResolvedReviewDetail = {
@@ -59,6 +70,7 @@ const toPostgresContext = (
 
 const mergeContext = (
   postgresContext: LegacyReviewContextRecord | undefined,
+  publication: LegacyReviewPublicationRecord | undefined,
   fileJob: JobRecord | null,
   source: 'postgres' | 'file'
 ): ReviewRouteContext | undefined => {
@@ -92,6 +104,7 @@ const mergeContext = (
       fileContext?.gradingScope ??
       null,
     source,
+    publication: source === 'postgres' ? publication : undefined,
   };
 };
 
@@ -123,15 +136,15 @@ export const getResolvedReviewDetail = async (
   const persistence = getServerPersistence();
 
   if (persistence) {
-    const detail = await persistence.reviewRecords.getReviewDetailByLegacyJobId(jobId);
-    if (detail) {
-      const fileJob = detail.context ? null : await loadFileBackedJob(jobId);
-      return {
-        review: detail.review,
-        context: mergeContext(detail.context, fileJob, 'postgres'),
-        source: 'postgres',
-      };
-    }
+      const detail = await persistence.reviewRecords.getReviewDetailByLegacyJobId(jobId);
+      if (detail) {
+        const fileJob = detail.context ? null : await loadFileBackedJob(jobId);
+        return {
+          review: detail.review,
+          context: mergeContext(detail.context, detail.publication, fileJob, 'postgres'),
+          source: 'postgres',
+        };
+      }
   }
 
   if (!hasDataDirConfigured()) {

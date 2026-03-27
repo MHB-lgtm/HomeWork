@@ -5,6 +5,7 @@ export type {
   LegacyReviewContextRecord,
   LegacyReviewDetailRecord,
   LegacyJobRecord,
+  LegacyReviewPublicationRecord,
   LegacySubmissionAssetRecord,
   LegacyReviewSummaryRecord,
 } from './types';
@@ -14,6 +15,7 @@ export { PrismaSubmissionRepository } from './repos/submission-repository';
 export { PrismaReviewRepository } from './repos/review-repository';
 export { PrismaPublicationRepository } from './repos/publication-repository';
 export { PrismaLegacyReviewRecordStore } from './queries/review-records';
+export { LegacyReviewPublicationConflictError } from './queries/review-records';
 export { importFileBackedData } from './import-file-backed';
 export {
   PLACEHOLDER_COURSE_DOMAIN_ID,

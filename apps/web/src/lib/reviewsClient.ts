@@ -15,6 +15,16 @@ export type ReviewContextV1 = {
   gradingMode: 'RUBRIC' | 'GENERAL' | null;
   gradingScope: 'QUESTION' | 'DOCUMENT' | null;
   source: 'postgres' | 'file';
+  publication?: ReviewPublicationV1;
+};
+
+export type ReviewPublicationV1 = {
+  isPublished: boolean;
+  publishedResultId?: string | null;
+  publishedAt?: string | null;
+  score?: number | null;
+  maxScore?: number | null;
+  summary?: string | null;
 };
 
 export type ReviewSummary = {
@@ -140,6 +150,39 @@ export async function updateReviewDisplayName(
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Failed to update review name',
+    };
+  }
+}
+
+export async function publishReview(
+  jobId: string
+): Promise<
+  | { ok: true; data: ReviewPublicationV1 }
+  | { ok: false; error: string; status?: number }
+> {
+  try {
+    const response = await fetch(`/api/reviews/${jobId}/publish`, {
+      method: 'POST',
+    });
+
+    const data = await response.json().catch(() => ({
+      ok: false,
+      error: 'Failed to parse response',
+    }));
+
+    if (!response.ok || !data.ok) {
+      return {
+        ok: false,
+        error: data.error || 'Failed to publish review',
+        status: response.status,
+      };
+    }
+
+    return { ok: true, data: data.data as ReviewPublicationV1 };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to publish review',
     };
   }
 }

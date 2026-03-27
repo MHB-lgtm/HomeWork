@@ -20,6 +20,7 @@ const createFakePrisma = () => {
   const submissions = new Map<string, any>();
   const materials = new Map<string, any>();
   const assets = new Map<string, any>();
+  const publishedResults = new Map<string, any>();
 
   assets.set('asset-row-1', {
     id: 'asset-row-1',
@@ -51,6 +52,10 @@ const createFakePrisma = () => {
         const review = row.review ? reviews.get(row.review) : null;
         const material = row.materialId ? materials.get(row.materialId) : null;
         const asset = material ? assets.get(material.assetId) : null;
+        const effectivePublishedResults = [...publishedResults.values()]
+          .filter((publishedResult) => publishedResult.submissionId === row.id)
+          .filter((publishedResult) => publishedResult.status === 'EFFECTIVE')
+          .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime());
 
         if (args.select) {
           return {
@@ -69,6 +74,17 @@ const createFakePrisma = () => {
                         },
                       }
                     : null,
+                }
+              : {}),
+            ...(args.select.publishedResults
+              ? {
+                  publishedResults: effectivePublishedResults.map((publishedResult) => ({
+                    domainId: publishedResult.domainId,
+                    publishedAt: publishedResult.publishedAt,
+                    finalScore: publishedResult.finalScore,
+                    maxScore: publishedResult.maxScore,
+                    summary: publishedResult.summary ?? null,
+                  })),
                 }
               : {}),
             ...(args.select.review
@@ -125,9 +141,16 @@ const createFakePrisma = () => {
           })
           .map((row) => {
             const review = row.review ? reviews.get(row.review) : null;
+            const effectivePublishedResults = [...publishedResults.values()]
+              .filter((publishedResult) => publishedResult.submissionId === row.id)
+              .filter((publishedResult) => publishedResult.status === 'EFFECTIVE')
+              .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime());
             return {
               legacyJobId: row.legacyJobId,
               currentPublishedResultId: row.currentPublishedResultId ?? null,
+              publishedResults: effectivePublishedResults.map((publishedResult) => ({
+                domainId: publishedResult.domainId,
+              })),
               review: review
                 ? {
                     createdAt: review.createdAt,

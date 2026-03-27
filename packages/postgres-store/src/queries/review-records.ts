@@ -1,8 +1,15 @@
 import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
+import {
+  PublicationService,
+  asActorRef,
+  assertCanPublishResultEnvelope,
+  createPublishedSnapshotResultEnvelope,
+} from '@hg/domain-workflow';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import type {
   LegacyReviewDetailRecord,
+  LegacyReviewPublicationRecord,
   LegacyReviewSummaryRecord,
   LegacySubmissionAssetRecord,
 } from '../types';
@@ -16,17 +23,79 @@ import {
   setReviewDisplayName,
 } from '../mappers/review-record';
 import {
+  asJsonValue,
+  decimalToNumber,
   toDate,
   toIsoString,
   toPrismaReviewState,
   toPrismaReviewVersionKind,
 } from '../mappers/domain';
 import { getReviewDomainId, getSavedReviewVersionDomainId } from '../mappers/import';
+import { PrismaPublicationRepository } from '../repos/publication-repository';
+import { PrismaReviewRepository } from '../repos/review-repository';
+import { PrismaSubmissionRepository } from '../repos/submission-repository';
 
 type ReviewStorePrisma = Pick<
   PrismaClient,
-  '$transaction' | 'submission' | 'review' | 'reviewVersion'
+  | '$transaction'
+  | 'course'
+  | 'courseMaterial'
+  | 'submission'
+  | 'review'
+  | 'reviewVersion'
+  | 'publishedResult'
+  | 'gradebookEntry'
 >;
+
+type ReviewStoreTx = Omit<ReviewStorePrisma, '$transaction'>;
+
+type SubmissionWithReview = Awaited<ReturnType<typeof getSubmissionWithReview>>;
+
+const toPublicationRecord = (
+  submission: SubmissionWithReview
+): LegacyReviewPublicationRecord | undefined => {
+  const effective = submission?.publishedResults?.[0];
+  if (!submission) {
+    return undefined;
+  }
+
+  if (!effective) {
+    return {
+      isPublished: false,
+      publishedResultId: null,
+      publishedAt: null,
+      score: null,
+      maxScore: null,
+      summary: null,
+    };
+  }
+
+  return {
+    isPublished: true,
+    publishedResultId: effective.domainId,
+    publishedAt: toIsoString(effective.publishedAt),
+    score: decimalToNumber(effective.finalScore) ?? null,
+    maxScore: decimalToNumber(effective.maxScore) ?? null,
+    summary: effective.summary ?? null,
+  };
+};
+
+const createPublishedReviewVersionDomainId = (jobId: string): string =>
+  `legacy-review-version:${jobId}:published:${randomUUID()}`;
+
+const createPublishedResultDomainId = (jobId: string): string =>
+  `legacy-published-result:${jobId}:${randomUUID()}`;
+
+const noOpAuditRepository = {
+  async appendAuditEvents() {
+    return undefined;
+  },
+  async listAuditEvents() {
+    return [];
+  },
+};
+
+export class LegacyReviewPublicationConflictError extends Error {}
 
 const getSubmissionWithReview = async (prisma: ReviewStorePrisma, jobId: string) =>
   prisma.submission.findUnique({
@@ -35,6 +104,18 @@ const getSubmissionWithReview = async (prisma: ReviewStorePrisma, jobId: string)
       id: true,
       courseId: true,
       currentPublishedResultId: true,
+      publishedResults: {
+        where: { status: 'EFFECTIVE' },
+        orderBy: { publishedAt: 'desc' },
+        take: 1,
+        select: {
+          domainId: true,
+          publishedAt: true,
+          finalScore: true,
+          maxScore: true,
+          summary: true,
+        },
+      },
       material: {
         select: {
           asset: {
@@ -75,6 +156,12 @@ export class PrismaLegacyReviewRecordStore {
       select: {
         legacyJobId: true,
         currentPublishedResultId: true,
+        publishedResults: {
+          where: { status: 'EFFECTIVE' },
+          orderBy: { publishedAt: 'desc' },
+          take: 1,
+          select: { domainId: true },
+        },
         review: {
           select: {
             createdAt: true,
@@ -139,7 +226,9 @@ export class PrismaLegacyReviewRecordStore {
             createdAt: toIsoString(review.createdAt),
             updatedAt: toIsoString(review.updatedAt),
             annotationCount: reviewRecord.annotations.length,
-            hasResult: Boolean(submission.currentPublishedResultId),
+            hasResult: Boolean(
+              submission.currentPublishedResultId ?? submission.publishedResults[0]?.domainId
+            ),
           } satisfies LegacyReviewSummaryRecord,
         ];
       })
@@ -190,6 +279,7 @@ export class PrismaLegacyReviewRecordStore {
         toIsoString(submission.review.updatedAt)
       ),
       context: reviewContextFromStoredPayload(currentVersion.rawPayload) ?? undefined,
+      publication: toPublicationRecord(submission),
       submissionAsset,
     };
   }
@@ -226,7 +316,135 @@ export class PrismaLegacyReviewRecordStore {
     return detail?.review ?? null;
   }
 
-  async saveReviewRecordByLegacyJobId(jobId: string, reviewRecord: ReviewRecord): Promise<ReviewRecord> {
+  async publishReviewByLegacyJobId(
+    jobId: string,
+    options?: {
+      actorRef?: string;
+      reviewRecord?: ReviewRecord;
+      context?: LegacyReviewDetailRecord['context'];
+    }
+  ): Promise<LegacyReviewPublicationRecord> {
+    const actorRef = options?.actorRef ?? 'legacy:review-route';
+    const submissionLink = await this.prisma.submission.findUnique({
+      where: { legacyJobId: jobId },
+      select: { domainId: true },
+    });
+
+    if (!submissionLink) {
+      throw new LegacyReviewPublicationConflictError(
+        `Review "${jobId}" is not backed by an imported Postgres submission`
+      );
+    }
+
+    const prisma = this.prisma as unknown as PrismaClient;
+    const submissionRepository = new PrismaSubmissionRepository(prisma);
+    const reviewRepository = new PrismaReviewRepository(prisma);
+    const publicationRepository = new PrismaPublicationRepository(prisma);
+    const publicationService = new PublicationService({
+      reviewRepository,
+      publicationRepository,
+      auditRepository: noOpAuditRepository,
+    });
+
+    const submission = await submissionRepository.getSubmission(submissionLink.domainId);
+    if (!submission) {
+      throw new LegacyReviewPublicationConflictError(
+        `Submission "${submissionLink.domainId}" could not be loaded for review "${jobId}"`
+      );
+    }
+
+    const review = await reviewRepository.getReviewBySubmissionId(submission.submissionId);
+    if (!review) {
+      throw new LegacyReviewPublicationConflictError(
+        `Review "${jobId}" does not have a persisted Postgres review record`
+      );
+    }
+
+    const versions = await reviewRepository.listReviewVersions(review.reviewId);
+    const sourceReviewVersion =
+      (review.currentVersionId
+        ? versions.find((version) => version.reviewVersionId === review.currentVersionId)
+        : undefined) ?? versions[versions.length - 1];
+
+    if (!sourceReviewVersion) {
+      throw new LegacyReviewPublicationConflictError(
+        `Review "${jobId}" has no source review version to publish`
+      );
+    }
+
+    const fallbackEnvelope =
+      options?.reviewRecord && options.context
+        ? {
+            ...createLegacyReviewResultEnvelope(
+              options.reviewRecord,
+              options.context.resultJson
+            ),
+            rawPayload: createStoredReviewRecordPayload(
+              options.reviewRecord,
+              options.context
+            ),
+          }
+        : null;
+    const effectiveSourceReviewVersion = {
+      ...sourceReviewVersion,
+      resultEnvelope: fallbackEnvelope ?? sourceReviewVersion.resultEnvelope,
+    };
+
+    let publishable: ReturnType<typeof assertCanPublishResultEnvelope>;
+    try {
+      publishable = assertCanPublishResultEnvelope(effectiveSourceReviewVersion.resultEnvelope);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new LegacyReviewPublicationConflictError(errorMessage);
+    }
+    const publishedAt = new Date().toISOString();
+    const publishedReviewVersionId = createPublishedReviewVersionDomainId(jobId);
+    const publishedResultId = createPublishedResultDomainId(jobId);
+
+    const { publishedResult } = await publicationService.publish({
+      review,
+      sourceReviewVersion: effectiveSourceReviewVersion,
+      publishedReviewVersion: {
+        reviewVersionId: publishedReviewVersionId,
+        reviewId: review.reviewId,
+        kind: 'published_snapshot',
+        resultEnvelope: createPublishedSnapshotResultEnvelope(effectiveSourceReviewVersion),
+        createdAt: publishedAt,
+        actorRef: asActorRef(actorRef),
+      },
+      publishedResult: {
+        publishedResultId,
+        courseId: review.courseId,
+        submissionId: submission.submissionId,
+        studentRef: submission.studentRef,
+        moduleRef: submission.moduleRef,
+        reviewId: review.reviewId,
+        sourceReviewVersionId: publishedReviewVersionId,
+        publishedAt,
+        status: 'effective',
+        finalScore: publishable.score,
+        maxScore: publishable.maxScore,
+        summary: publishable.summary,
+        breakdownSnapshot: effectiveSourceReviewVersion.resultEnvelope.questionBreakdown ?? null,
+      },
+      actorRef: asActorRef(actorRef),
+    });
+
+    return {
+      isPublished: true,
+      publishedResultId: publishedResult.publishedResultId,
+      publishedAt: publishedResult.publishedAt,
+      score: publishedResult.finalScore,
+      maxScore: publishedResult.maxScore,
+      summary: publishedResult.summary,
+    };
+  }
+
+  async saveReviewRecordByLegacyJobId(
+    jobId: string,
+    reviewRecord: ReviewRecord,
+    options?: { context?: LegacyReviewDetailRecord['context'] }
+  ): Promise<ReviewRecord> {
     const submission = await this.prisma.submission.findUnique({
       where: { legacyJobId: jobId },
       include: {
@@ -245,7 +463,14 @@ export class PrismaLegacyReviewRecordStore {
             select: { rawPayload: true },
           })
         : null;
-    const preservedContext = reviewContextFromStoredPayload(currentVersion?.rawPayload ?? null) ?? undefined;
+    const preservedContext =
+      reviewContextFromStoredPayload(currentVersion?.rawPayload ?? null) ??
+      options?.context ??
+      undefined;
+    const resultEnvelope = createLegacyReviewResultEnvelope(
+      reviewRecord,
+      preservedContext?.resultJson
+    );
 
     await this.prisma.$transaction(async (tx) => {
       const review =
@@ -269,7 +494,16 @@ export class PrismaLegacyReviewRecordStore {
           kind: toPrismaReviewVersionKind(kind),
           actorKind: actorKindFromReviewRecord(reviewRecord),
           actorRefRaw: kind === 'lecturer_edit' ? 'review-route' : 'ai',
-          summary: createLegacyReviewResultEnvelope(reviewRecord).summary ?? null,
+          score:
+            typeof resultEnvelope.score === 'number'
+              ? resultEnvelope.score
+              : null,
+          maxScore:
+            typeof resultEnvelope.maxScore === 'number'
+              ? resultEnvelope.maxScore
+              : null,
+          summary: resultEnvelope.summary ?? null,
+          questionBreakdown: asJsonValue(resultEnvelope.questionBreakdown ?? null),
           rawPayload: createStoredReviewRecordPayload(reviewRecord, preservedContext) as never,
           createdAt: toDate(reviewRecord.updatedAt),
         },
@@ -292,7 +526,8 @@ export class PrismaLegacyReviewRecordStore {
 
   async patchReviewDisplayNameByLegacyJobId(
     jobId: string,
-    displayName: string | null
+    displayName: string | null,
+    options?: { context?: LegacyReviewDetailRecord['context'] }
   ): Promise<ReviewRecord> {
     const currentReview = await this.getReviewRecordByLegacyJobId(jobId);
     const now = new Date().toISOString();
@@ -311,6 +546,6 @@ export class PrismaLegacyReviewRecordStore {
       updatedAt: now,
     };
 
-    return this.saveReviewRecordByLegacyJobId(jobId, nextReview);
+    return this.saveReviewRecordByLegacyJobId(jobId, nextReview, options);
   }
 }

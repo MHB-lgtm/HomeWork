@@ -89,7 +89,10 @@ export async function PUT(
     if (persistence) {
       try {
         if (await persistence.reviewRecords.hasLegacySubmission(jobId)) {
-          await persistence.reviewRecords.saveReviewRecordByLegacyJobId(jobId, review);
+          const resolved = await getResolvedReviewDetail(jobId);
+          await persistence.reviewRecords.saveReviewRecordByLegacyJobId(jobId, review, {
+            context: resolved.context,
+          });
           return NextResponse.json({ ok: true });
         }
       } catch (error) {
@@ -173,9 +176,13 @@ export async function PATCH(
     if (persistence) {
       try {
         if (await persistence.reviewRecords.hasLegacySubmission(jobId)) {
+          const resolved = await getResolvedReviewDetail(jobId);
           const review = await persistence.reviewRecords.patchReviewDisplayNameByLegacyJobId(
             jobId,
-            parsedPayload.data.displayName ?? null
+            parsedPayload.data.displayName ?? null,
+            {
+              context: resolved.context,
+            }
           );
 
           return NextResponse.json({ ok: true, data: review });

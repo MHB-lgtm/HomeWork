@@ -43,6 +43,15 @@ export interface LegacyReviewContextRecord {
   gradingScope?: 'QUESTION' | 'DOCUMENT' | null;
 }
 
+export interface LegacyReviewPublicationRecord {
+  isPublished: boolean;
+  publishedResultId?: string | null;
+  publishedAt?: string | null;
+  score?: number | null;
+  maxScore?: number | null;
+  summary?: string | null;
+}
+
 export interface LegacySubmissionAssetRecord {
   path: string;
   mimeType?: string | null;
@@ -51,6 +60,7 @@ export interface LegacySubmissionAssetRecord {
 export interface LegacyReviewDetailRecord {
   review: import('@hg/shared-schemas').ReviewRecord;
   context?: LegacyReviewContextRecord;
+  publication?: LegacyReviewPublicationRecord;
   submissionAsset: LegacySubmissionAssetRecord | null;
 }
 

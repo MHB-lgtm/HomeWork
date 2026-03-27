@@ -2,7 +2,12 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { getReview, ReviewRecordV1 } from '../../../lib/reviewsClient';
+import {
+  getReview,
+  publishReview,
+  ReviewPublicationV1,
+  ReviewRecordV1,
+} from '../../../lib/reviewsClient';
 import {
   RubricEvaluationResult,
   Annotation,
@@ -33,6 +38,8 @@ function toShortText(value: string, maxChars: number): string {
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [reviewSource, setReviewSource] = useState<'postgres' | 'file' | null>(null);
+  const [publication, setPublication] = useState<ReviewPublicationV1 | null>(null);
   const [resultJson, setResultJson] = useState<any>(null);
   const [submissionMimeType, setSubmissionMimeType] = useState<string | undefined>(undefined);
   const [review, setReview] = useState<ReviewRecordV1 | null>(null);
@@ -44,6 +51,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [copiedTechnicalValue, setCopiedTechnicalValue] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
   const programmaticScrollRef = useRef<{ lockUntilMs: number; targetPageIndex: number | null }>({
     lockUntilMs: 0,
     targetPageIndex: null,
@@ -57,28 +66,44 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     return Date.now() < programmaticScrollRef.current.lockUntilMs;
   };
 
+  const loadReviewData = async (id: string, options?: { keepLoading?: boolean }) => {
+    if (options?.keepLoading !== false) {
+      setLoading(true);
+    }
+
+    const reviewResult = await getReview(id);
+
+    if (!reviewResult.ok) {
+      if (reviewResult.status !== 404) {
+        setError(`Failed to load review: ${reviewResult.error}`);
+      }
+      if (options?.keepLoading !== false) {
+        setLoading(false);
+      }
+      return false;
+    }
+
+    setError(null);
+    setReview(reviewResult.review);
+    setJobStatus(reviewResult.context?.status ?? null);
+    setReviewSource(reviewResult.context?.source ?? null);
+    setPublication(reviewResult.context?.publication ?? null);
+    setResultJson(reviewResult.context?.resultJson ?? null);
+    setSubmissionMimeType(reviewResult.context?.submissionMimeType ?? undefined);
+
+    if (options?.keepLoading !== false) {
+      setLoading(false);
+    }
+
+    return true;
+  };
+
   useEffect(() => {
     async function loadData() {
       const resolvedParams = await params;
       const id = resolvedParams.jobId;
       setJobId(id);
-
-      const reviewResult = await getReview(id);
-
-      if (!reviewResult.ok) {
-        if (reviewResult.status !== 404) {
-          setError(`Failed to load review: ${reviewResult.error}`);
-        }
-        setLoading(false);
-        return;
-      }
-
-      setReview(reviewResult.review);
-      setJobStatus(reviewResult.context?.status ?? null);
-      setResultJson(reviewResult.context?.resultJson ?? null);
-      setSubmissionMimeType(reviewResult.context?.submissionMimeType ?? undefined);
-
-      setLoading(false);
+      await loadReviewData(id);
     }
 
     loadData();
@@ -230,6 +255,26 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     } catch {
       setCopiedTechnicalValue(null);
     }
+  };
+
+  const handlePublish = async () => {
+    if (!jobId || reviewSource !== 'postgres' || isPublishing) {
+      return;
+    }
+
+    setIsPublishing(true);
+    setPublishError(null);
+
+    const result = await publishReview(jobId);
+    if (!result.ok) {
+      setPublishError(result.error);
+      setIsPublishing(false);
+      return;
+    }
+
+    setPublication(result.data);
+    await loadReviewData(jobId, { keepLoading: false });
+    setIsPublishing(false);
   };
 
   // Get all annotations, sorted by confidence desc (undefined last)
@@ -489,6 +534,32 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {jobStatus && <Badge variant={getJobStatusBadgeVariant(jobStatus)}>{jobStatus}</Badge>}
+              {publication?.isPublished ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                    Published
+                  </p>
+                  <p className="text-sm font-medium text-emerald-900">
+                    {publication.score != null && publication.maxScore != null
+                      ? `${publication.score}/${publication.maxScore}`
+                      : 'Published'}
+                  </p>
+                  {publication.summary ? (
+                    <p className="mt-1 max-w-[240px] text-xs text-emerald-800">
+                      {toShortText(publication.summary, 120)}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              {reviewSource === 'postgres' ? (
+                <Button
+                  onClick={handlePublish}
+                  disabled={isPublishing}
+                  className="min-w-[110px]"
+                >
+                  {isPublishing ? 'Publishing...' : publication?.isPublished ? 'Republish' : 'Publish'}
+                </Button>
+              ) : null}
               <details className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
                 <summary className="cursor-pointer font-medium text-slate-700">Technical details</summary>
                 <div className="mt-2 space-y-1 min-w-[240px]">
@@ -511,6 +582,12 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
               </details>
             </div>
           </div>
+          {publishError ? (
+            <Alert variant="destructive" className="mt-4">
+              <AlertTitle>Publish failed</AlertTitle>
+              <AlertDescription>{publishError}</AlertDescription>
+            </Alert>
+          ) : null}
         </div>
       </div>
 

@@ -73,7 +73,7 @@ export class PrismaPublicationRepository implements PublicationRepository {
     ]);
     const moduleFields = moduleRefToStoredFields(publishedResult.moduleRef);
 
-    await this.prisma.publishedResult.upsert({
+    const saved = await this.prisma.publishedResult.upsert({
       where: { domainId: publishedResult.publishedResultId },
       create: {
         domainId: publishedResult.publishedResultId,
@@ -108,6 +108,14 @@ export class PrismaPublicationRepository implements PublicationRepository {
         summary: publishedResult.summary,
         breakdownSnapshot: publishedResult.breakdownSnapshot as never,
       },
+      select: { id: true },
+    });
+
+    await this.prisma.submission.update({
+      where: { id: submission.id },
+      data: {
+        currentPublishedResultId: saved.id,
+      },
     });
   }
 
@@ -117,6 +125,13 @@ export class PrismaPublicationRepository implements PublicationRepository {
     await this.prisma.publishedResult.updateMany({
       where: { submissionId: submission.id, status: 'EFFECTIVE' },
       data: { status: 'SUPERSEDED' },
+    });
+
+    await this.prisma.submission.update({
+      where: { id: submission.id },
+      data: {
+        currentPublishedResultId: null,
+      },
     });
   }
 
