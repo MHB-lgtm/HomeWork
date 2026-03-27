@@ -6,7 +6,7 @@ Scope: implemented repo structure, completed milestones, approved next direction
 
 ## 1. Repo overview
 
-Homework Grader is a pnpm monorepo for a grading system that is still primarily local-first and file-backed, with a narrow Postgres-backed review and publication slice now committed on the current branch.
+Homework Grader is a pnpm monorepo for a grading system that is still primarily local-first and file-backed, with a narrow Postgres-backed review and publication slice now committed on the current branch, including a lecturer-facing publication lens inside `/reviews`.
 
 Today the repo contains:
 
@@ -140,10 +140,11 @@ Current branch addition:
 
 - `GET /api/reviews/[jobId]` is DB-aware when `DATABASE_URL` is configured,
 - `PUT` / `PATCH /api/reviews/[jobId]` can persist imported reviews to Postgres,
-- `GET /api/reviews` is hybrid and merges DB-backed review fields with file-backed job metadata,
+- `GET /api/reviews` is hybrid and merges DB-backed review fields and publication summary with file-backed job metadata,
 - `GET /api/reviews/[jobId]/submission` and `/submission-raw` can serve imported assets through review-centric APIs,
 - `POST /api/reviews/[jobId]/publish` can publish imported review results into `PublishedResult` / `GradebookEntry`,
 - review detail can surface current publication state and expose a narrow lecturer-facing publish / republish flow,
+- `/reviews` now acts as a narrow lecturer-facing published lens for imported reviews,
 - `import-file-backed` supports `--dry-run`, structured reporting, and rerunnable import into Postgres.
 
 ### 3.2 Current persistence model
@@ -249,6 +250,7 @@ Important current-state clarification:
 
 - these publication concepts are implemented as domain contracts, rules, services, and tests,
 - a narrow imported-review publication path is now persisted and exposed through review-centric APIs on this branch,
+- current effective publication state is now visible in both review detail and review list surfaces for imported reviews,
 - broader publication and gradebook surfaces are still not first-class runtime APIs in the product.
 
 ## 6. What is intentionally still file-backed
@@ -336,6 +338,7 @@ Important boundary:
 
 - this slice is intentionally narrow,
 - publication is lecturer-facing and review-centric only,
+- `/reviews` is the current lecturer-facing read surface for publication summary only,
 - the rest of the product runtime is still file-backed,
 - `apps/worker` remains unchanged,
 - `apps/web/src/app/api/jobs/**` still remains the legacy file-backed surface for non-review flows.
@@ -351,6 +354,8 @@ The following are intentionally not implemented yet:
 - first-class exam-batch runtime lifecycle,
 - broader published-result runtime surfaces,
 - gradebook runtime surfaces,
+- student-facing publication surfaces,
+- broader publication history/timeline UI,
 - flag persistence and filtering,
 - audit-event persistence,
 - analytics snapshots,

@@ -1,6 +1,6 @@
 # Postgres + Prisma Persistence & Identity Design
 
-Status: approved design direction and still the source of truth for rollout beyond the current review and publication slices
+Status: approved design direction and still the source of truth for rollout beyond the current review, publication, and published-lens slices
 Last updated: 2026-03-27
 
 ## 1. Goal
@@ -11,7 +11,7 @@ This design must be precise enough that the next coding milestone can implement 
 
 ## 2. Non-goals
 
-This design does not itself implement the wider product migration. The current branch now has narrow committed review and publication slices, but broader rollout decisions still come from this document.
+This design does not itself implement the wider product migration. The current branch now has narrow committed review and publication slices, including a lecturer-facing published lens inside `/reviews`, but broader rollout decisions still come from this document.
 
 This design does not itself implement:
 
@@ -33,6 +33,7 @@ The committed baseline already has:
   - `GradebookEntry`
 - file-backed local stores still active
 - narrow committed DB-backed review/publication runtime in `apps/web`
+- narrow committed lecturer-facing publication read-side in `/reviews`
 - no committed user, membership, or authz runtime
 
 Future persistence milestones must build on that foundation rather than redesign it.
@@ -285,6 +286,7 @@ Publication is a multi-row invariant and must be transactionally protected.
 Current branch note:
 
 - a narrow imported-review publish route now exists
+- the current lecturer-facing publication read surface is still `/reviews` only
 - this section remains the source of truth for stronger concurrency guarantees in broader rollout
 
 Recommended policy:
@@ -423,9 +425,10 @@ Current branch note:
 
 - `GET /api/reviews/[jobId]` is now implemented
 - `PUT` / `PATCH /api/reviews/[jobId]` are also DB-aware for imported reviews
-- `GET /api/reviews` is now a narrow hybrid read-side extension
+- `GET /api/reviews` is now a narrow hybrid read-side extension with publication summary for effective imported results
 - `GET /api/reviews/[jobId]/submission` and `/submission-raw` now serve imported assets through review-centric APIs
 - `POST /api/reviews/[jobId]/publish` now exposes a narrow imported-review publication mutation
+- `/reviews` now acts as the current lecturer-facing published lens inside the existing review surface
 - the rest of the product still remains outside this rollout
 
 ## 18. Tighter acceptance criteria for the next coding milestone

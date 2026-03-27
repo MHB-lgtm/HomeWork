@@ -55,6 +55,7 @@ Completed:
 - `Postgres Runtime Slice 1`
 - `Postgres Runtime Slice 2`
 - `Postgres Publication Slice 1`
+- `Postgres Publication Slice 2`
 
 Current branch context:
 
@@ -89,6 +90,8 @@ Current branch context:
   - `GET /api/reviews/[jobId]/submission-raw`
   - `POST /api/reviews/[jobId]/publish`
   - `context.publication` on imported review detail
+  - `publication` summary on imported review list rows
+  - `/reviews` as the current lecturer-facing published lens
 
 ## 5. What is intentionally not implemented yet
 
@@ -98,6 +101,8 @@ Current branch context:
 - assignment runtime lifecycle
 - exam-batch runtime lifecycle
 - broader `PublishedResult` / `GradebookEntry` runtime surfaces
+- student-facing publication surfaces
+- broader publication history UI
 - notifications
 - analytics snapshots
 - export pipelines
@@ -122,6 +127,7 @@ Current narrow exception on this branch:
 - review detail and review list can use Postgres when `DATABASE_URL` is configured
 - imported review assets can be served from `StoredAsset` rows with pointwise fallback
 - imported review detail can surface current publication state
+- imported review list can surface current effective publication summary
 - imported reviews can publish the current review result into `PublishedResult` and `GradebookEntry`
 
 Runtime code still depends directly on:
@@ -233,6 +239,7 @@ Current branch:
 
 Relevant recent commits:
 
+- `309b67e feat(postgres): add published lens to reviews list`
 - `8804be7 feat(postgres): add narrow review publication flow`
 - `853d1af docs: align branch handoff and architecture with postgres review slices`
 - `302b7fe feat(postgres): make review detail independent of legacy jobs api`
@@ -262,6 +269,8 @@ Current runtime shape:
 - current branch has narrow committed Postgres-backed review and publication slices
 - imported reviews can publish through `POST /api/reviews/[jobId]/publish`
 - imported review detail can expose `context.publication`
+- imported review list rows can expose `publication` summary
+- `/reviews` is now the current lecturer-facing published lens for imported reviews
 
 Current branch context:
 - branch: feat/postgres-runtime-slice-1
@@ -294,5 +303,7 @@ Key architecture boundary:
   - PUT/PATCH /api/reviews/[jobId]
   - GET /api/reviews
   - GET /api/reviews/[jobId]/submission*
+  - POST /api/reviews/[jobId]/publish
+- publication state is visible in both review detail and review list for imported reviews
 - Submission.legacyJobId is the bridge from current jobId route params to DB-backed review records
 ```
