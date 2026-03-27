@@ -1,0 +1,72 @@
+import { NextRequest, NextResponse } from 'next/server';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { resolveReviewSubmissionAsset } from '@/lib/server/reviewDetail';
+
+export const runtime = 'nodejs';
+
+/**
+ * GET /api/reviews/[jobId]/submission
+ * Get the submission image file for a review
+ */
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ jobId: string }> }
+) {
+  try {
+    const { jobId } = await params;
+
+    if (!jobId) {
+      return NextResponse.json(
+        { error: 'Job ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const asset = await resolveReviewSubmissionAsset(jobId);
+    if (!asset) {
+      return NextResponse.json(
+        { error: 'Submission file path not found for review' },
+        { status: 404 }
+      );
+    }
+
+    const ext = path.extname(asset.path).toLowerCase();
+    const supportedExtensions = ['.png', '.jpg', '.jpeg'];
+
+    if (!supportedExtensions.includes(ext)) {
+      return NextResponse.json(
+        { error: 'Submission review supports PNG/JPG only for now.' },
+        { status: 415 }
+      );
+    }
+
+    const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
+
+    let fileBuffer: Buffer;
+    try {
+      fileBuffer = await fs.readFile(asset.path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return NextResponse.json(
+          { error: 'Submission file not found' },
+          { status: 404 }
+        );
+      }
+      throw error;
+    }
+
+    return new NextResponse(new Uint8Array(fileBuffer), {
+      headers: {
+        'Content-Type': mimeType,
+        'Cache-Control': 'no-store',
+      },
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { error: `Failed to fetch submission: ${errorMessage}` },
+      { status: 500 }
+    );
+  }
+}

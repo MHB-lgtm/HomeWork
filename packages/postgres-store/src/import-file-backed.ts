@@ -24,6 +24,7 @@ import {
 } from './mappers/import';
 import {
   actorKindFromReviewRecord,
+  createStoredReviewRecordPayload,
   createLegacyReviewResultEnvelope,
   reviewVersionKindFromReviewRecord,
 } from './mappers/review-record';
@@ -515,6 +516,14 @@ export const importFileBackedData = async (
       });
 
       const envelope = createLegacyReviewResultEnvelope(reviewRecord, job.resultJson);
+      const storedReviewPayload = createStoredReviewRecordPayload(reviewRecord, {
+        status: job.status,
+        resultJson: job.resultJson ?? null,
+        errorMessage: job.errorMessage ?? null,
+        submissionMimeType: job.inputs.submissionMimeType ?? null,
+        gradingMode: job.inputs.gradingMode ?? null,
+        gradingScope: job.inputs.gradingScope ?? null,
+      });
       const hasPublishedResult =
         typeof envelope.score === 'number' &&
         typeof envelope.maxScore === 'number' &&
@@ -664,7 +673,7 @@ export const importFileBackedData = async (
                       : null,
                   summary: envelope.summary ?? null,
                   questionBreakdown: asJsonValue(envelope.questionBreakdown ?? null),
-                  rawPayload: asJsonValue(reviewRecord),
+                  rawPayload: asJsonValue(storedReviewPayload),
                   createdAt: toDate(reviewRecord.updatedAt),
                 },
                 select: { id: true },
@@ -687,7 +696,7 @@ export const importFileBackedData = async (
                       : null,
                   summary: envelope.summary ?? null,
                   questionBreakdown: asJsonValue(envelope.questionBreakdown ?? null),
-                  rawPayload: asJsonValue(reviewRecord),
+                  rawPayload: asJsonValue(storedReviewPayload),
                   createdAt: toDate(reviewRecord.updatedAt),
                 },
                 select: { id: true },

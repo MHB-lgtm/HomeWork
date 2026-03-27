@@ -12,6 +12,8 @@ export interface LegacyJobRecord {
     examFilePath?: string;
     submissionFilePath?: string;
     submissionMimeType?: string;
+    gradingMode?: 'RUBRIC' | 'GENERAL';
+    gradingScope?: 'QUESTION' | 'DOCUMENT';
   };
   resultJson?: unknown;
   errorMessage?: string;
@@ -30,6 +32,26 @@ export interface LegacyReviewSummaryRecord {
   updatedAt: string | null;
   annotationCount: number;
   hasResult: boolean;
+}
+
+export interface LegacyReviewContextRecord {
+  status?: string;
+  resultJson?: unknown;
+  errorMessage?: string | null;
+  submissionMimeType?: string | null;
+  gradingMode?: 'RUBRIC' | 'GENERAL' | null;
+  gradingScope?: 'QUESTION' | 'DOCUMENT' | null;
+}
+
+export interface LegacySubmissionAssetRecord {
+  path: string;
+  mimeType?: string | null;
+}
+
+export interface LegacyReviewDetailRecord {
+  review: import('@hg/shared-schemas').ReviewRecord;
+  context?: LegacyReviewContextRecord;
+  submissionAsset: LegacySubmissionAssetRecord | null;
 }
 
 export interface ImportFileBackedSummary {

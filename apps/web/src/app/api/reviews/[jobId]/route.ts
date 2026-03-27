@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ReviewRecordSchema, ReviewRecord } from '@hg/shared-schemas';
 import { getOrCreateReview, saveReview } from '@hg/local-job-store';
 import { getServerPersistence } from '@/lib/server/persistence';
+import { getResolvedReviewDetail } from '@/lib/server/reviewDetail';
 
 export const runtime = 'nodejs';
 
@@ -29,26 +30,12 @@ export async function GET(
       );
     }
 
-    const persistence = getServerPersistence();
-    if (persistence) {
-      try {
-        const review = await persistence.reviewRecords.getReviewRecordByLegacyJobId(jobId);
-        if (review) {
-          return NextResponse.json({ ok: true, data: review });
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return NextResponse.json(
-          { ok: false, error: `Failed to fetch review: ${errorMessage}` },
-          { status: 500 }
-        );
-      }
-    }
-
-    ensureDataDirConfigured();
-    const review = await getOrCreateReview(jobId);
-
-    return NextResponse.json({ ok: true, data: review });
+    const resolved = await getResolvedReviewDetail(jobId);
+    return NextResponse.json({
+      ok: true,
+      data: resolved.review,
+      context: resolved.context,
+    });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(

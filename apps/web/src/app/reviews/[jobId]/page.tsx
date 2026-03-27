@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { getJob } from '../../../lib/jobsClient';
 import { getReview, ReviewRecordV1 } from '../../../lib/reviewsClient';
 import {
   RubricEvaluationResult,
@@ -64,30 +63,20 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       const id = resolvedParams.jobId;
       setJobId(id);
 
-      // Fetch job and review in parallel
-      const [jobResult, reviewResult] = await Promise.all([
-        getJob(id),
-        getReview(id),
-      ]);
+      const reviewResult = await getReview(id);
 
-      if (!jobResult.ok) {
-        setError(`Failed to load job: ${jobResult.error}`);
+      if (!reviewResult.ok) {
+        if (reviewResult.status !== 404) {
+          setError(`Failed to load review: ${reviewResult.error}`);
+        }
         setLoading(false);
         return;
       }
 
-      setJobStatus(jobResult.status);
-      setResultJson(jobResult.resultJson);
-      setSubmissionMimeType(jobResult.submissionMimeType);
-
-      if (reviewResult.ok) {
-        setReview(reviewResult.review);
-      } else {
-        // Review not found is OK - just means no annotations yet
-        if (reviewResult.status !== 404) {
-          setError(`Failed to load review: ${reviewResult.error}`);
-        }
-      }
+      setReview(reviewResult.review);
+      setJobStatus(reviewResult.context?.status ?? null);
+      setResultJson(reviewResult.context?.resultJson ?? null);
+      setSubmissionMimeType(reviewResult.context?.submissionMimeType ?? undefined);
 
       setLoading(false);
     }
@@ -544,7 +533,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 {submissionMimeType === 'application/pdf' ? (
                   <div className="space-y-4">
                     <PDFViewer
-                      pdfUrl={`/api/jobs/${jobId}/submission-raw`}
+                      pdfUrl={`/api/reviews/${jobId}/submission-raw`}
                       annotations={allAnnotations}
                       selectedAnnotationId={selectedAnnotationId}
                       hoveredAnnotationId={hoveredAnnotationId}
@@ -572,7 +561,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 ) : (
                   <div className="relative inline-block w-full max-w-full">
                     <img
-                      src={`/api/jobs/${jobId}/submission`}
+                      src={`/api/reviews/${jobId}/submission`}
                       alt="Student submission"
                       className="w-full h-auto block border border-slate-200 rounded-lg"
                     />

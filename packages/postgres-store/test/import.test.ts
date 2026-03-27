@@ -4,6 +4,7 @@ import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import {
+  reviewContextFromStoredPayload,
   importFileBackedData,
   PLACEHOLDER_COURSE_DOMAIN_ID,
 } from '../src';
@@ -324,5 +325,24 @@ describe('importFileBackedData', () => {
     expect(stores.submission.get(getSubmissionDomainId('job-1'))?.currentPublishedResultId).toBe(
       stores.publishedResult.get(getPublishedResultDomainId('job-1'))?.id
     );
+    expect(
+      reviewContextFromStoredPayload(
+        stores.reviewVersion.get(getImportedReviewVersionDomainId('job-1'))?.rawPayload
+      )
+    ).toEqual({
+      status: 'DONE',
+      resultJson: {
+        mode: 'RUBRIC',
+        rubricEvaluation: {
+          sectionScore: 91,
+          sectionMaxPoints: 100,
+          overallFeedback: 'Strong work',
+        },
+      },
+      errorMessage: null,
+      submissionMimeType: 'application/pdf',
+      gradingMode: null,
+      gradingScope: null,
+    });
   });
 });

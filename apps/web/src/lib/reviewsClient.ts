@@ -7,6 +7,16 @@ export type ReviewRecordV1 = {
   annotations: any[];
 };
 
+export type ReviewContextV1 = {
+  status: string;
+  resultJson: unknown | null;
+  errorMessage: string | null;
+  submissionMimeType: string | null;
+  gradingMode: 'RUBRIC' | 'GENERAL' | null;
+  gradingScope: 'QUESTION' | 'DOCUMENT' | null;
+  source: 'postgres' | 'file';
+};
+
 export type ReviewSummary = {
   jobId: string;
   displayName?: string | null;
@@ -25,7 +35,7 @@ export type ReviewSummary = {
  * Get a review record by jobId
  */
 export async function getReview(jobId: string): Promise<
-  | { ok: true; review: ReviewRecordV1 }
+  | { ok: true; review: ReviewRecordV1; context?: ReviewContextV1 }
   | { ok: false; error: string; status?: number }
 > {
   try {
@@ -45,6 +55,7 @@ export async function getReview(jobId: string): Promise<
       return {
         ok: true,
         review: data.data,
+        context: data.context as ReviewContextV1 | undefined,
       };
     }
 

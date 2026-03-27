@@ -1,11 +1,17 @@
 import { randomUUID } from 'crypto';
 import type { PrismaClient } from '@prisma/client';
 import type { ReviewRecord } from '@hg/shared-schemas';
-import type { LegacyReviewSummaryRecord } from '../types';
+import type {
+  LegacyReviewDetailRecord,
+  LegacyReviewSummaryRecord,
+  LegacySubmissionAssetRecord,
+} from '../types';
 import {
   actorKindFromReviewRecord,
+  createStoredReviewRecordPayload,
   createLegacyReviewResultEnvelope,
   reviewRecordFromStoredPayload,
+  reviewContextFromStoredPayload,
   reviewVersionKindFromReviewRecord,
   setReviewDisplayName,
 } from '../mappers/review-record';
@@ -25,10 +31,30 @@ type ReviewStorePrisma = Pick<
 const getSubmissionWithReview = async (prisma: ReviewStorePrisma, jobId: string) =>
   prisma.submission.findUnique({
     where: { legacyJobId: jobId },
-    include: {
+    select: {
+      id: true,
+      courseId: true,
+      currentPublishedResultId: true,
+      material: {
+        select: {
+          asset: {
+            select: {
+              path: true,
+              mimeType: true,
+            },
+          },
+        },
+      },
       review: {
-        include: {
+        select: {
+          createdAt: true,
+          updatedAt: true,
+          currentVersionId: true,
           versions: {
+            select: {
+              id: true,
+              rawPayload: true,
+            },
             orderBy: { createdAt: 'desc' },
             take: 1,
           },
@@ -129,7 +155,7 @@ export class PrismaLegacyReviewRecordStore {
     return Boolean(submission);
   }
 
-  async getReviewRecordByLegacyJobId(jobId: string): Promise<ReviewRecord | null> {
+  async getReviewDetailByLegacyJobId(jobId: string): Promise<LegacyReviewDetailRecord | null> {
     const submission = await getSubmissionWithReview(this.prisma, jobId);
     if (!submission?.review) {
       return null;
@@ -149,12 +175,55 @@ export class PrismaLegacyReviewRecordStore {
       return null;
     }
 
-    return reviewRecordFromStoredPayload(
-      jobId,
-      currentVersion.rawPayload,
-      toIsoString(submission.review.createdAt),
-      toIsoString(submission.review.updatedAt)
-    );
+    const submissionAsset = submission.material?.asset
+      ? ({
+          path: submission.material.asset.path,
+          mimeType: submission.material.asset.mimeType ?? null,
+        } satisfies LegacySubmissionAssetRecord)
+      : null;
+
+    return {
+      review: reviewRecordFromStoredPayload(
+        jobId,
+        currentVersion.rawPayload,
+        toIsoString(submission.review.createdAt),
+        toIsoString(submission.review.updatedAt)
+      ),
+      context: reviewContextFromStoredPayload(currentVersion.rawPayload) ?? undefined,
+      submissionAsset,
+    };
+  }
+
+  async getSubmissionAssetByLegacyJobId(jobId: string): Promise<LegacySubmissionAssetRecord | null> {
+    const submission = await this.prisma.submission.findUnique({
+      where: { legacyJobId: jobId },
+      select: {
+        material: {
+          select: {
+            asset: {
+              select: {
+                path: true,
+                mimeType: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!submission?.material?.asset) {
+      return null;
+    }
+
+    return {
+      path: submission.material.asset.path,
+      mimeType: submission.material.asset.mimeType ?? null,
+    };
+  }
+
+  async getReviewRecordByLegacyJobId(jobId: string): Promise<ReviewRecord | null> {
+    const detail = await this.getReviewDetailByLegacyJobId(jobId);
+    return detail?.review ?? null;
   }
 
   async saveReviewRecordByLegacyJobId(jobId: string, reviewRecord: ReviewRecord): Promise<ReviewRecord> {
@@ -168,6 +237,15 @@ export class PrismaLegacyReviewRecordStore {
     if (!submission) {
       throw new Error(`Submission not found for legacy job "${jobId}"`);
     }
+
+    const currentVersion =
+      submission.review?.currentVersionId
+        ? await this.prisma.reviewVersion.findUnique({
+            where: { id: submission.review.currentVersionId },
+            select: { rawPayload: true },
+          })
+        : null;
+    const preservedContext = reviewContextFromStoredPayload(currentVersion?.rawPayload ?? null) ?? undefined;
 
     await this.prisma.$transaction(async (tx) => {
       const review =
@@ -192,7 +270,7 @@ export class PrismaLegacyReviewRecordStore {
           actorKind: actorKindFromReviewRecord(reviewRecord),
           actorRefRaw: kind === 'lecturer_edit' ? 'review-route' : 'ai',
           summary: createLegacyReviewResultEnvelope(reviewRecord).summary ?? null,
-          rawPayload: reviewRecord as never,
+          rawPayload: createStoredReviewRecordPayload(reviewRecord, preservedContext) as never,
           createdAt: toDate(reviewRecord.updatedAt),
         },
       });

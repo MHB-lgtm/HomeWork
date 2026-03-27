@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ReviewRecord } from '@hg/shared-schemas';
-import { PrismaLegacyReviewRecordStore } from '../src';
+import {
+  createStoredReviewRecordPayload,
+  PrismaLegacyReviewRecordStore,
+} from '../src';
 
 const makeReviewRecord = (displayName?: string): ReviewRecord => ({
   version: '1.0.0',
@@ -15,11 +18,25 @@ const createFakePrisma = () => {
   const reviewVersions = new Map<string, any>();
   const reviews = new Map<string, any>();
   const submissions = new Map<string, any>();
+  const materials = new Map<string, any>();
+  const assets = new Map<string, any>();
+
+  assets.set('asset-row-1', {
+    id: 'asset-row-1',
+    path: 'C:\\fixtures\\job-1.pdf',
+    mimeType: 'application/pdf',
+  });
+  materials.set('material-row-1', {
+    id: 'material-row-1',
+    assetId: 'asset-row-1',
+  });
 
   submissions.set('job-1', {
     id: 'submission-row-1',
     legacyJobId: 'job-1',
     courseId: 'course-row-1',
+    materialId: 'material-row-1',
+    currentPublishedResultId: null,
     review: null,
   });
 
@@ -31,12 +48,52 @@ const createFakePrisma = () => {
           return null;
         }
 
-        if (args.select?.id) {
-          return { id: row.id };
+        const review = row.review ? reviews.get(row.review) : null;
+        const material = row.materialId ? materials.get(row.materialId) : null;
+        const asset = material ? assets.get(material.assetId) : null;
+
+        if (args.select) {
+          return {
+            ...(args.select.id ? { id: row.id } : {}),
+            ...(args.select.courseId ? { courseId: row.courseId } : {}),
+            ...(args.select.currentPublishedResultId
+              ? { currentPublishedResultId: row.currentPublishedResultId ?? null }
+              : {}),
+            ...(args.select.material
+              ? {
+                  material: asset
+                    ? {
+                        asset: {
+                          path: asset.path,
+                          mimeType: asset.mimeType ?? null,
+                        },
+                      }
+                    : null,
+                }
+              : {}),
+            ...(args.select.review
+              ? {
+                  review: review
+                    ? {
+                        createdAt: review.createdAt,
+                        updatedAt: review.updatedAt,
+                        currentVersionId: review.currentVersionId ?? null,
+                        versions: [...reviewVersions.values()]
+                          .filter((version) => version.reviewId === review.id)
+                          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+                          .slice(0, 1)
+                          .map((version) => ({
+                            id: version.id,
+                            rawPayload: version.rawPayload,
+                          })),
+                      }
+                    : null,
+                }
+              : {}),
+          };
         }
 
         if (args.include?.review) {
-          const review = row.review ? reviews.get(row.review) : null;
           return {
             ...row,
             review: review
@@ -187,5 +244,97 @@ describe('PrismaLegacyReviewRecordStore', () => {
       createdAt: '2026-03-26T10:00:00.000Z',
     });
     expect(summaries[0].updatedAt).toBeTruthy();
+  });
+
+  it('returns review detail context and submission asset for wrapped imported payloads', async () => {
+    const { prisma, submissions, reviews, reviewVersions } = createFakePrisma();
+    const store = new PrismaLegacyReviewRecordStore(prisma);
+
+    const reviewRow = {
+      id: 'review-row-imported',
+      domainId: 'legacy-review:job-1',
+      createdAt: new Date('2026-03-26T10:00:00.000Z'),
+      updatedAt: new Date('2026-03-26T10:05:00.000Z'),
+      currentVersionId: 'review-version-row-imported',
+    };
+    reviews.set(reviewRow.id, reviewRow);
+    submissions.get('job-1').review = reviewRow.id;
+    reviewVersions.set('review-version-row-imported', {
+      id: 'review-version-row-imported',
+      domainId: 'legacy-review-version:job-1:imported',
+      reviewId: reviewRow.id,
+      createdAt: new Date('2026-03-26T10:05:00.000Z'),
+      rawPayload: createStoredReviewRecordPayload(makeReviewRecord('Imported name'), {
+        status: 'DONE',
+        resultJson: { mode: 'RUBRIC' },
+        errorMessage: null,
+        submissionMimeType: 'application/pdf',
+        gradingMode: 'RUBRIC',
+        gradingScope: 'QUESTION',
+      }),
+    });
+
+    const detail = await store.getReviewDetailByLegacyJobId('job-1');
+
+    expect(detail).toMatchObject({
+      review: {
+        jobId: 'job-1',
+        displayName: 'Imported name',
+      },
+      context: {
+        status: 'DONE',
+        resultJson: { mode: 'RUBRIC' },
+        errorMessage: null,
+        submissionMimeType: 'application/pdf',
+        gradingMode: 'RUBRIC',
+        gradingScope: 'QUESTION',
+      },
+      submissionAsset: {
+        path: 'C:\\fixtures\\job-1.pdf',
+        mimeType: 'application/pdf',
+      },
+    });
+  });
+
+  it('preserves imported context when patching the display name', async () => {
+    const { prisma, submissions, reviews, reviewVersions } = createFakePrisma();
+    const store = new PrismaLegacyReviewRecordStore(prisma);
+
+    const reviewRow = {
+      id: 'review-row-imported',
+      domainId: 'legacy-review:job-1',
+      createdAt: new Date('2026-03-26T10:00:00.000Z'),
+      updatedAt: new Date('2026-03-26T10:05:00.000Z'),
+      currentVersionId: 'review-version-row-imported',
+    };
+    reviews.set(reviewRow.id, reviewRow);
+    submissions.get('job-1').review = reviewRow.id;
+    reviewVersions.set('review-version-row-imported', {
+      id: 'review-version-row-imported',
+      domainId: 'legacy-review-version:job-1:imported',
+      reviewId: reviewRow.id,
+      createdAt: new Date('2026-03-26T10:05:00.000Z'),
+      rawPayload: createStoredReviewRecordPayload(makeReviewRecord('Imported name'), {
+        status: 'DONE',
+        resultJson: { mode: 'RUBRIC' },
+        errorMessage: null,
+        submissionMimeType: 'application/pdf',
+        gradingMode: 'RUBRIC',
+        gradingScope: 'QUESTION',
+      }),
+    });
+
+    await store.patchReviewDisplayNameByLegacyJobId('job-1', 'Renamed');
+
+    const latestVersion = reviewVersions.get(reviews.get(reviewRow.id).currentVersionId);
+    expect(latestVersion.rawPayload.legacyJobContext).toEqual({
+      status: 'DONE',
+      resultJson: { mode: 'RUBRIC' },
+      errorMessage: null,
+      submissionMimeType: 'application/pdf',
+      gradingMode: 'RUBRIC',
+      gradingScope: 'QUESTION',
+    });
+    expect(latestVersion.rawPayload.reviewRecord.displayName).toBe('Renamed');
   });
 });

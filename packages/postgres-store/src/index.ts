@@ -2,7 +2,10 @@ export { getPrismaClient, disconnectPrismaClient } from './client';
 export type {
   ImportFileBackedOptions,
   ImportFileBackedSummary,
+  LegacyReviewContextRecord,
+  LegacyReviewDetailRecord,
   LegacyJobRecord,
+  LegacySubmissionAssetRecord,
   LegacyReviewSummaryRecord,
 } from './types';
 export { PrismaCourseRepository } from './repos/course-repository';
@@ -19,6 +22,8 @@ export {
 } from './mappers/import';
 export {
   normalizeLegacyJobResultEnvelope,
+  createStoredReviewRecordPayload,
+  reviewContextFromStoredPayload,
   reviewRecordFromStoredPayload,
   createLegacyReviewResultEnvelope,
 } from './mappers/review-record';

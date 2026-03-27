@@ -2,6 +2,7 @@ import { ActorKind } from '@prisma/client';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import { ReviewRecordSchema } from '@hg/shared-schemas';
 import type { ReviewResultEnvelope, ReviewVersionKind } from '@hg/domain-workflow';
+import type { LegacyReviewContextRecord } from '../types';
 import { asJsonValue } from './domain';
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -12,6 +13,76 @@ const getString = (record: Record<string, unknown>, key: string): string | undef
 
 const getNumber = (record: Record<string, unknown>, key: string): number | undefined =>
   typeof record[key] === 'number' ? (record[key] as number) : undefined;
+
+const hasOwn = (record: Record<string, unknown>, key: string): boolean =>
+  Object.prototype.hasOwnProperty.call(record, key);
+
+const STORED_REVIEW_PAYLOAD_FORMAT = 'legacy-review-record-v2';
+
+type StoredReviewRecordPayload = {
+  format: typeof STORED_REVIEW_PAYLOAD_FORMAT;
+  reviewRecord: ReviewRecord;
+  legacyJobContext: LegacyReviewContextRecord;
+};
+
+const parseStoredReviewContext = (value: unknown): LegacyReviewContextRecord | null => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  const context: LegacyReviewContextRecord = {};
+
+  if (typeof value.status === 'string') {
+    context.status = value.status;
+  }
+  if (hasOwn(value, 'resultJson')) {
+    context.resultJson = value.resultJson;
+  }
+  if (value.errorMessage === null || typeof value.errorMessage === 'string') {
+    context.errorMessage = value.errorMessage;
+  }
+  if (value.submissionMimeType === null || typeof value.submissionMimeType === 'string') {
+    context.submissionMimeType = value.submissionMimeType;
+  }
+  if (
+    value.gradingMode === null ||
+    value.gradingMode === 'RUBRIC' ||
+    value.gradingMode === 'GENERAL'
+  ) {
+    context.gradingMode = value.gradingMode;
+  }
+  if (
+    value.gradingScope === null ||
+    value.gradingScope === 'QUESTION' ||
+    value.gradingScope === 'DOCUMENT'
+  ) {
+    context.gradingScope = value.gradingScope;
+  }
+
+  return Object.keys(context).length > 0 ? context : null;
+};
+
+const parseStoredReviewPayload = (value: unknown): StoredReviewRecordPayload | null => {
+  if (!isObject(value) || value.format !== STORED_REVIEW_PAYLOAD_FORMAT) {
+    return null;
+  }
+
+  const parsedReview = ReviewRecordSchema.safeParse(value.reviewRecord);
+  if (!parsedReview.success) {
+    return null;
+  }
+
+  const context = parseStoredReviewContext(value.legacyJobContext);
+  if (!context) {
+    return null;
+  }
+
+  return {
+    format: STORED_REVIEW_PAYLOAD_FORMAT,
+    reviewRecord: parsedReview.data,
+    legacyJobContext: context,
+  };
+};
 
 export const hasHumanAnnotations = (reviewRecord: ReviewRecord): boolean =>
   reviewRecord.annotations.some((annotation) => annotation.createdBy === 'human');
@@ -90,12 +161,32 @@ export const createLegacyReviewResultEnvelope = (
   };
 };
 
+export const createStoredReviewRecordPayload = (
+  reviewRecord: ReviewRecord,
+  legacyJobContext?: LegacyReviewContextRecord
+): ReviewRecord | StoredReviewRecordPayload => {
+  if (!legacyJobContext) {
+    return reviewRecord;
+  }
+
+  return {
+    format: STORED_REVIEW_PAYLOAD_FORMAT,
+    reviewRecord,
+    legacyJobContext,
+  };
+};
+
 export const reviewRecordFromStoredPayload = (
   jobId: string,
   rawPayload: unknown,
   fallbackCreatedAt: string,
   fallbackUpdatedAt: string
 ): ReviewRecord => {
+  const storedPayload = parseStoredReviewPayload(rawPayload);
+  if (storedPayload) {
+    return storedPayload.reviewRecord;
+  }
+
   const parsed = ReviewRecordSchema.safeParse(rawPayload);
   if (parsed.success) {
     return parsed.data;
@@ -109,6 +200,10 @@ export const reviewRecordFromStoredPayload = (
     annotations: [],
   };
 };
+
+export const reviewContextFromStoredPayload = (
+  rawPayload: unknown
+): LegacyReviewContextRecord | null => parseStoredReviewPayload(rawPayload)?.legacyJobContext ?? null;
 
 export const setReviewDisplayName = (
   reviewRecord: ReviewRecord,

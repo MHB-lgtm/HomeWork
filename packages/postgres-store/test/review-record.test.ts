@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import {
+  createStoredReviewRecordPayload,
   createLegacyReviewResultEnvelope,
   normalizeLegacyJobResultEnvelope,
+  reviewContextFromStoredPayload,
   reviewRecordFromStoredPayload,
 } from '../src';
 
@@ -74,6 +76,34 @@ describe('legacy review record mappers', () => {
       createdAt: baseReviewRecord.createdAt,
       updatedAt: baseReviewRecord.updatedAt,
       annotations: [],
+    });
+  });
+
+  it('reads wrapped review payloads without breaking the review record shape', () => {
+    const storedPayload = createStoredReviewRecordPayload(baseReviewRecord, {
+      status: 'DONE',
+      resultJson: { mode: 'RUBRIC' },
+      errorMessage: null,
+      submissionMimeType: 'application/pdf',
+      gradingMode: 'RUBRIC',
+      gradingScope: 'QUESTION',
+    });
+
+    expect(
+      reviewRecordFromStoredPayload(
+        'job-1',
+        storedPayload,
+        baseReviewRecord.createdAt,
+        baseReviewRecord.updatedAt
+      )
+    ).toEqual(baseReviewRecord);
+    expect(reviewContextFromStoredPayload(storedPayload)).toEqual({
+      status: 'DONE',
+      resultJson: { mode: 'RUBRIC' },
+      errorMessage: null,
+      submissionMimeType: 'application/pdf',
+      gradingMode: 'RUBRIC',
+      gradingScope: 'QUESTION',
     });
   });
 });
