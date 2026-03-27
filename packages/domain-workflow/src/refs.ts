@@ -12,7 +12,12 @@ export type ExamBatchModuleRef = {
   examBatchId: string;
 };
 
-export type ModuleRef = AssignmentModuleRef | ExamBatchModuleRef;
+export type LegacyJobModuleRef = {
+  kind: 'legacy_job';
+  legacyJobId: string;
+};
+
+export type ModuleRef = AssignmentModuleRef | ExamBatchModuleRef | LegacyJobModuleRef;
 
 export type AssetStorageKind = 'local_file' | 'object_storage' | 'unknown';
 
@@ -40,8 +45,17 @@ export const createExamBatchModuleRef = (examBatchId: string): ExamBatchModuleRe
   examBatchId,
 });
 
+export const createLegacyJobModuleRef = (legacyJobId: string): LegacyJobModuleRef => ({
+  kind: 'legacy_job',
+  legacyJobId,
+});
+
 export const getModuleRefId = (moduleRef: ModuleRef): string =>
-  moduleRef.kind === 'assignment' ? moduleRef.assignmentId : moduleRef.examBatchId;
+  moduleRef.kind === 'assignment'
+    ? moduleRef.assignmentId
+    : moduleRef.kind === 'exam_batch'
+      ? moduleRef.examBatchId
+      : moduleRef.legacyJobId;
 
 export const getModuleRefKey = (moduleRef: ModuleRef): string =>
   `${moduleRef.kind}:${getModuleRefId(moduleRef)}`;

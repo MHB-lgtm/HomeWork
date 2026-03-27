@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ReviewRecordSchema, ReviewRecord } from '@hg/shared-schemas';
 import { getOrCreateReview, saveReview } from '@hg/local-job-store';
+import { getServerPersistence } from '@/lib/server/persistence';
 
 export const runtime = 'nodejs';
+
+const ensureDataDirConfigured = (): void => {
+  if (!process.env.HG_DATA_DIR) {
+    throw new Error('HG_DATA_DIR is not set in environment');
+  }
+};
 
 /**
  * GET /api/reviews/[jobId]
@@ -13,14 +20,6 @@ export async function GET(
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
-
     const { jobId } = await params;
 
     if (!jobId) {
@@ -30,7 +29,23 @@ export async function GET(
       );
     }
 
-    // Get or create review (returns empty if not found)
+    const persistence = getServerPersistence();
+    if (persistence) {
+      try {
+        const review = await persistence.reviewRecords.getReviewRecordByLegacyJobId(jobId);
+        if (review) {
+          return NextResponse.json({ ok: true, data: review });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return NextResponse.json(
+          { ok: false, error: `Failed to fetch review: ${errorMessage}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    ensureDataDirConfigured();
     const review = await getOrCreateReview(jobId);
 
     return NextResponse.json({ ok: true, data: review });
@@ -52,14 +67,6 @@ export async function PUT(
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
-
     const { jobId } = await params;
 
     if (!jobId) {
@@ -91,7 +98,23 @@ export async function PUT(
       );
     }
 
-    // Save review atomically
+    const persistence = getServerPersistence();
+    if (persistence) {
+      try {
+        if (await persistence.reviewRecords.hasLegacySubmission(jobId)) {
+          await persistence.reviewRecords.saveReviewRecordByLegacyJobId(jobId, review);
+          return NextResponse.json({ ok: true });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return NextResponse.json(
+          { ok: false, error: `Failed to save review: ${errorMessage}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    ensureDataDirConfigured();
     await saveReview(review);
 
     return NextResponse.json({ ok: true });
@@ -141,14 +164,6 @@ export async function PATCH(
   { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
-
     const { jobId } = await params;
     if (!jobId) {
       return NextResponse.json(
@@ -167,6 +182,27 @@ export async function PATCH(
       );
     }
 
+    const persistence = getServerPersistence();
+    if (persistence) {
+      try {
+        if (await persistence.reviewRecords.hasLegacySubmission(jobId)) {
+          const review = await persistence.reviewRecords.patchReviewDisplayNameByLegacyJobId(
+            jobId,
+            parsedPayload.data.displayName ?? null
+          );
+
+          return NextResponse.json({ ok: true, data: review });
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return NextResponse.json(
+          { ok: false, error: `Failed to update review: ${errorMessage}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    ensureDataDirConfigured();
     const review = await getOrCreateReview(jobId);
     const nextDisplayName = parsedPayload.data.displayName?.trim() || undefined;
 

@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserGlobalRole {
+  USER
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum CourseStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CourseMembershipRole {
+  COURSE_ADMIN
+  LECTURER
+  STUDENT
+}
+
+enum CourseMembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+enum StoredAssetStorageKind {
+  LOCAL_FILE
+  OBJECT_STORAGE
+  UNKNOWN
+}
+
+enum CourseMaterialKind {
+  ASSIGNMENT_PROMPT
+  ASSIGNMENT_SOLUTION
+  EXAM_ORIGINAL
+  EXAM_MODEL_SOLUTION
+  SUBMISSION_PDF
+  DERIVED_ARTIFACT
+  EXPORT_BUNDLE
+  LECTURE_ASSET
+}
+
+enum SubmissionModuleType {
+  ASSIGNMENT
+  EXAM_BATCH
+  LEGACY_JOB
+}
+
+enum SubmissionState {
+  UPLOADED
+  SUPERSEDED
+  QUEUED
+  PROCESSED
+  LECTURER_EDITED
+  PUBLISHED
+}
+
+enum ReviewState {
+  DRAFT
+  READY_FOR_REVIEW
+  LECTURER_EDITED
+  PUBLISHED
+}
+
+enum ReviewVersionKind {
+  AI_DRAFT
+  LECTURER_EDIT
+  PUBLISHED_SNAPSHOT
+}
+
+enum ActorKind {
+  USER
+  AI
+  LEGACY
+  SYSTEM
+}
+
+enum PublishedResultStatus {
+  EFFECTIVE
+  SUPERSEDED
+}
+
+enum GradebookEntryStatus {
+  EFFECTIVE
+}
+
+model User {
+  id                String             @id @default(uuid()) @db.Uuid
+  normalizedEmail   String?            @unique
+  displayName       String?
+  globalRole        UserGlobalRole     @default(USER)
+  status            UserStatus         @default(ACTIVE)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(6)
+  identityAliases   IdentityAlias[]
+  memberships       CourseMembership[]
+  studentSubmissions Submission[]      @relation("SubmissionStudentUser")
+  actedReviewVersions ReviewVersion[]  @relation("ReviewVersionActorUser")
+  publishedResults  PublishedResult[]  @relation("PublishedResultStudentUser")
+  gradebookEntries  GradebookEntry[]   @relation("GradebookEntryStudentUser")
+}
+
+model IdentityAlias {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String?  @db.Uuid
+  kind            String
+  value           String
+  normalizedValue String
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([kind, normalizedValue])
+}
+
+model Course {
+  id                String             @id @default(uuid()) @db.Uuid
+  domainId          String             @unique
+  legacyCourseKey   String?            @unique
+  title             String
+  status            CourseStatus       @default(ACTIVE)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(6)
+  memberships       CourseMembership[]
+  materials         CourseMaterial[]
+  submissions       Submission[]
+  reviews           Review[]
+  publishedResults  PublishedResult[]
+  gradebookEntries  GradebookEntry[]
+}
+
+model CourseMembership {
+  id              String                 @id @default(uuid()) @db.Uuid
+  courseId        String                 @db.Uuid
+  userId          String                 @db.Uuid
+  role            CourseMembershipRole
+  status          CourseMembershipStatus @default(INVITED)
+  joinedAt        DateTime?              @db.Timestamptz(6)
+  invitedByUserId String?                @db.Uuid
+  createdAt       DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(6)
+  course          Course                 @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, userId])
+  @@index([courseId, role, status])
+  @@index([userId, status])
+}
+
+model StoredAsset {
+  id            String                  @id @default(uuid()) @db.Uuid
+  assetKey      String                  @unique
+  storageKind   StoredAssetStorageKind
+  logicalBucket String
+  path          String
+  mimeType      String?
+  sizeBytes     Int?
+  originalName  String?
+  metadata      Json?
+  createdAt     DateTime                @default(now()) @db.Timestamptz(6)
+  materials     CourseMaterial[]
+}
+
+model CourseMaterial {
+  id         String             @id @default(uuid()) @db.Uuid
+  domainId   String             @unique
+  courseId   String             @db.Uuid
+  assetId    String             @db.Uuid
+  kind       CourseMaterialKind
+  title      String?
+  createdAt  DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime           @updatedAt @db.Timestamptz(6)
+  course     Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  asset      StoredAsset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  submissions Submission[]
+
+  @@index([courseId, kind])
+}
+
+model Submission {
+  id                       String               @id @default(uuid()) @db.Uuid
+  domainId                 String               @unique
+  courseId                 String               @db.Uuid
+  studentUserId            String?              @db.Uuid
+  moduleType               SubmissionModuleType
+  assignmentId             String?
+  examBatchId              String?
+  materialId               String               @db.Uuid
+  submittedAt              DateTime             @db.Timestamptz(6)
+  state                    SubmissionState
+  supersedesSubmissionId   String?              @db.Uuid
+  legacyJobId              String?              @unique
+  currentPublishedResultId String?              @db.Uuid
+  createdAt                DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime             @updatedAt @db.Timestamptz(6)
+  course                   Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  studentUser              User?                @relation("SubmissionStudentUser", fields: [studentUserId], references: [id], onDelete: SetNull)
+  material                 CourseMaterial       @relation(fields: [materialId], references: [id], onDelete: Restrict)
+  review                   Review?
+  publishedResults         PublishedResult[]
+
+  @@index([courseId, studentUserId, submittedAt(sort: Desc)])
+}
+
+model Review {
+  id               String      @id @default(uuid()) @db.Uuid
+  domainId         String      @unique
+  courseId         String      @db.Uuid
+  submissionId     String      @unique @db.Uuid
+  currentVersionId String?     @db.Uuid
+  state            ReviewState
+  createdAt        DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime    @updatedAt @db.Timestamptz(6)
+  course           Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submission       Submission  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  versions         ReviewVersion[]
+  publishedResults PublishedResult[]
+}
+
+model ReviewVersion {
+  id                String            @id @default(uuid()) @db.Uuid
+  domainId          String            @unique
+  reviewId          String            @db.Uuid
+  kind              ReviewVersionKind
+  actorUserId       String?           @db.Uuid
+  actorKind         ActorKind
+  actorRefRaw       String?
+  score             Decimal?          @db.Decimal(8, 2)
+  maxScore          Decimal?          @db.Decimal(8, 2)
+  summary           String?
+  questionBreakdown Json?
+  rawPayload        Json
+  flagsJson         Json?
+  createdAt         DateTime          @default(now()) @db.Timestamptz(6)
+  review            Review            @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  actorUser         User?             @relation("ReviewVersionActorUser", fields: [actorUserId], references: [id], onDelete: SetNull)
+  sourcedResults    PublishedResult[] @relation("PublishedResultSourceVersion")
+
+  @@index([reviewId, createdAt(sort: Desc)])
+}
+
+model PublishedResult {
+  id                    String                @id @default(uuid()) @db.Uuid
+  domainId              String                @unique
+  courseId              String                @db.Uuid
+  submissionId          String                @db.Uuid
+  studentUserId         String?               @db.Uuid
+  moduleType            SubmissionModuleType
+  assignmentId          String?
+  examBatchId           String?
+  reviewId              String                @db.Uuid
+  sourceReviewVersionId String                @db.Uuid
+  publishedAt           DateTime              @db.Timestamptz(6)
+  status                PublishedResultStatus
+  finalScore            Decimal               @db.Decimal(8, 2)
+  maxScore              Decimal               @db.Decimal(8, 2)
+  summary               String
+  breakdownSnapshot     Json
+  createdAt             DateTime              @default(now()) @db.Timestamptz(6)
+  course                Course                @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  submission            Submission            @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  studentUser           User?                 @relation("PublishedResultStudentUser", fields: [studentUserId], references: [id], onDelete: SetNull)
+  review                Review                @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  sourceReviewVersion   ReviewVersion         @relation("PublishedResultSourceVersion", fields: [sourceReviewVersionId], references: [id], onDelete: Restrict)
+  gradebookEntry        GradebookEntry?
+
+  @@index([submissionId, publishedAt(sort: Desc)])
+  @@index([courseId, studentUserId, publishedAt(sort: Desc)])
+}
+
+model GradebookEntry {
+  id                String               @id @default(uuid()) @db.Uuid
+  domainId          String               @unique
+  courseId          String               @db.Uuid
+  studentUserId     String?              @db.Uuid
+  moduleType        SubmissionModuleType
+  assignmentId      String?
+  examBatchId       String?
+  publishedResultId String               @unique @db.Uuid
+  score             Decimal              @db.Decimal(8, 2)
+  maxScore          Decimal              @db.Decimal(8, 2)
+  status            GradebookEntryStatus
+  publishedAt       DateTime             @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(6)
+  course            Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  studentUser       User?                @relation("GradebookEntryStudentUser", fields: [studentUserId], references: [id], onDelete: SetNull)
+  publishedResult   PublishedResult      @relation(fields: [publishedResultId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, publishedAt(sort: Desc)])
+}
