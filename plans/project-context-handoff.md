@@ -11,7 +11,7 @@ The repo now has:
 
 - the original file-backed grading runtime,
 - a completed storage-agnostic domain foundation package,
-- a narrow committed Postgres + Prisma review slice on the current branch.
+- a narrow committed Postgres + Prisma review and publication slice on the current branch.
 
 ## 2. Repo structure and responsibilities
 
@@ -54,12 +54,13 @@ Completed:
 - `Domain & Workflow Foundation`
 - `Postgres Runtime Slice 1`
 - `Postgres Runtime Slice 2`
+- `Postgres Publication Slice 1`
 
 Current branch context:
 
 - branch: `feat/postgres-runtime-slice-1`
-- the Postgres runtime review slices are already committed on this branch
-- current dirty state is in docs/plans, not in the main review runtime slice
+- the Postgres runtime review and publication slices are already committed on this branch
+- the working tree should be clean after the publication-slice docs closure
 
 ## 4. What is already implemented
 
@@ -86,6 +87,8 @@ Current branch context:
   - `GET /api/reviews`
   - `GET /api/reviews/[jobId]/submission`
   - `GET /api/reviews/[jobId]/submission-raw`
+  - `POST /api/reviews/[jobId]/publish`
+  - `context.publication` on imported review detail
 
 ## 5. What is intentionally not implemented yet
 
@@ -118,6 +121,8 @@ Current narrow exception on this branch:
 
 - review detail and review list can use Postgres when `DATABASE_URL` is configured
 - imported review assets can be served from `StoredAsset` rows with pointwise fallback
+- imported review detail can surface current publication state
+- imported reviews can publish the current review result into `PublishedResult` and `GradebookEntry`
 
 Runtime code still depends directly on:
 
@@ -143,7 +148,8 @@ Most important concepts:
 Important clarification:
 
 - these are implemented as domain contracts and tests,
-- the current runtime only adopts a narrow review slice, not the broader publication lifecycle.
+- the current runtime now adopts a narrow review and publication slice for imported reviews only,
+- broader publication, gradebook, and student-facing lifecycle surfaces are still deferred.
 
 ## 8. Next milestone
 
@@ -154,6 +160,9 @@ Already implemented seams on this branch:
 - `GET /api/reviews/[jobId]`
 - `PUT` / `PATCH /api/reviews/[jobId]`
 - `GET /api/reviews`
+- `GET /api/reviews/[jobId]/submission`
+- `GET /api/reviews/[jobId]/submission-raw`
+- `POST /api/reviews/[jobId]/publish`
 
 Bridge rule that still matters:
 
@@ -224,23 +233,16 @@ Current branch:
 
 Relevant recent commits:
 
+- `8804be7 feat(postgres): add narrow review publication flow`
+- `853d1af docs: align branch handoff and architecture with postgres review slices`
+- `302b7fe feat(postgres): make review detail independent of legacy jobs api`
 - `245e428 feat(postgres): harden review read side and import flow`
 - `4b16945 feat(postgres): finalize first prisma review seam and local db bring-up`
-- `c1f09e1 docs(plan): add postgres prisma identity design artifact`
-- `7577208 docs(plan): add auth foundation planning artifact`
-- `3e052c7 docs(architecture): refresh architecture and add planning artifacts`
-- `992a1e8 feat(domain): add workflow foundation package and filesystem adapters`
 
 Current dirty context:
 
-- runtime slice code is already committed
-- current dirty files are docs/plans:
-  - `AGENTS.md`
-  - `ARCHITECTURE.md`
-  - `plans/auth-foundation.md`
-  - `plans/domain-workflow-foundation.md`
-  - `plans/postgres-prisma-identity-design.md`
-  - `plans/project-context-handoff.md`
+- none expected after publication slice closure
+- always confirm with `git status` before assuming a clean tree
 
 ## 13. Copy-paste handoff block
 
@@ -257,7 +259,9 @@ Current runtime shape:
 - still primarily file-backed under HG_DATA_DIR
 - apps/web + apps/worker still rely mostly on local stores
 - @hg/domain-workflow exists and is tested, but broad runtime adoption is still deferred
-- current branch has narrow committed Postgres-backed review slices
+- current branch has narrow committed Postgres-backed review and publication slices
+- imported reviews can publish through `POST /api/reviews/[jobId]/publish`
+- imported review detail can expose `context.publication`
 
 Current branch context:
 - branch: feat/postgres-runtime-slice-1

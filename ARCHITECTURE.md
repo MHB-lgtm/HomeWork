@@ -6,7 +6,7 @@ Scope: implemented repo structure, completed milestones, approved next direction
 
 ## 1. Repo overview
 
-Homework Grader is a pnpm monorepo for a grading system that is still primarily local-first and file-backed, with a narrow Postgres-backed reviews slice now committed on the current branch.
+Homework Grader is a pnpm monorepo for a grading system that is still primarily local-first and file-backed, with a narrow Postgres-backed review and publication slice now committed on the current branch.
 
 Today the repo contains:
 
@@ -120,7 +120,7 @@ Owns:
 - Prisma client setup,
 - Postgres review-side query helpers,
 - repository implementations for the domain foundation,
-- import tooling used by the current review slice.
+- import tooling used by the current review and publication slice.
 
 ## 3. What is implemented today
 
@@ -141,6 +141,9 @@ Current branch addition:
 - `GET /api/reviews/[jobId]` is DB-aware when `DATABASE_URL` is configured,
 - `PUT` / `PATCH /api/reviews/[jobId]` can persist imported reviews to Postgres,
 - `GET /api/reviews` is hybrid and merges DB-backed review fields with file-backed job metadata,
+- `GET /api/reviews/[jobId]/submission` and `/submission-raw` can serve imported assets through review-centric APIs,
+- `POST /api/reviews/[jobId]/publish` can publish imported review results into `PublishedResult` / `GradebookEntry`,
+- review detail can surface current publication state and expose a narrow lecturer-facing publish / republish flow,
 - `import-file-backed` supports `--dry-run`, structured reporting, and rerunnable import into Postgres.
 
 ### 3.2 Current persistence model
@@ -157,7 +160,7 @@ Key persisted areas:
 - `uploads/` for copied submissions and derived PDFs,
 - `worker/heartbeat.json` for worker liveness.
 
-There is now a committed Prisma schema, Postgres persistence package, and narrow review-route runtime use of PostgreSQL on this branch. The rest of the product remains file-backed.
+There is now a committed Prisma schema, Postgres persistence package, and narrow review / publication runtime use of PostgreSQL on this branch. The rest of the product remains file-backed.
 
 ### 3.3 Current runtime boundaries
 
@@ -245,7 +248,8 @@ The canonical publish-boundary model now exists in `packages/domain-workflow`.
 Important current-state clarification:
 
 - these publication concepts are implemented as domain contracts, rules, services, and tests,
-- they are **not yet** persisted or exposed as first-class runtime API objects in the committed baseline.
+- a narrow imported-review publication path is now persisted and exposed through review-centric APIs on this branch,
+- broader publication and gradebook surfaces are still not first-class runtime APIs in the product.
 
 ## 6. What is intentionally still file-backed
 
@@ -310,7 +314,7 @@ That direction introduced:
 - groundwork for identity and course membership tables,
 - repository implementations for the domain foundation,
 - import tooling from file-backed data,
-- a narrow first runtime adoption seam.
+- a narrow first runtime adoption seam, later extended on this branch to a narrow publication mutation inside review detail.
 
 ## 9. Current DB-backed review seams on this branch
 
@@ -322,6 +326,7 @@ The first approved DB-backed adoption seam was the review API route. It is now i
 - `GET /api/reviews`
 - `GET /api/reviews/[jobId]/submission`
 - `GET /api/reviews/[jobId]/submission-raw`
+- `POST /api/reviews/[jobId]/publish`
 
 Approved bridge strategy:
 
@@ -330,6 +335,7 @@ Approved bridge strategy:
 Important boundary:
 
 - this slice is intentionally narrow,
+- publication is lecturer-facing and review-centric only,
 - the rest of the product runtime is still file-backed,
 - `apps/worker` remains unchanged,
 - `apps/web/src/app/api/jobs/**` still remains the legacy file-backed surface for non-review flows.
@@ -343,7 +349,7 @@ The following are intentionally not implemented yet:
 - course-scoped authz,
 - assignment runtime lifecycle,
 - first-class exam-batch runtime lifecycle,
-- published-result runtime persistence,
+- broader published-result runtime surfaces,
 - gradebook runtime surfaces,
 - flag persistence and filtering,
 - audit-event persistence,
@@ -362,8 +368,8 @@ The main open or deferred architectural decisions are:
 2. Legacy identity resolution
    - how unresolved `studentRef` and `actorRef` values are reported, stored, and later reconciled.
 
-3. Publish concurrency
-   - how publication races should be locked and surfaced once PostgreSQL-backed publication is implemented.
+3. Publish concurrency hardening
+   - how publication races should be locked and surfaced for broader concurrent rollout beyond the current narrow review publish flow.
 
 4. Gradebook uniqueness and denormalization
    - the exact DB constraints and partial indexes needed for current-effective gradebook rows.

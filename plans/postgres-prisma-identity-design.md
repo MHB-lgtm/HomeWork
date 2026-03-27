@@ -1,21 +1,21 @@
 # Postgres + Prisma Persistence & Identity Design
 
-Status: approved design direction and still the source of truth for rollout beyond the current review slices
+Status: approved design direction and still the source of truth for rollout beyond the current review and publication slices
 Last updated: 2026-03-27
 
 ## 1. Goal
 
-Define how the existing domain foundation should map to PostgreSQL, Prisma, identity, memberships, and course-scoped ownership before committed runtime adoption begins.
+Define how the existing domain foundation should map to PostgreSQL, Prisma, identity, memberships, and course-scoped ownership before broader committed runtime adoption continues.
 
 This design must be precise enough that the next coding milestone can implement the first DB slice without making new architectural decisions mid-flight.
 
 ## 2. Non-goals
 
-This design does not itself implement the wider product migration. The current branch now has narrow committed review slices, but broader rollout decisions still come from this document.
+This design does not itself implement the wider product migration. The current branch now has narrow committed review and publication slices, but broader rollout decisions still come from this document.
 
 This design does not itself implement:
 
-- runtime adoption in `apps/web` or `apps/worker`
+- broad runtime adoption in `apps/web` or `apps/worker` beyond the current narrow review/publication slices
 - worker migration
 - UI changes
 - final analytics, notification, or export systems
@@ -32,9 +32,10 @@ The committed baseline already has:
   - `PublishedResult`
   - `GradebookEntry`
 - file-backed local stores still active
-- no committed DB, user, membership, or authz runtime
+- narrow committed DB-backed review/publication runtime in `apps/web`
+- no committed user, membership, or authz runtime
 
-The next persistence milestone must build on that foundation rather than redesign it.
+Future persistence milestones must build on that foundation rather than redesign it.
 
 ## 4. Design principles for this repo
 
@@ -45,7 +46,7 @@ The next persistence milestone must build on that foundation rather than redesig
 - Course-scoped authorization remains central to relation design, so course-owned rows keep a direct `courseId` column even when derivable.
 - Raw legacy payloads and snapshots belong in `jsonb`; query-critical fields belong in explicit relational columns.
 - Background worker runtime remains unchanged in the first DB slice.
-- Current HTTP shapes should stay stable during the first runtime seam.
+- Current HTTP shapes should stay stable during narrow runtime seams.
 
 ## 5. Recommended package and schema direction
 
@@ -238,8 +239,8 @@ Future Postgres implementations should map to `@hg/domain-workflow` interfaces a
     - `listReviewVersions`
     - `setCurrentReviewVersion`
 - `PublicationRepository`
-  - first-slice repository for schema completeness and future publish path
-  - methods should exist even if the first seam does not expose full publish behavior yet
+  - first-slice repository used by the current narrow publish path
+  - broader publication and gradebook surfaces remain future work
 
 ### Deferred
 
@@ -280,6 +281,11 @@ Historical rule:
 ## 13. Publish concurrency and locking policy
 
 Publication is a multi-row invariant and must be transactionally protected.
+
+Current branch note:
+
+- a narrow imported-review publish route now exists
+- this section remains the source of truth for stronger concurrency guarantees in broader rollout
 
 Recommended policy:
 
@@ -418,6 +424,8 @@ Current branch note:
 - `GET /api/reviews/[jobId]` is now implemented
 - `PUT` / `PATCH /api/reviews/[jobId]` are also DB-aware for imported reviews
 - `GET /api/reviews` is now a narrow hybrid read-side extension
+- `GET /api/reviews/[jobId]/submission` and `/submission-raw` now serve imported assets through review-centric APIs
+- `POST /api/reviews/[jobId]/publish` now exposes a narrow imported-review publication mutation
 - the rest of the product still remains outside this rollout
 
 ## 18. Tighter acceptance criteria for the next coding milestone
