@@ -1,13 +1,28 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
-export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  padding?: 'none' | 'sm' | 'md' | 'lg';
+  hover?: boolean;
+}
+
+const paddingMap: Record<string, string> = {
+  none: '',
+  sm: 'p-4',
+  md: 'p-5',
+  lg: 'p-6',
+};
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, ...props }, ref) => (
+  ({ className, padding, hover, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-lg border border-gray-200 bg-white shadow-sm', className)}
+      className={cn(
+        'rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-xs)',
+        hover && 'transition-all duration-(--duration) ease-(--ease) hover:shadow-(--shadow-sm) hover:border-(--border-hover)',
+        padding && paddingMap[padding],
+        className
+      )}
       {...props}
     />
   )
@@ -33,7 +48,10 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-2xl font-semibold leading-none tracking-tight', className)}
+      className={cn(
+        'text-base font-semibold leading-none tracking-tight text-(--text-primary)',
+        className
+      )}
       {...props}
     />
   )
@@ -50,4 +68,3 @@ const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
 CardContent.displayName = 'CardContent';
 
 export { Card, CardHeader, CardTitle, CardContent };
-

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { getJob } from '../../../lib/jobsClient';
-import { getReview, ReviewRecordV1 } from '../../../lib/reviewsClient';
+import { getJob } from '../../../../lib/jobsClient';
+import { getReview, ReviewRecordV1 } from '../../../../lib/reviewsClient';
 import {
   RubricEvaluationResult,
   Annotation,
@@ -12,12 +12,12 @@ import {
   QuestionEvaluation,
   StudyPointerV1,
 } from '@hg/shared-schemas';
-import { Badge } from '../../../components/ui/badge';
-import { Button } from '../../../components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
-import { cn } from '../../../lib/utils';
-import { PDFViewer } from '../../../components/review/pdf/PDFViewer';
-import { StudyPointersPanel } from '../../../components/review/StudyPointersPanel';
+import { Badge } from '../../../../components/ui/badge';
+import { Button } from '../../../../components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '../../../../components/ui/alert';
+import { cn } from '../../../../lib/utils';
+import { PDFViewer } from '../../../../components/review/pdf/PDFViewer';
+import { StudyPointersPanel } from '../../../../components/review/StudyPointersPanel';
 
 const MAX_RIGHT_PANEL_TITLE_CHARS = 90;
 const MAX_RIGHT_PANEL_TEXT_CHARS = 180;

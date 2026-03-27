@@ -2,18 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { RubricSpec } from '@hg/shared-schemas';
-import { listExams, ExamSummary } from '../../lib/examsClient';
-import { listRubricQuestionIds } from '../../lib/rubricsClient';
-import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
-import { Button } from '../../components/ui/button';
-import { EmptyState } from '../../components/ui/empty-state';
-import { Input } from '../../components/ui/input';
-import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
-import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
-import { StatusBadge } from '../../components/ui/status-badge';
-import { Textarea } from '../../components/ui/textarea';
-import { CardSkeleton } from '../../components/ui/skeleton';
-import { cn } from '../../lib/utils';
+import { listExams, ExamSummary } from '../../../lib/examsClient';
+import { listRubricQuestionIds } from '../../../lib/rubricsClient';
+import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { Button } from '../../../components/ui/button';
+import { EmptyState } from '../../../components/ui/empty-state';
+import { Input } from '../../../components/ui/input';
+import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
+import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../../components/ui/panel';
+import { StatusBadge } from '../../../components/ui/status-badge';
+import { Textarea } from '../../../components/ui/textarea';
+import { CardSkeleton } from '../../../components/ui/skeleton';
+import { cn } from '../../../lib/utils';
 
 type Criterion = {
   id: string;

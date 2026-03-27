@@ -4,7 +4,11 @@ import { cn } from '../../lib/utils';
 export interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export function Skeleton({ className, ...props }: SkeletonProps) {
-  return <div className={cn('animate-pulse rounded-md bg-slate-200/80', className)} {...props} />;
+  return <div className={cn('skeleton-line h-4 w-full', className)} {...props} />;
+}
+
+export function SkeletonLine({ className, ...props }: SkeletonProps) {
+  return <div className={cn('skeleton-line h-4 w-full rounded', className)} {...props} />;
 }
 
 type CardSkeletonProps = React.HTMLAttributes<HTMLDivElement> & {
@@ -14,17 +18,24 @@ type CardSkeletonProps = React.HTMLAttributes<HTMLDivElement> & {
 export function CardSkeleton({ className, lines = 3, ...props }: CardSkeletonProps) {
   return (
     <div
-      className={cn('rounded-2xl border border-slate-200/80 bg-white/90 p-5 shadow-[0_12px_35px_rgba(15,23,42,0.05)]', className)}
+      className={cn(
+        'rounded-xl border border-(--border) bg-(--surface) p-5 shadow-(--shadow-xs)',
+        className
+      )}
       {...props}
     >
       <Skeleton className="mb-4 h-5 w-40" />
       <div className="space-y-2">
-        {Array.from({ length: lines }).map((_, index) => (
-          <Skeleton key={index} className={cn('h-4', index === lines - 1 ? 'w-2/3' : 'w-full')} />
+        {Array.from({ length: lines }).map((_, i) => (
+          <Skeleton key={i} className={cn('h-4', i === lines - 1 ? 'w-2/3' : 'w-full')} />
         ))}
       </div>
     </div>
   );
+}
+
+export function SkeletonCard({ className, ...props }: CardSkeletonProps) {
+  return <CardSkeleton className={className} {...props} />;
 }
 
 type TableRowSkeletonProps = React.HTMLAttributes<HTMLTableRowElement> & {
@@ -33,12 +44,46 @@ type TableRowSkeletonProps = React.HTMLAttributes<HTMLTableRowElement> & {
 
 export function TableRowSkeleton({ columns = 4, className, ...props }: TableRowSkeletonProps) {
   return (
-    <tr className={cn('border-b', className)} {...props}>
-      {Array.from({ length: columns }).map((_, index) => (
-        <td key={index} className="p-4">
-          <Skeleton className={cn('h-4', index === columns - 1 ? 'w-20' : 'w-full max-w-[240px]')} />
+    <tr className={cn('border-b border-(--border-light)', className)} {...props}>
+      {Array.from({ length: columns }).map((_, i) => (
+        <td key={i} className="p-3">
+          <Skeleton className={cn('h-4', i === columns - 1 ? 'w-20' : 'w-full max-w-60')} />
         </td>
       ))}
     </tr>
+  );
+}
+
+type SkeletonTableProps = React.HTMLAttributes<HTMLDivElement> & {
+  columns?: number;
+  rows?: number;
+};
+
+export function SkeletonTable({ columns = 4, rows = 5, className, ...props }: SkeletonTableProps) {
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-xl border border-(--border) bg-(--surface)',
+        className
+      )}
+      {...props}
+    >
+      <table className="w-full">
+        <thead>
+          <tr className="border-b border-(--border) bg-(--surface-secondary)">
+            {Array.from({ length: columns }).map((_, i) => (
+              <th key={i} className="p-3">
+                <Skeleton className="h-3 w-20" />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }).map((_, i) => (
+            <TableRowSkeleton key={i} columns={columns} />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

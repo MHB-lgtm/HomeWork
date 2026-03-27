@@ -1,51 +1,126 @@
 import * as React from 'react';
-import { Badge } from './badge';
 import { cn } from '../../lib/utils';
 
-type StatusValue = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | string | null | undefined;
+type StatusKey =
+  | 'pending'
+  | 'active'
+  | 'done'
+  | 'error'
+  | 'locked'
+  | 'published'
+  | 'review'
+  | 'draft';
 
-type StatusStyle = {
-  variant: 'default' | 'secondary' | 'outline' | 'destructive';
-  className?: string;
+type StatusConfig = {
   label: string;
+  dot: string;
+  bg: string;
+  text: string;
 };
 
-const normalizeStatus = (status: StatusValue): string => {
-  if (!status) {
-    return 'UNKNOWN';
-  }
-  return String(status).toUpperCase();
+const statusMap: Record<StatusKey, StatusConfig> = {
+  pending: {
+    label: 'Pending',
+    dot: 'bg-(--warning)',
+    bg: 'bg-(--warning-subtle)',
+    text: 'text-(--warning)',
+  },
+  active: {
+    label: 'Active',
+    dot: 'bg-(--success)',
+    bg: 'bg-(--success-subtle)',
+    text: 'text-(--success)',
+  },
+  done: {
+    label: 'Done',
+    dot: 'bg-(--success)',
+    bg: 'bg-(--success-subtle)',
+    text: 'text-(--success)',
+  },
+  error: {
+    label: 'Error',
+    dot: 'bg-(--error)',
+    bg: 'bg-(--error-subtle)',
+    text: 'text-(--error)',
+  },
+  locked: {
+    label: 'Locked',
+    dot: 'bg-(--text-quaternary)',
+    bg: 'bg-(--surface-secondary)',
+    text: 'text-(--text-tertiary)',
+  },
+  published: {
+    label: 'Published',
+    dot: 'bg-(--brand)',
+    bg: 'bg-(--brand-subtle)',
+    text: 'text-(--brand)',
+  },
+  review: {
+    label: 'In Review',
+    dot: 'bg-(--info)',
+    bg: 'bg-(--info-subtle)',
+    text: 'text-(--info)',
+  },
+  draft: {
+    label: 'Draft',
+    dot: 'bg-(--text-quaternary)',
+    bg: 'bg-(--surface-secondary)',
+    text: 'text-(--text-tertiary)',
+  },
 };
 
-const statusStyles: Record<string, StatusStyle> = {
-  PENDING: { variant: 'outline', className: 'border-yellow-200 bg-yellow-100 text-yellow-800', label: 'PENDING' },
-  PROPOSED: { variant: 'outline', className: 'border-yellow-200 bg-yellow-100 text-yellow-800', label: 'PROPOSED' },
-  RUNNING: { variant: 'outline', className: 'border-blue-200 bg-blue-100 text-blue-800', label: 'RUNNING' },
-  LOADING: { variant: 'outline', className: 'border-blue-200 bg-blue-100 text-blue-800', label: 'LOADING' },
-  DONE: { variant: 'outline', className: 'border-emerald-200 bg-emerald-100 text-emerald-800', label: 'DONE' },
-  FAILED: { variant: 'outline', className: 'border-red-200 bg-red-100 text-red-800', label: 'FAILED' },
-  NOT_INDEXED: { variant: 'outline', className: 'border-gray-200 bg-gray-100 text-gray-800', label: 'NOT INDEXED' },
-  UNKNOWN: { variant: 'outline', className: 'border-gray-200 bg-gray-100 text-gray-800', label: 'UNKNOWN' },
+// Legacy uppercase status mapping
+const legacyMap: Record<string, StatusKey> = {
+  PENDING: 'pending',
+  PROPOSED: 'pending',
+  RUNNING: 'active',
+  LOADING: 'active',
+  DONE: 'done',
+  FAILED: 'error',
+  NOT_INDEXED: 'locked',
+  UNKNOWN: 'locked',
 };
 
-export interface StatusBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  status: StatusValue;
+export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  status: StatusKey | string | null | undefined;
   label?: string;
+  size?: 'sm' | 'md';
 }
 
-export function StatusBadge({ status, label, className, ...props }: StatusBadgeProps) {
-  const normalized = normalizeStatus(status);
-  const style = statusStyles[normalized] || statusStyles.UNKNOWN;
-  const resolvedLabel = label || style.label;
+export function StatusBadge({
+  status,
+  label: labelOverride,
+  size = 'md',
+  className,
+  ...props
+}: StatusBadgeProps) {
+  const normalizedKey = status
+    ? (legacyMap[String(status).toUpperCase()] ?? (String(status).toLowerCase() as StatusKey))
+    : 'locked';
+
+  const config = statusMap[normalizedKey as StatusKey] || statusMap.locked;
+  const displayLabel = labelOverride || config.label;
 
   return (
-    <Badge
-      variant={style.variant}
-      className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', style.className, className)}
-      aria-label={`Status ${resolvedLabel}`}
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full font-medium',
+        config.bg,
+        config.text,
+        size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs',
+        className
+      )}
+      aria-label={`Status ${displayLabel}`}
       {...props}
     >
-      {resolvedLabel}
-    </Badge>
+      <span
+        className={cn(
+          'shrink-0 rounded-full',
+          config.dot,
+          size === 'sm' ? 'h-1.5 w-1.5' : 'h-1.5 w-1.5'
+        )}
+      />
+      {displayLabel}
+    </span>
   );
 }

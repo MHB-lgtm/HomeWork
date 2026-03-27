@@ -1,17 +1,17 @@
-const path = require('path');
+const createNextIntlPlugin = require('next-intl/plugin');
+
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   webpack: (config, { isServer }) => {
-    // Ensure pdfjs-dist worker can be resolved correctly
     if (!isServer) {
       config.resolve.alias = {
         ...config.resolve.alias,
         canvas: false,
       };
-      
-      // Add fallback for Node.js modules that aren't available in browser
+
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
@@ -22,5 +22,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
-
+module.exports = withNextIntl(nextConfig);

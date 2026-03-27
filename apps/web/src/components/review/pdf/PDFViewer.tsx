@@ -54,7 +54,7 @@ export function PDFViewer({
   const activePageRef = useRef<number | null>(null);
   const ratioByPageRef = useRef<Map<number, number>>(new Map());
   const pdfScrollContainerRef = useRef<HTMLElement | null>(null);
-  
+
   // Constants for hysteresis
   const MIN_SWITCH_DELTA = 0.05;
   const MIN_ACTIVE_RATIO = 0.15;
@@ -75,7 +75,7 @@ export function PDFViewer({
           const contentType = response.headers.get('content-type') || 'unknown';
           const status = response.status;
           const text = await response.text().catch(() => 'Failed to read response');
-          
+
           if (isMounted) {
             setFetchError({
               status,
@@ -198,7 +198,7 @@ export function PDFViewer({
     const findScrollContainer = (): HTMLElement | null => {
       const firstPage = pageRefs.current.values().next().value;
       if (!firstPage) return null;
-      
+
       let current: HTMLElement | null = firstPage.parentElement;
       while (current) {
         const style = window.getComputedStyle(current);
@@ -217,13 +217,13 @@ export function PDFViewer({
       if (observerRef.current && pageRefs.current.size > 0) {
         const oldObserver = observerRef.current;
         oldObserver.disconnect();
-        
+
         const newObserver = new IntersectionObserver(observerCallback, {
           threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
           rootMargin: '-20% 0px -20% 0px',
           root: container || undefined,
         });
-        
+
         observerRef.current = newObserver;
         // Re-observe all pages
         pageRefs.current.forEach((pageElement) => {

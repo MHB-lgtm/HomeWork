@@ -1,23 +1,49 @@
 import * as React from 'react';
 import { cn } from '../../lib/utils';
 
-export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label?: string;
+  error?: string;
+}
 
 const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, ...props }, ref) => {
+  ({ className, label, error, id, ...props }, ref) => {
+    const textareaId = id || React.useId();
+
     return (
-      <textarea
-        className={cn(
-          'flex min-h-[80px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-          className
+      <div className="w-full">
+        {label && (
+          <label
+            htmlFor={textareaId}
+            className="mb-1.5 block text-sm font-medium text-(--text-primary)"
+          >
+            {label}
+          </label>
         )}
-        ref={ref}
-        {...props}
-      />
+        <textarea
+          id={textareaId}
+          ref={ref}
+          className={cn(
+            'flex min-h-20 w-full rounded-lg border bg-(--surface) px-3 py-2 text-sm text-(--text-primary)',
+            'transition-colors duration-(--duration) ease-(--ease)',
+            'placeholder:text-(--text-quaternary)',
+            'focus-visible:outline-none focus-visible:border-(--border-focus) focus-visible:ring-1 focus-visible:ring-(--border-focus)',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            error
+              ? 'border-(--error) focus-visible:border-(--error) focus-visible:ring-(--error)'
+              : 'border-(--border)',
+            className
+          )}
+          {...props}
+        />
+        {error && (
+          <p className="mt-1.5 text-xs text-(--error)">{error}</p>
+        )}
+      </div>
     );
   }
 );
+
 Textarea.displayName = 'Textarea';
 
 export { Textarea };
-

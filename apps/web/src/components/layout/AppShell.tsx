@@ -2,219 +2,261 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRole, type UserRole } from '../../contexts/RoleContext';
+import {
+  LayoutDashboard, BookOpen, FileText, ClipboardCheck, BarChart3,
+  Flag, Users, ChevronLeft, Menu, X, GraduationCap,
+  LogOut, Sparkles, TrendingUp, ChevronRight,
+} from 'lucide-react';
 import { cn } from '../../lib/utils';
 
+type NavSection = { label?: string; items: NavItem[] };
 type NavItem = {
   href: string;
   label: string;
-  title: string | ((pathname: string) => string);
-  matches: (pathname: string) => boolean;
+  icon: React.ReactNode;
+  matches: (p: string) => boolean;
+  count?: number;
 };
 
-const matchesSegment = (pathname: string, href: string): boolean => {
-  return pathname === href || pathname.startsWith(`${href}/`);
-};
-
-const navItems: NavItem[] = [
+const studentSections: NavSection[] = [
   {
-    href: '/',
-    label: 'Home',
-    title: 'Dashboard',
-    matches: (pathname) => pathname === '/',
-  },
-  {
-    href: '/exams',
-    label: 'Exams',
-    title: 'Exams',
-    matches: (pathname) => matchesSegment(pathname, '/exams'),
-  },
-  {
-    href: '/rubrics',
-    label: 'Rubrics',
-    title: 'Rubrics',
-    matches: (pathname) => matchesSegment(pathname, '/rubrics'),
-  },
-  {
-    href: '/reviews',
-    label: 'Reviews',
-    title: (pathname) => (pathname === '/reviews' ? 'All Reviews' : 'Review Details'),
-    matches: (pathname) => matchesSegment(pathname, '/reviews'),
-  },
-  {
-    href: '/courses',
-    label: 'Courses',
-    title: (pathname) => (pathname === '/courses' ? 'Courses' : 'Course Details'),
-    matches: (pathname) => matchesSegment(pathname, '/courses'),
+    items: [
+      { href: '/s/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, matches: (p) => p.endsWith('/s/dashboard') },
+      { href: '/s/courses', label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.includes('/s/courses') },
+      { href: '/s/results', label: 'Results', icon: <BarChart3 size={18} />, matches: (p) => p.includes('/s/results') },
+      { href: '/s/results', label: 'Progress', icon: <TrendingUp size={18} />, matches: () => false },
+    ],
   },
 ];
 
-const getRouteTitle = (pathname: string): string => {
-  const matched = navItems.find((item) => item.matches(pathname));
-  if (!matched) {
-    return 'Homework Grader';
+const lecturerSections: NavSection[] = [
+  {
+    items: [
+      { href: '/l/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, matches: (p) => p.endsWith('/l/dashboard') },
+      { href: '/l/courses', label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.includes('/l/courses') },
+      { href: '/l/submissions', label: 'Submissions', icon: <ClipboardCheck size={18} />, matches: (p) => p.includes('/l/submissions'), count: 18 },
+      { href: '/l/exams', label: 'Exams', icon: <FileText size={18} />, matches: (p) => p.includes('/l/exams') },
+      { href: '/l/analytics', label: 'Analytics', icon: <BarChart3 size={18} />, matches: (p) => p.includes('/l/analytics') },
+    ],
+  },
+];
+
+function getBreadcrumbs(pathname: string): { label: string; href?: string }[] {
+  const segments = pathname.split('/').filter(Boolean);
+  const crumbs: { label: string; href?: string }[] = [];
+  const labelMap: Record<string, string> = {
+    s: 'Student', l: 'Lecturer', dashboard: 'Dashboard', courses: 'Courses',
+    results: 'Results', submissions: 'Submissions', exams: 'Exams',
+    analytics: 'Analytics', assignments: 'Assignments', workspace: 'Workspace',
+    result: 'Result', review: 'Review', create: 'Create',
+  };
+  let path = '';
+  for (const seg of segments) {
+    path += `/${seg}`;
+    if (seg.length === 2 && /^[a-z]+$/.test(seg)) continue; // locale
+    const label = labelMap[seg] || (seg.length > 8 ? `${seg.slice(0, 8)}...` : seg);
+    crumbs.push({ label, href: path });
   }
-  return typeof matched.title === 'function' ? matched.title(pathname) : matched.title;
-};
+  if (crumbs.length > 0) delete crumbs[crumbs.length - 1].href;
+  return crumbs;
+}
 
-const immersivePrefixes = ['/exams', '/rubrics', '/reviews', '/courses'];
-
-const isImmersiveRoutePath = (pathname: string): boolean => {
-  if (pathname === '/') {
-    return true;
-  }
-  return immersivePrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
-};
-
-type AppShellProps = {
-  children: React.ReactNode;
-};
-
-export function AppShell({ children }: AppShellProps) {
-  const pathname = usePathname() || '/';
-  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-
-  const title = useMemo(() => getRouteTitle(pathname), [pathname]);
-  const isImmersiveRoute = isImmersiveRoutePath(pathname);
-
-  useEffect(() => {
-    setIsMobileNavOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!isMobileNavOpen) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsMobileNavOpen(false);
-      }
-    };
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isMobileNavOpen]);
-
-  if (isImmersiveRoute) {
-    return <>{children}</>;
-  }
+function Sidebar({ role, pathname, collapsed, onNav }: {
+  role: UserRole; pathname: string; collapsed: boolean; onNav?: () => void;
+}) {
+  const { clearRole } = useRole();
+  const sections = role === 'student' ? studentSections : lecturerSections;
 
   return (
-    <div className="min-h-screen bg-body text-body">
-      <a
-        href="#app-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-slate-900 focus:shadow-lg"
-      >
-        Skip to content
-      </a>
-
-      <div className="min-h-screen lg:flex">
-        <aside className="group/sidebar hidden overflow-hidden border-r border-slate-200/80 bg-white/85 backdrop-blur transition-[width] duration-200 ease-out lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-3 lg:flex-col lg:hover:w-[252px] lg:focus-within:w-[252px]">
-          <div className="min-w-[252px] h-full opacity-0 transition-opacity duration-150 ease-out group-hover/sidebar:opacity-100 group-focus-within/sidebar:opacity-100">
-            <div className="flex h-16 items-center border-b border-slate-200/80 px-5">
-              <p className="font-heading text-sm font-semibold tracking-[0.14em] text-slate-700 uppercase">
-                Homework Grader
-              </p>
-            </div>
-            <nav className="flex-1 space-y-1 p-3" aria-label="Primary">
-              {navItems.map((item) => {
-                const isActive = item.matches(pathname);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={cn(
-                      'block overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-[0_8px_25px_rgba(37,99,235,0.25)]'
-                        : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-                    )}
-                  >
-                    <span className="truncate">{item.label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-        </aside>
-
-        <div className="min-w-0 flex flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-            <div className="flex h-16 items-center justify-between gap-3 px-4 md:px-6">
-              <button
-                type="button"
-                onClick={() => setIsMobileNavOpen(true)}
-                className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 lg:hidden"
-                aria-label="Open navigation menu"
-                aria-expanded={isMobileNavOpen}
-                aria-controls="mobile-nav-drawer"
-              >
-                Menu
-              </button>
-              <h1 className="font-heading text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
-                {title}
-              </h1>
-              <div className="w-16 shrink-0" aria-hidden />
-            </div>
-          </header>
-
-          <div id="app-content" className="flex-1 min-w-0">
-            <div className="mx-auto w-full max-w-[1400px] px-4 py-6 md:px-6 md:py-8">{children}</div>
-          </div>
+    <div className="flex h-full flex-col">
+      {/* Brand */}
+      <div className={cn(
+        'flex items-center h-[var(--topbar-height)] border-b border-[var(--border-light)]',
+        collapsed ? 'justify-center px-2' : 'gap-2.5 px-4'
+      )}>
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--text-primary)] text-white">
+          <Sparkles size={14} />
         </div>
+        {!collapsed && (
+          <span className="text-[13px] font-semibold tracking-tight text-[var(--text-primary)]">AcademyAI</span>
+        )}
       </div>
 
-      {isMobileNavOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
-          <button
-            type="button"
-            className="absolute inset-0 bg-slate-900/40"
-            onClick={() => setIsMobileNavOpen(false)}
-            aria-label="Close navigation menu overlay"
-          />
-          <aside
-            id="mobile-nav-drawer"
-            className="relative h-full w-[272px] max-w-[85vw] border-r border-slate-200/80 bg-white p-4 shadow-2xl"
-          >
-            <div className="mb-4 flex items-center justify-between border-b border-slate-200/80 pb-3">
-              <p className="font-heading text-sm font-semibold tracking-[0.14em] text-slate-700 uppercase">
-                Navigation
+      {/* Role pill */}
+      {!collapsed && (
+        <div className="px-3 pt-3">
+          <div className="flex items-center gap-2 rounded-md bg-[var(--surface-secondary)] px-2.5 py-1.5">
+            {role === 'student' ? <GraduationCap size={14} className="text-[var(--text-tertiary)]" /> : <Users size={14} className="text-[var(--text-tertiary)]" />}
+            <span className="text-[11px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+              {role}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-2 pt-3 pb-2">
+        {sections.map((section, si) => (
+          <div key={si} className="mb-1">
+            {section.label && !collapsed && (
+              <p className="mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-[var(--text-quaternary)]">
+                {section.label}
               </p>
-              <button
-                type="button"
-                onClick={() => setIsMobileNavOpen(false)}
-                className="rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-                aria-label="Close navigation menu"
-              >
-                Close
-              </button>
-            </div>
-            <nav className="space-y-1.5" aria-label="Mobile primary">
-              {navItems.map((item) => {
-                const isActive = item.matches(pathname);
+            )}
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const active = item.matches(pathname);
                 return (
                   <Link
-                    key={item.href}
+                    key={item.href + item.label}
                     href={item.href}
-                    aria-current={isActive ? 'page' : undefined}
+                    onClick={onNav}
+                    aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'block rounded-xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
-                      isActive ? 'bg-blue-600 text-white' : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                      'group flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium transition-colors',
+                      collapsed && 'justify-center px-2',
+                      active
+                        ? 'bg-[var(--surface-secondary)] text-[var(--text-primary)]'
+                        : 'text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]'
                     )}
                   >
-                    {item.label}
+                    <span className={cn('shrink-0', active ? 'text-[var(--text-primary)]' : 'text-[var(--text-quaternary)] group-hover:text-[var(--text-tertiary)]')}>
+                      {item.icon}
+                    </span>
+                    {!collapsed && (
+                      <>
+                        <span className="truncate">{item.label}</span>
+                        {item.count != null && item.count > 0 && (
+                          <span className="ml-auto rounded bg-[var(--text-primary)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                            {item.count}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </Link>
                 );
               })}
-            </nav>
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      {/* Bottom */}
+      <div className="border-t border-[var(--border-light)] p-2">
+        <button
+          onClick={() => { clearRole(); onNav?.(); }}
+          className={cn(
+            'flex w-full items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13px] font-medium text-[var(--text-tertiary)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]',
+            collapsed && 'justify-center px-2'
+          )}
+        >
+          <LogOut size={18} className="text-[var(--text-quaternary)]" />
+          {!collapsed && <span>Switch Role</span>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const { role } = useRole();
+  const pathname = usePathname() || '/';
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMobileOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = prev; };
+  }, [mobileOpen]);
+
+  // No shell for: no role, landing, immersive routes
+  if (!role || pathname === '/' || pathname.match(/^\/[a-z]{2}$/)) return <>{children}</>;
+  if (pathname.includes('/workspace') || (pathname.includes('/assignments/') && (pathname.includes('/result') || pathname.includes('/review')))) return <>{children}</>;
+
+  const breadcrumbs = getBreadcrumbs(pathname);
+
+  return (
+    <div className="flex h-screen overflow-hidden bg-[var(--bg)]">
+      {/* Desktop sidebar */}
+      <aside className={cn(
+        'hidden lg:flex lg:flex-col lg:shrink-0 border-r border-[var(--border-light)] bg-[var(--surface)] transition-[width] duration-200 ease-[var(--ease)]',
+        collapsed ? 'w-[var(--sidebar-collapsed)]' : 'w-[var(--sidebar-width)]'
+      )}>
+        <Sidebar role={role} pathname={pathname} collapsed={collapsed} />
+      </aside>
+
+      {/* Main */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Topbar */}
+        <header className="flex h-[var(--topbar-height)] shrink-0 items-center gap-3 border-b border-[var(--border-light)] bg-[var(--surface)] px-4">
+          {/* Mobile menu */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="rounded-md p-1.5 text-[var(--text-tertiary)] transition-colors hover:bg-[var(--surface-hover)] lg:hidden"
+            aria-label="Open menu"
+          >
+            <Menu size={18} />
+          </button>
+
+          {/* Collapse toggle */}
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="hidden rounded-md p-1.5 text-[var(--text-quaternary)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--text-tertiary)] lg:flex"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            <ChevronLeft size={16} className={cn('transition-transform', collapsed && 'rotate-180')} />
+          </button>
+
+          {/* Breadcrumbs */}
+          <nav className="flex items-center gap-1 text-[13px] overflow-hidden" aria-label="Breadcrumb">
+            {breadcrumbs.map((crumb, i) => (
+              <span key={i} className="flex items-center gap-1 min-w-0">
+                {i > 0 && <ChevronRight size={12} className="shrink-0 text-[var(--text-quaternary)]" />}
+                {crumb.href ? (
+                  <Link href={crumb.href} className="truncate text-[var(--text-tertiary)] hover:text-[var(--text-primary)] transition-colors">
+                    {crumb.label}
+                  </Link>
+                ) : (
+                  <span className="truncate font-medium text-[var(--text-primary)]">{crumb.label}</span>
+                )}
+              </span>
+            ))}
+          </nav>
+
+          <div className="flex-1" />
+
+          {/* Avatar */}
+          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-[var(--brand)] to-[var(--brand-hover)]" />
+        </header>
+
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6 lg:py-8">
+            {children}
+          </div>
+        </main>
+      </div>
+
+      {/* Mobile drawer */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button className="absolute inset-0 bg-black/20" onClick={() => setMobileOpen(false)} aria-label="Close" />
+          <aside className="relative h-full w-[240px] max-w-[80vw] border-r border-[var(--border-light)] bg-[var(--surface)] shadow-lg">
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="absolute right-2 top-3 rounded-md p-1.5 text-[var(--text-tertiary)] hover:bg-[var(--surface-hover)]"
+              aria-label="Close"
+            >
+              <X size={16} />
+            </button>
+            <Sidebar role={role} pathname={pathname} collapsed={false} onNav={() => setMobileOpen(false)} />
           </aside>
         </div>
       )}

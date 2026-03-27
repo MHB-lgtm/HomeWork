@@ -1,17 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createExam, ExamSummary, listExams } from '../../lib/examsClient';
-import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
-import { Button } from '../../components/ui/button';
-import { EmptyState } from '../../components/ui/empty-state';
-import { Input } from '../../components/ui/input';
-import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
-import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
-import { StatusBadge } from '../../components/ui/status-badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
-import { CardSkeleton, TableRowSkeleton } from '../../components/ui/skeleton';
-import { cn } from '../../lib/utils';
+import { createExam, ExamSummary, listExams } from '../../../lib/examsClient';
+import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { Button } from '../../../components/ui/button';
+import { EmptyState } from '../../../components/ui/empty-state';
+import { Input } from '../../../components/ui/input';
+import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
+import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../../components/ui/panel';
+import { StatusBadge } from '../../../components/ui/status-badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
+import { CardSkeleton, TableRowSkeleton } from '../../../components/ui/skeleton';
+import { cn } from '../../../lib/utils';
 
 type ExamMessage = {
   type: 'success' | 'error' | 'warning';

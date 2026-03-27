@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { listExams } from '../../lib/examsClient';
-import { listReviews, ReviewSummary, updateReviewDisplayName } from '../../lib/reviewsClient';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
-import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
-import { Input } from '../../components/ui/input';
-import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
+import { listExams } from '../../../lib/examsClient';
+import { listReviews, ReviewSummary, updateReviewDisplayName } from '../../../lib/reviewsClient';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { Badge } from '../../../components/ui/badge';
+import { Button } from '../../../components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { Input } from '../../../components/ui/input';
+import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
 
 type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
 

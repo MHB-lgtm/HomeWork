@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Course } from '@hg/shared-schemas';
-import { CoursesClientError, listCourses } from '../../lib/coursesClient';
-import { CreateCourseCard } from '../../components/courses/CreateCourseCard';
-import { CoursesTable } from '../../components/courses/CoursesTable';
-import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
-import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
-import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
+import { CoursesClientError, listCourses } from '../../../lib/coursesClient';
+import { CreateCourseCard } from '../../../components/courses/CreateCourseCard';
+import { CoursesTable } from '../../../components/courses/CoursesTable';
+import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
+import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { Badge } from '../../../components/ui/badge';
+import { Button } from '../../../components/ui/button';
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof CoursesClientError) {

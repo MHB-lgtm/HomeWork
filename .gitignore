@@ -3,9 +3,11 @@ dist/
 .env
 data/
 .codex-runlogs/
+.DS_Store
+docs/.DS_Store
+docs/ui-audit/.DS_Store
 
 # Env Files
 .env
 .env.local
 .env.*.local
-

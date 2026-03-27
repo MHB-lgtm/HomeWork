@@ -3,16 +3,16 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Course, Lecture, RagManifest } from '@hg/shared-schemas';
-import { CoursesClientError, getCourse, listLectures, getRagManifest, rebuildRagIndex } from '../../../lib/coursesClient';
-import { LectureUploadForm } from '../../../components/courses/LectureUploadForm';
-import { LecturesTable } from '../../../components/courses/LecturesTable';
-import { RagIndexPanel } from '../../../components/courses/RagIndexPanel';
-import { RagTestPanel } from '../../../components/courses/RagTestPanel';
-import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
-import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
-import { Badge } from '../../../components/ui/badge';
-import { Button } from '../../../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { CoursesClientError, getCourse, listLectures, getRagManifest, rebuildRagIndex } from '../../../../lib/coursesClient';
+import { LectureUploadForm } from '../../../../components/courses/LectureUploadForm';
+import { LecturesTable } from '../../../../components/courses/LecturesTable';
+import { RagIndexPanel } from '../../../../components/courses/RagIndexPanel';
+import { RagTestPanel } from '../../../../components/courses/RagTestPanel';
+import { ImmersiveShell } from '../../../../components/layout/ImmersiveShell';
+import { Alert, AlertDescription, AlertTitle } from '../../../../components/ui/alert';
+import { Badge } from '../../../../components/ui/badge';
+import { Button } from '../../../../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
 
 type CourseDetailsPageProps = {
   params: { courseId: string };

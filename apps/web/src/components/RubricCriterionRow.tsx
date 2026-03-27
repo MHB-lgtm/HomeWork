@@ -53,4 +53,3 @@ export function RubricCriterionRow({ criterion }: RubricCriterionRowProps) {
     </TableRow>
   );
 }
-

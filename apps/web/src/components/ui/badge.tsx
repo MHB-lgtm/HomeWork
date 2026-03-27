@@ -2,33 +2,44 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLDivElement> {
-  variant?: 'default' | 'secondary' | 'outline' | 'destructive';
+  variant?: 'default' | 'brand' | 'success' | 'warning' | 'error' | 'info' | 'secondary' | 'outline' | 'destructive';
+  size?: 'sm' | 'md';
 }
 
-const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
-  ({ className, variant = 'default', ...props }, ref) => {
-    const variants = {
-      default: 'bg-blue-600 text-white',
-      secondary: 'bg-gray-200 text-gray-900',
-      outline: 'border border-gray-300 bg-transparent',
-      destructive: 'bg-red-600 text-white',
-    };
+const variantStyles: Record<string, string> = {
+  default: 'bg-(--surface-secondary) text-(--text-secondary)',
+  brand: 'bg-(--brand-subtle) text-(--brand)',
+  success: 'bg-(--success-subtle) text-(--success)',
+  warning: 'bg-(--warning-subtle) text-(--warning)',
+  error: 'bg-(--error-subtle) text-(--error)',
+  info: 'bg-(--info-subtle) text-(--info)',
+  // Legacy variants for backward compatibility
+  secondary: 'bg-(--surface-secondary) text-(--text-secondary)',
+  outline: 'border border-(--border) bg-transparent text-(--text-secondary)',
+  destructive: 'bg-(--error-subtle) text-(--error)',
+};
 
-    return (
-      <div
-        ref={ref}
-        className={cn(
-          'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors',
-          variants[variant],
-          className
-        )}
-        {...props}
-      />
-    );
-  }
+const sizeStyles: Record<string, string> = {
+  sm: 'px-2 py-0.5 text-[11px]',
+  md: 'px-2.5 py-0.5 text-xs',
+};
+
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant = 'default', size = 'md', ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(
+        'inline-flex items-center rounded-full font-medium',
+        'transition-colors duration-(--duration) ease-(--ease)',
+        variantStyles[variant] || variantStyles.default,
+        sizeStyles[size],
+        className
+      )}
+      {...props}
+    />
+  )
 );
 
 Badge.displayName = 'Badge';
 
 export { Badge };
-

@@ -20,7 +20,11 @@ export interface TableHeaderProps extends React.HTMLAttributes<HTMLTableSectionE
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, TableHeaderProps>(
   ({ className, ...props }, ref) => (
-    <thead ref={ref} className={cn('[&_tr]:border-b', className)} {...props} />
+    <thead
+      ref={ref}
+      className={cn('bg-(--surface-secondary) [&_tr]:border-b [&_tr]:border-(--border)', className)}
+      {...props}
+    />
   )
 );
 TableHeader.displayName = 'TableHeader';
@@ -45,7 +49,10 @@ const TableRow = React.forwardRef<HTMLTableRowElement, TableRowProps>(
     <tr
       ref={ref}
       className={cn(
-        'border-b transition-colors hover:bg-gray-100/50 data-[state=selected]:bg-gray-100',
+        'border-b border-(--border-light)',
+        'transition-colors duration-(--duration) ease-(--ease)',
+        'hover:bg-(--surface-hover)',
+        'data-[state=selected]:bg-(--surface-secondary)',
         className
       )}
       {...props}
@@ -61,7 +68,8 @@ const TableHead = React.forwardRef<HTMLTableCellElement, TableHeadProps>(
     <th
       ref={ref}
       className={cn(
-        'h-12 px-4 text-left align-middle font-medium text-gray-500 [&:has([role=checkbox])]:pr-0',
+        'h-10 px-3 text-left align-middle text-xs font-medium uppercase tracking-wider text-(--text-tertiary)',
+        '[&:has([role=checkbox])]:pr-0',
         className
       )}
       {...props}
@@ -76,7 +84,11 @@ const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
   ({ className, ...props }, ref) => (
     <td
       ref={ref}
-      className={cn('p-4 align-middle [&:has([role=checkbox])]:pr-0', className)}
+      className={cn(
+        'p-3 align-middle text-sm text-(--text-primary)',
+        '[&:has([role=checkbox])]:pr-0',
+        className
+      )}
       {...props}
     />
   )
@@ -84,4 +96,3 @@ const TableCell = React.forwardRef<HTMLTableCellElement, TableCellProps>(
 TableCell.displayName = 'TableCell';
 
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell };
-
