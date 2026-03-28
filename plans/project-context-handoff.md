@@ -11,7 +11,8 @@ The repo now has:
 
 - the original file-backed grading runtime,
 - a completed storage-agnostic domain foundation package,
-- a narrow committed Postgres + Prisma review and publication slice on the current branch.
+- a narrow committed Postgres + Prisma review and publication slice on the current branch,
+- current Wave 1A working-tree changes that make exams, rubrics, and exam-index metadata DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers.
 
 ## 2. Repo structure and responsibilities
 
@@ -61,7 +62,8 @@ Current branch context:
 
 - branch: `feat/postgres-runtime-slice-1`
 - the Postgres runtime review and publication slices are already committed on this branch
-- the working tree should be clean after the publication-slice docs closure
+- the current working tree also contains Wave 1A exam/rubric/exam-index migration work
+- do not assume Wave 1A is committed without checking `git status`
 
 ## 4. What is already implemented
 
@@ -92,10 +94,17 @@ Current branch context:
   - `context.publication` on imported review detail
   - `publication` summary on imported review list rows
   - `/reviews` as the current lecturer-facing published lens
+- current Wave 1A working-tree runtime adoption:
+  - `GET` / `POST /api/exams`
+  - `GET /api/exams/[examId]`
+  - `GET` / `PUT /api/exams/[examId]/index`
+  - `GET` / `POST /api/rubrics`
+  - `GET /api/rubrics/[examId]/[questionId]`
+  - `apps/worker/src/scripts/generateExamIndex.ts` saving exam-index metadata to Postgres first, then exporting `examIndex.json`
 
 ## 5. What is intentionally not implemented yet
 
-- broad PostgreSQL/Prisma runtime adoption beyond the review slice
+- broad PostgreSQL/Prisma runtime adoption beyond the review slice and current Wave 1A surfaces
 - committed user identity model in product runtime
 - committed memberships or course-scoped authz
 - assignment runtime lifecycle
@@ -122,13 +131,15 @@ Main persisted areas under `HG_DATA_DIR`:
 - `uploads/`
 - `worker/heartbeat.json`
 
-Current narrow exception on this branch:
+Current narrow exceptions on this branch / working tree:
 
 - review detail and review list can use Postgres when `DATABASE_URL` is configured
 - imported review assets can be served from `StoredAsset` rows with pointwise fallback
 - imported review detail can surface current publication state
 - imported review list can surface current effective publication summary
 - imported reviews can publish the current review result into `PublishedResult` and `GradebookEntry`
+- exams, rubrics, and exam-index metadata are DB-first in `apps/web`
+- legacy files under `exams/**`, `rubrics/**`, and `examIndex.json` remain compatibility outputs for unchanged job and worker flows
 
 Runtime code still depends directly on:
 
@@ -159,7 +170,7 @@ Important clarification:
 
 ## 8. Next milestone
 
-The approved direction is still PostgreSQL + Prisma, but the next step should stay narrow.
+The approved direction is still PostgreSQL + Prisma, and the current working tree has already moved beyond review-only work into Wave 1A.
 
 Already implemented seams on this branch:
 
@@ -176,9 +187,9 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- keep working inside the review area
-- do not assume broader DB adoption is already accepted
-- do not jump to auth or worker migration next
+- finish and validate Wave 1A if it is still dirty
+- then move to `W1B` for courses and lectures
+- do not jump to auth or worker queue migration before Wave 1 is closed
 
 ## 9. Main constraints and do-not-change-yet boundaries
 
@@ -248,7 +259,19 @@ Relevant recent commits:
 
 Current dirty context:
 
-- none expected after publication slice closure
+- current Wave 1A work should include:
+  - `apps/web/src/app/api/exams/**`
+  - `apps/web/src/app/api/rubrics/**`
+  - `apps/web/src/lib/server/persistence.ts`
+  - `apps/worker/src/scripts/generateExamIndex.ts`
+  - `packages/postgres-store/prisma/schema.prisma`
+  - `packages/postgres-store/prisma/migrations/**`
+  - `packages/postgres-store/src/import-file-backed.ts`
+  - `packages/postgres-store/src/queries/exam-store.ts`
+  - `packages/postgres-store/src/queries/rubric-store.ts`
+  - `packages/postgres-store/src/queries/exam-index-store.ts`
+  - `packages/postgres-store/src/compat/file-materialization.ts`
+  - `plans/postgres-wave-1-execution-plan.md`
 - always confirm with `git status` before assuming a clean tree
 
 ## 13. Copy-paste handoff block

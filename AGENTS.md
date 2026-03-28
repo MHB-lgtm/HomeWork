@@ -32,10 +32,17 @@
   - `GET /api/reviews/[jobId]`
   - `PUT` / `PATCH /api/reviews/[jobId]`
   - `GET /api/reviews`
+- The current Wave 1A working tree also makes these `apps/web` surfaces DB-first when `DATABASE_URL` is configured:
+  - `GET` / `POST /api/exams`
+  - `GET /api/exams/[examId]`
+  - `GET` / `PUT /api/exams/[examId]/index`
+  - `GET` / `POST /api/rubrics`
+  - `GET /api/rubrics/[examId]/[questionId]`
+- In Wave 1A, exam metadata, rubric data, and exam-index metadata are DB-authoritative, while filesystem artifacts under `HG_DATA_DIR` remain compatibility exports for unchanged consumers such as `apps/web/src/app/api/jobs/**` and the legacy worker.
 - `@hg/domain-workflow` exists and is tested, but broad runtime adoption is still deferred.
 - Keep auth/session concerns separate from grading domain logic.
 - Do not change `apps/worker` unless a milestone explicitly includes worker work.
-- PostgreSQL + Prisma remains a narrow review-slice adoption, not a broad runtime migration.
+- PostgreSQL + Prisma is still not the full runtime, but it is no longer review-only: the current workspace also contains Wave 1A exam/rubric/exam-index migration work.
 
 ## Validation guidance
 
