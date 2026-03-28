@@ -76,6 +76,7 @@ export interface LegacyReviewDetailRecord {
 export interface ImportFileBackedSummary {
   dryRun: boolean;
   importedCourses: number;
+  importedLectures: number;
   importedLectureAssets: number;
   importedExams: number;
   importedRubrics: number;

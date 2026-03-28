@@ -1,6 +1,8 @@
 import {
+  PrismaCourseStore,
   PrismaExamIndexStore,
   PrismaExamStore,
+  PrismaLectureStore,
   PrismaLegacyReviewRecordStore,
   PrismaRubricStore,
   getPrismaClient,
@@ -8,7 +10,9 @@ import {
 
 type ServerPersistence = {
   reviewRecords: PrismaLegacyReviewRecordStore;
+  courses: PrismaCourseStore;
   exams: PrismaExamStore;
+  lectures: PrismaLectureStore;
   rubrics: PrismaRubricStore;
   examIndexes: PrismaExamIndexStore;
 };
@@ -24,7 +28,9 @@ export const getServerPersistence = (): ServerPersistence | null => {
     const prisma = getPrismaClient();
     cachedPersistence = {
       reviewRecords: new PrismaLegacyReviewRecordStore(prisma),
+      courses: new PrismaCourseStore(prisma),
       exams: new PrismaExamStore(prisma),
+      lectures: new PrismaLectureStore(prisma),
       rubrics: new PrismaRubricStore(prisma),
       examIndexes: new PrismaExamIndexStore(prisma),
     };

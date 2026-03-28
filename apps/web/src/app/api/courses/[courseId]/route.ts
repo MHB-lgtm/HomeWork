@@ -1,39 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CourseNotFoundError, getCourse } from '@hg/local-course-store';
+import { getServerPersistence } from '../../../../lib/server/persistence';
 
 export const runtime = 'nodejs';
 
-const ensureDataDir = () => {
-  if (!process.env.HG_DATA_DIR) {
+const ensurePersistence = () => {
+  const persistence = getServerPersistence();
+  if (!persistence) {
     return NextResponse.json(
-      { ok: false, error: 'HG_DATA_DIR is not set in environment' },
+      { ok: false, error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
       { status: 500 }
     );
   }
-  return null;
+
+  return persistence;
 };
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { courseId: string } }
 ) {
-  const dataDirError = ensureDataDir();
-  if (dataDirError) return dataDirError;
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
 
   try {
-    const course = await getCourse(params.courseId);
-    return NextResponse.json({ ok: true, data: course });
-  } catch (error) {
-    if (error instanceof CourseNotFoundError) {
+    const course = await persistence.courses.getCourse(params.courseId);
+    if (!course) {
       return NextResponse.json(
-        { ok: false, error: 'Course not found' },
+        { ok: false, error: 'Course not found', code: 'COURSE_NOT_FOUND' },
         { status: 404 }
       );
     }
 
+    return NextResponse.json({ ok: true, data: course });
+  } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { ok: false, error: `Failed to load course: ${message}` },
+      { ok: false, error: `Failed to load course: ${message}`, code: 'INTERNAL_ERROR' },
       { status: 500 }
     );
   }

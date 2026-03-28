@@ -10,7 +10,13 @@ import {
   RubricSpecSchema,
 } from '@hg/shared-schemas';
 import { ImportFileBackedOptions, ImportFileBackedSummary, LegacyJobRecord } from './types';
-import { materializeExamCompatibility, materializeExamIndexCompatibility, materializeRubricCompatibility } from './compat/file-materialization';
+import {
+  materializeCourseCompatibility,
+  materializeExamCompatibility,
+  materializeExamIndexCompatibility,
+  materializeLectureCompatibility,
+  materializeRubricCompatibility,
+} from './compat/file-materialization';
 import {
   deriveReviewStateFromLegacy,
   deriveSubmissionStateFromLegacy,
@@ -90,6 +96,7 @@ const isPreviewId = (value: string): boolean => value.startsWith('dry-run:');
 const createSummary = (dryRun: boolean): ImportFileBackedSummary => ({
   dryRun,
   importedCourses: 0,
+  importedLectures: 0,
   importedLectureAssets: 0,
   importedExams: 0,
   importedRubrics: 0,
@@ -345,6 +352,23 @@ export const importFileBackedData = async (
       summary.importedCourses += 1;
       countUpdated(summary, Boolean(existingCourse));
 
+      if (!dryRun) {
+        try {
+          await materializeCourseCompatibility({
+            dataDir,
+            course,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          recordFailed(
+            summary,
+            logger,
+            'course_compat_export_failed',
+            `Failed to export course compatibility ${course.courseId}: ${message}`
+          );
+        }
+      }
+
       const lectureEntries = await readDirEntries(
         path.join(dataDir, 'courses', courseEntry.name, 'lectures')
       );
@@ -376,13 +400,29 @@ export const importFileBackedData = async (
           }
 
           const lecture = parsedLecture.data;
+          const absolutePath = resolveStoredPath(dataDir, lecture.assetPath);
+          try {
+            await fs.access(absolutePath);
+          } catch {
+            recordUnresolved(
+              summary,
+              logger,
+              'missing_lecture_asset',
+              `Skipping lecture with missing asset: ${course.courseId}/${lecture.lectureId}`
+            );
+            continue;
+          }
+
+          const existingLecture = await prisma.lecture.findUnique({
+            where: { domainId: lecture.lectureId },
+            select: { id: true },
+          });
           const materialDomainId = getLectureMaterialDomainId(course.courseId, lecture.lectureId);
           const existingMaterial = await prisma.courseMaterial.findUnique({
             where: { domainId: materialDomainId },
             select: { id: true },
           });
 
-          const absolutePath = resolveStoredPath(dataDir, lecture.assetPath);
           const asset = await upsertStoredAsset(prisma, dryRun, {
             assetKey: getLectureAssetKey(course.courseId, lecture.lectureId),
             logicalBucket: 'course_lectures',
@@ -391,6 +431,51 @@ export const importFileBackedData = async (
           });
 
           if (!dryRun) {
+            if (existingLecture) {
+              await prisma.lecture.update({
+                where: { id: existingLecture.id },
+                data: {
+                  courseId: courseRow.id,
+                  assetId: asset.id,
+                  title: lecture.title,
+                  sourceType:
+                    lecture.sourceType === 'markdown'
+                      ? 'MARKDOWN'
+                      : lecture.sourceType === 'text'
+                        ? 'TEXT'
+                        : lecture.sourceType === 'transcript_vtt'
+                          ? 'TRANSCRIPT_VTT'
+                          : 'TRANSCRIPT_SRT',
+                  assetPath: lecture.assetPath,
+                  externalUrl: lecture.externalUrl ?? null,
+                  updatedAt: toDate(lecture.updatedAt),
+                },
+                select: { id: true },
+              });
+            } else {
+              await prisma.lecture.create({
+                data: {
+                  domainId: lecture.lectureId,
+                  courseId: courseRow.id,
+                  assetId: asset.id,
+                  title: lecture.title,
+                  sourceType:
+                    lecture.sourceType === 'markdown'
+                      ? 'MARKDOWN'
+                      : lecture.sourceType === 'text'
+                        ? 'TEXT'
+                        : lecture.sourceType === 'transcript_vtt'
+                          ? 'TRANSCRIPT_VTT'
+                          : 'TRANSCRIPT_SRT',
+                  assetPath: lecture.assetPath,
+                  externalUrl: lecture.externalUrl ?? null,
+                  createdAt: toDate(lecture.createdAt),
+                  updatedAt: toDate(lecture.updatedAt),
+                },
+                select: { id: true },
+              });
+            }
+
             if (existingMaterial) {
               await prisma.courseMaterial.update({
                 where: { id: existingMaterial.id },
@@ -415,10 +500,27 @@ export const importFileBackedData = async (
                 },
               });
             }
+
+            try {
+              await materializeLectureCompatibility({
+                dataDir,
+                lecture,
+                sourceAssetPath: absolutePath,
+              });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              recordFailed(
+                summary,
+                logger,
+                'lecture_compat_export_failed',
+                `Failed to export lecture compatibility ${course.courseId}/${lecture.lectureId}: ${message}`
+              );
+            }
           }
 
+          summary.importedLectures += 1;
           summary.importedLectureAssets += 1;
-          countUpdated(summary, Boolean(existingMaterial));
+          countUpdated(summary, Boolean(existingLecture || existingMaterial));
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           recordFailed(
@@ -1105,7 +1207,7 @@ export const importFileBackedData = async (
   }
 
   logger.log(
-    `[postgres-store] ${dryRun ? 'dry-run ' : ''}import summary courses=${summary.importedCourses} lectures=${summary.importedLectureAssets} submissions=${summary.importedSubmissions} reviews=${summary.importedReviews} published=${summary.importedPublishedResults} updated=${summary.updatedRecords} skipped=${summary.skippedRecords} unresolved=${summary.unresolvedRecords} failed=${summary.failedRecords}`
+    `[postgres-store] ${dryRun ? 'dry-run ' : ''}import summary courses=${summary.importedCourses} lectures=${summary.importedLectures} submissions=${summary.importedSubmissions} reviews=${summary.importedReviews} published=${summary.importedPublishedResults} updated=${summary.updatedRecords} skipped=${summary.skippedRecords} unresolved=${summary.unresolvedRecords} failed=${summary.failedRecords}`
   );
 
   return summary;

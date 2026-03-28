@@ -42,6 +42,13 @@ enum StoredAssetStorageKind {
   UNKNOWN
 }
 
+enum LectureSourceType {
+  TEXT
+  MARKDOWN
+  TRANSCRIPT_VTT
+  TRANSCRIPT_SRT
+}
+
 enum CourseMaterialKind {
   ASSIGNMENT_PROMPT
   ASSIGNMENT_SOLUTION
@@ -139,6 +146,7 @@ model Course {
   createdAt         DateTime           @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @db.Timestamptz(6)
   memberships       CourseMembership[]
+  lectures          Lecture[]
   materials         CourseMaterial[]
   submissions       Submission[]
   reviews           Review[]
@@ -177,6 +185,7 @@ model StoredAsset {
   createdAt     DateTime                @default(now()) @db.Timestamptz(6)
   materials     CourseMaterial[]
   exams         Exam[]
+  lectures      Lecture[]
 }
 
 model Exam {
@@ -215,6 +224,23 @@ model ExamIndex {
   updatedAt  DateTime        @db.Timestamptz(6)
   payloadJson Json
   exam       Exam            @relation(fields: [examRowId], references: [id], onDelete: Cascade)
+}
+
+model Lecture {
+  id          String            @id @default(uuid()) @db.Uuid
+  domainId    String            @unique
+  courseId    String            @db.Uuid
+  assetId     String            @unique @db.Uuid
+  title       String
+  sourceType  LectureSourceType
+  assetPath   String
+  externalUrl String?
+  createdAt   DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(6)
+  course      Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  asset       StoredAsset       @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([courseId, createdAt(sort: Desc)])
 }
 
 model CourseMaterial {

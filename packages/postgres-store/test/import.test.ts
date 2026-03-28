@@ -119,6 +119,32 @@ const createFakeModel = (uniqueKey: string, label: string) => {
       rows.set(String(next[uniqueKey]), next);
       return pickSelectedFields(next, args.select);
     },
+    async findMany(args?: {
+      where?: Record<string, unknown>;
+      select?: Record<string, boolean>;
+      orderBy?: Record<string, 'asc' | 'desc'>;
+    }) {
+      let values = [...rows.values()];
+
+      if (args?.where) {
+        values = values.filter((candidate) => matchesWhere(candidate, args.where!));
+      }
+
+      if (args?.orderBy) {
+        const [[key, direction]] = Object.entries(args.orderBy);
+        values.sort((left, right) => {
+          const leftValue = left[key];
+          const rightValue = right[key];
+          if (leftValue === rightValue) return 0;
+          if (direction === 'desc') {
+            return leftValue > rightValue ? -1 : 1;
+          }
+          return leftValue > rightValue ? 1 : -1;
+        });
+      }
+
+      return values.map((row) => pickSelectedFields(row, args?.select));
+    },
   };
 };
 
@@ -187,6 +213,7 @@ const createFakePrisma = () => {
   const course = createFakeModel('domainId', 'course');
   const storedAsset = createFakeModel('assetKey', 'asset');
   const courseMaterial = createFakeModel('domainId', 'material');
+  const lecture = createFakeModel('domainId', 'lecture');
   const exam = createFakeModel('domainId', 'exam');
   const rubric = createFakeCompositeModel('rubric', (value) => {
     if (
@@ -217,6 +244,7 @@ const createFakePrisma = () => {
     course,
     storedAsset,
     courseMaterial,
+    lecture,
     exam,
     rubric,
     examIndex,
@@ -242,6 +270,7 @@ const createFakePrisma = () => {
       course: course.rows,
       storedAsset: storedAsset.rows,
       courseMaterial: courseMaterial.rows,
+      lecture: lecture.rows,
       exam: exam.rows,
       rubric: rubric.rows,
       examIndex: examIndex.rows,
@@ -270,6 +299,17 @@ const createImportFixture = async (): Promise<string> => {
     title: 'Course 1',
     createdAt: '2026-03-26T10:00:00.000Z',
     updatedAt: '2026-03-26T10:05:00.000Z',
+  });
+  await writeJson('courses/course-1/lectures/lecture-1/lecture.json', {
+    version: '1.0.0',
+    lectureId: 'lecture-1',
+    courseId: 'course-1',
+    title: 'Signals Intro',
+    sourceType: 'markdown',
+    assetPath: 'courses/course-1/lectures/lecture-1/assets/lecture.md',
+    externalUrl: 'https://example.com/lecture-1',
+    createdAt: '2026-03-26T10:10:00.000Z',
+    updatedAt: '2026-03-26T10:15:00.000Z',
   });
 
   await writeJson('exams/exam-1/exam.json', {
@@ -341,6 +381,14 @@ const createImportFixture = async (): Promise<string> => {
   await fs.writeFile(path.join(tempDir, 'uploads', 'job-1.pdf'), 'fixture', 'utf-8');
   await fs.mkdir(path.join(tempDir, 'exams', 'exam-1', 'assets'), { recursive: true });
   await fs.writeFile(path.join(tempDir, 'exams', 'exam-1', 'assets', 'exam.pdf'), 'exam', 'utf-8');
+  await fs.mkdir(path.join(tempDir, 'courses', 'course-1', 'lectures', 'lecture-1', 'assets'), {
+    recursive: true,
+  });
+  await fs.writeFile(
+    path.join(tempDir, 'courses', 'course-1', 'lectures', 'lecture-1', 'assets', 'lecture.md'),
+    '# Lecture',
+    'utf-8'
+  );
 
   return tempDir;
 };
@@ -391,7 +439,8 @@ describe('importFileBackedData', () => {
     expect(summary).toMatchObject({
       dryRun: true,
       importedCourses: 1,
-      importedLectureAssets: 0,
+      importedLectures: 1,
+      importedLectureAssets: 1,
       importedExams: 1,
       importedRubrics: 1,
       importedExamIndexes: 1,
@@ -433,6 +482,8 @@ describe('importFileBackedData', () => {
     expect(firstRun).toMatchObject({
       dryRun: false,
       importedCourses: 1,
+      importedLectures: 1,
+      importedLectureAssets: 1,
       importedExams: 1,
       importedRubrics: 1,
       importedExamIndexes: 1,
@@ -445,6 +496,8 @@ describe('importFileBackedData', () => {
     expect(secondRun).toMatchObject({
       dryRun: false,
       importedCourses: 1,
+      importedLectures: 1,
+      importedLectureAssets: 1,
       importedExams: 1,
       importedRubrics: 1,
       importedExamIndexes: 1,
@@ -460,8 +513,9 @@ describe('importFileBackedData', () => {
     });
 
     expect(stores.course.size).toBe(2);
-    expect(stores.storedAsset.size).toBe(2);
-    expect(stores.courseMaterial.size).toBe(1);
+    expect(stores.storedAsset.size).toBe(3);
+    expect(stores.courseMaterial.size).toBe(2);
+    expect(stores.lecture.size).toBe(1);
     expect(stores.exam.size).toBe(1);
     expect(stores.rubric.size).toBe(1);
     expect(stores.examIndex.size).toBe(1);
