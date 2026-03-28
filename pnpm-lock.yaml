@@ -13,9 +13,6 @@ importers:
       '@hg/local-course-store':
         specifier: workspace:*
         version: link:../../packages/local-course-store
-      '@hg/local-job-store':
-        specifier: workspace:*
-        version: link:../../packages/local-job-store
       '@hg/postgres-store':
         specifier: workspace:*
         version: link:../../packages/postgres-store

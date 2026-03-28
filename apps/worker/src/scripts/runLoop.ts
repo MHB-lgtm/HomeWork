@@ -3,6 +3,7 @@ import os from 'os';
 import dotenv from 'dotenv';
 import { processNextPendingJob } from '../lib/processNextPendingJob';
 import { writeHeartbeat } from '../lib/heartbeat';
+import { getWorkerRuntimePersistence } from '../lib/runtimePersistence';
 
 // Load .env from repo root (not from current working directory)
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
@@ -26,6 +27,7 @@ process.on('SIGTERM', () => {
 });
 
 async function main() {
+  getWorkerRuntimePersistence();
   console.log('[worker] Starting worker loop...');
 
   // Write initial heartbeat

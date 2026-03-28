@@ -38,7 +38,7 @@ function toShortText(value: string, maxChars: number): string {
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
-  const [reviewSource, setReviewSource] = useState<'postgres' | 'file' | null>(null);
+  const [reviewSource, setReviewSource] = useState<'postgres' | null>(null);
   const [publication, setPublication] = useState<ReviewPublicationV1 | null>(null);
   const [resultJson, setResultJson] = useState<any>(null);
   const [submissionMimeType, setSubmissionMimeType] = useState<string | undefined>(undefined);
@@ -74,9 +74,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     const reviewResult = await getReview(id);
 
     if (!reviewResult.ok) {
-      if (reviewResult.status !== 404) {
-        setError(`Failed to load review: ${reviewResult.error}`);
-      }
+      setError(
+        reviewResult.status === 404
+          ? 'Review not found'
+          : `Failed to load review: ${reviewResult.error}`
+      );
       if (options?.keepLoading !== false) {
         setLoading(false);
       }

@@ -29,12 +29,19 @@ export async function POST(
     const persistence = getServerPersistence();
     if (!persistence) {
       return NextResponse.json(
-        { ok: false, error: 'Publish is only available when Postgres persistence is configured' },
-        { status: 409 }
+        { ok: false, error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
       );
     }
 
     const resolved = await getResolvedReviewDetail(jobId);
+    if (!resolved) {
+      return NextResponse.json(
+        { ok: false, error: 'Review not found' },
+        { status: 404 }
+      );
+    }
+
     const publication = await persistence.reviewRecords.publishReviewByLegacyJobId(jobId, {
       actorRef: 'legacy:review-route',
       reviewRecord: resolved.review,

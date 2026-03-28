@@ -278,6 +278,7 @@ describe('PrismaLegacyReviewRecordStore', () => {
     expect(summaries[0]).toMatchObject({
       jobId: 'job-1',
       displayName: 'Renamed',
+      status: 'UNKNOWN',
       annotationCount: 0,
       hasResult: true,
       createdAt: '2026-03-26T10:00:00.000Z',
@@ -303,7 +304,42 @@ describe('PrismaLegacyReviewRecordStore', () => {
 
     expect(summaries).toHaveLength(1);
     expect(summaries[0].publication).toBeUndefined();
+    expect(summaries[0].status).toBe('UNKNOWN');
     expect(summaries[0].hasResult).toBe(false);
+  });
+
+  it('preserves stored context status in review summaries when available', async () => {
+    const { prisma, submissions, reviews, reviewVersions } = createFakePrisma();
+    const store = new PrismaLegacyReviewRecordStore(prisma);
+
+    const reviewRow = {
+      id: 'review-row-imported',
+      domainId: 'legacy-review:job-1',
+      createdAt: new Date('2026-03-26T10:00:00.000Z'),
+      updatedAt: new Date('2026-03-26T10:05:00.000Z'),
+      currentVersionId: 'review-version-row-imported',
+    };
+    reviews.set(reviewRow.id, reviewRow);
+    submissions.get('job-1').review = reviewRow.id;
+    reviewVersions.set('review-version-row-imported', {
+      id: 'review-version-row-imported',
+      domainId: 'legacy-review-version:job-1:imported',
+      reviewId: reviewRow.id,
+      createdAt: new Date('2026-03-26T10:05:00.000Z'),
+      rawPayload: createStoredReviewRecordPayload(makeReviewRecord('Imported name'), {
+        status: 'DONE',
+        resultJson: { mode: 'GENERAL' },
+        errorMessage: null,
+        submissionMimeType: 'application/pdf',
+        gradingMode: 'GENERAL',
+        gradingScope: 'DOCUMENT',
+      }),
+    });
+
+    const summaries = await store.listReviewSummariesByLegacyJobId();
+
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0].status).toBe('DONE');
   });
 
   it('returns review detail context and submission asset for wrapped imported payloads', async () => {
@@ -352,6 +388,45 @@ describe('PrismaLegacyReviewRecordStore', () => {
       submissionAsset: {
         path: 'C:\\fixtures\\job-1.pdf',
         mimeType: 'application/pdf',
+      },
+    });
+  });
+
+  it('synthesizes an UNKNOWN context when an imported DB review has no stored runtime context', async () => {
+    const { prisma, submissions, reviews, reviewVersions } = createFakePrisma();
+    const store = new PrismaLegacyReviewRecordStore(prisma);
+
+    const reviewRow = {
+      id: 'review-row-imported',
+      domainId: 'legacy-review:job-1',
+      createdAt: new Date('2026-03-26T10:00:00.000Z'),
+      updatedAt: new Date('2026-03-26T10:05:00.000Z'),
+      currentVersionId: 'review-version-row-imported',
+    };
+    reviews.set(reviewRow.id, reviewRow);
+    submissions.get('job-1').review = reviewRow.id;
+    reviewVersions.set('review-version-row-imported', {
+      id: 'review-version-row-imported',
+      domainId: 'legacy-review-version:job-1:imported',
+      reviewId: reviewRow.id,
+      createdAt: new Date('2026-03-26T10:05:00.000Z'),
+      rawPayload: makeReviewRecord('Imported name'),
+    });
+
+    const detail = await store.getReviewDetailByLegacyJobId('job-1');
+
+    expect(detail).toMatchObject({
+      review: {
+        jobId: 'job-1',
+        displayName: 'Imported name',
+      },
+      context: {
+        status: 'UNKNOWN',
+        resultJson: null,
+        errorMessage: null,
+        submissionMimeType: null,
+        gradingMode: null,
+        gradingScope: null,
       },
     });
   });

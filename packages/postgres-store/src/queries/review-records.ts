@@ -8,6 +8,7 @@ import {
 } from '@hg/domain-workflow';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import type {
+  LegacyReviewContextRecord,
   LegacyReviewDetailRecord,
   LegacyReviewPublicationRecord,
   LegacyReviewSummaryRecord,
@@ -104,6 +105,15 @@ const toEffectivePublicationSummary = (
     summary: effective.summary ?? null,
   };
 };
+
+const createUnknownLegacyReviewContext = (): LegacyReviewContextRecord => ({
+  status: 'UNKNOWN',
+  resultJson: null,
+  errorMessage: null,
+  submissionMimeType: null,
+  gradingMode: null,
+  gradingScope: null,
+});
 
 const createPublishedReviewVersionDomainId = (jobId: string): string =>
   `legacy-review-version:${jobId}:published:${randomUUID()}`;
@@ -249,11 +259,13 @@ export class PrismaLegacyReviewRecordStore {
           toIsoString(review.createdAt),
           toIsoString(review.updatedAt)
         );
+        const reviewContext = reviewContextFromStoredPayload(rawPayload);
 
         return [
           {
             jobId,
             displayName: reviewRecord.displayName ?? null,
+            status: reviewContext?.status ?? 'UNKNOWN',
             createdAt: toIsoString(review.createdAt),
             updatedAt: toIsoString(review.updatedAt),
             annotationCount: reviewRecord.annotations.length,
@@ -310,7 +322,7 @@ export class PrismaLegacyReviewRecordStore {
         toIsoString(submission.review.createdAt),
         toIsoString(submission.review.updatedAt)
       ),
-      context: reviewContextFromStoredPayload(currentVersion.rawPayload) ?? undefined,
+      context: reviewContextFromStoredPayload(currentVersion.rawPayload) ?? createUnknownLegacyReviewContext(),
       publication: toPublicationRecord(submission),
       submissionAsset,
     };

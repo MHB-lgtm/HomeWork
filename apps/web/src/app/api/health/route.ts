@@ -1,24 +1,18 @@
 import { NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
 import * as path from 'path';
-import { existsSync } from 'fs';
 import { getServerPersistence } from '@/lib/server/persistence';
 
 export const runtime = 'nodejs';
-
-interface HeartbeatData {
-  ts: string;
-  pid: number;
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
     const dataDir = process.env.HG_DATA_DIR;
     const persistence = getServerPersistence();
 
-    if (!dataDir && !persistence) {
+    if (!persistence) {
       return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
+        { error: 'DATABASE_URL is not set in environment' },
         { status: 500 }
       );
     }
@@ -27,30 +21,12 @@ export async function GET() {
     let workerAlive = false;
     let heartbeatAgeMs: number | null = null;
 
-    if (persistence) {
-      const heartbeat = await persistence.workerHeartbeats.getLatestHeartbeat();
-      if (heartbeat) {
-        const heartbeatTime = new Date(heartbeat.lastSeenAt).getTime();
-        const now = Date.now();
-        heartbeatAgeMs = now - heartbeatTime;
-        workerAlive = heartbeatAgeMs < 10000;
-      }
-    }
-
-    if (heartbeatAgeMs === null && dataDir) {
-      const heartbeatPath = path.join(DATA_DIR, 'worker', 'heartbeat.json');
-      if (existsSync(heartbeatPath)) {
-        try {
-          const content = await fs.readFile(heartbeatPath, 'utf-8');
-          const heartbeat: HeartbeatData = JSON.parse(content);
-          const heartbeatTime = new Date(heartbeat.ts).getTime();
-          const now = Date.now();
-          heartbeatAgeMs = now - heartbeatTime;
-          workerAlive = heartbeatAgeMs < 10000;
-        } catch {
-          workerAlive = false;
-        }
-      }
+    const heartbeat = await persistence.workerHeartbeats.getLatestHeartbeat();
+    if (heartbeat) {
+      const heartbeatTime = new Date(heartbeat.lastSeenAt).getTime();
+      const now = Date.now();
+      heartbeatAgeMs = now - heartbeatTime;
+      workerAlive = heartbeatAgeMs < 10000;
     }
 
     return NextResponse.json({

@@ -1,5 +1,4 @@
 import * as fs from 'fs/promises';
-import { getJob, getOrCreateReview, type JobRecord } from '@hg/local-job-store';
 import type {
   LegacyReviewContextRecord,
   LegacyReviewPublicationRecord,
@@ -24,34 +23,36 @@ export type ReviewRouteContext = {
   submissionMimeType: string | null;
   gradingMode: 'RUBRIC' | 'GENERAL' | null;
   gradingScope: 'QUESTION' | 'DOCUMENT' | null;
-  source: 'postgres' | 'file';
+  source: 'postgres';
   publication?: ReviewPublicationContext;
 };
 
 export type ResolvedReviewDetail = {
   review: ReviewRecord;
   context?: ReviewRouteContext;
-  source: 'postgres' | 'file';
+  source: 'postgres';
 };
 
 export type ResolvedSubmissionAsset = LegacySubmissionAssetRecord & {
-  source: 'postgres' | 'file';
+  source: 'postgres';
 };
 
-const hasDataDirConfigured = (): boolean => Boolean(process.env.HG_DATA_DIR);
-
-const toFileBackedContext = (job: JobRecord): Omit<ReviewRouteContext, 'source'> => ({
-  status: job.status,
-  resultJson: job.resultJson ?? null,
-  errorMessage: job.errorMessage ?? null,
-  submissionMimeType: job.inputs.submissionMimeType ?? null,
-  gradingMode: job.inputs.gradingMode ?? null,
-  gradingScope: job.inputs.gradingScope ?? null,
+const createUnknownPostgresContext = (
+  publication?: LegacyReviewPublicationRecord
+): ReviewRouteContext => ({
+  status: 'UNKNOWN',
+  resultJson: null,
+  errorMessage: null,
+  submissionMimeType: null,
+  gradingMode: null,
+  gradingScope: null,
+  source: 'postgres',
+  publication,
 });
 
 const toPostgresContext = (
   context: LegacyReviewContextRecord
-): Omit<ReviewRouteContext, 'source'> | null => {
+): Omit<ReviewRouteContext, 'source' | 'publication'> | null => {
   if (!context.status) {
     return null;
   }
@@ -70,50 +71,23 @@ const toPostgresContext = (
 
 const mergeContext = (
   postgresContext: LegacyReviewContextRecord | undefined,
-  publication: LegacyReviewPublicationRecord | undefined,
-  fileJob: JobRecord | null,
-  source: 'postgres' | 'file'
-): ReviewRouteContext | undefined => {
-  const fileContext = fileJob ? toFileBackedContext(fileJob) : null;
+  publication: LegacyReviewPublicationRecord | undefined
+): ReviewRouteContext => {
   const dbContext = postgresContext ? toPostgresContext(postgresContext) : null;
-  const status = dbContext?.status ?? fileContext?.status;
-  if (!status) {
-    return undefined;
+  if (!dbContext?.status) {
+    return createUnknownPostgresContext(publication);
   }
 
   return {
-    status,
-    resultJson:
-      dbContext?.resultJson ??
-      fileContext?.resultJson ??
-      null,
-    errorMessage:
-      dbContext?.errorMessage ??
-      fileContext?.errorMessage ??
-      null,
-    submissionMimeType:
-      dbContext?.submissionMimeType ??
-      fileContext?.submissionMimeType ??
-      null,
-    gradingMode:
-      dbContext?.gradingMode ??
-      fileContext?.gradingMode ??
-      null,
-    gradingScope:
-      dbContext?.gradingScope ??
-      fileContext?.gradingScope ??
-      null,
-    source,
-    publication: source === 'postgres' ? publication : undefined,
+    status: dbContext.status,
+    resultJson: dbContext.resultJson ?? null,
+    errorMessage: dbContext.errorMessage ?? null,
+    submissionMimeType: dbContext.submissionMimeType ?? null,
+    gradingMode: dbContext.gradingMode ?? null,
+    gradingScope: dbContext.gradingScope ?? null,
+    source: 'postgres',
+    publication,
   };
-};
-
-const loadFileBackedJob = async (jobId: string): Promise<JobRecord | null> => {
-  if (!hasDataDirConfigured()) {
-    return null;
-  }
-
-  return getJob(jobId);
 };
 
 const fileExists = async (filePath: string): Promise<boolean> => {
@@ -132,46 +106,30 @@ const fileExists = async (filePath: string): Promise<boolean> => {
 
 export const getResolvedReviewDetail = async (
   jobId: string
-): Promise<ResolvedReviewDetail> => {
+): Promise<ResolvedReviewDetail | null> => {
   const persistence = getServerPersistence();
-
-  if (persistence) {
-      const runtimeDetail = await persistence.jobs.getRuntimeReviewDetail(jobId);
-      if (runtimeDetail) {
-        const runtimeContext = mergeContext(
-          runtimeDetail.context,
-          runtimeDetail.publication,
-          null,
-          'postgres'
-        );
-        return {
-          review: runtimeDetail.review,
-          context: runtimeContext,
-          source: 'postgres',
-        };
-      }
-
-      const detail = await persistence.reviewRecords.getReviewDetailByLegacyJobId(jobId);
-      if (detail) {
-        const fileJob = detail.context ? null : await loadFileBackedJob(jobId);
-        return {
-          review: detail.review,
-          context: mergeContext(detail.context, detail.publication, fileJob, 'postgres'),
-          source: 'postgres',
-        };
-      }
+  if (!persistence) {
+    throw new Error('DATABASE_URL is not set in environment');
   }
 
-  if (!hasDataDirConfigured()) {
-    throw new Error('HG_DATA_DIR is not set in environment');
+  const runtimeDetail = await persistence.jobs.getRuntimeReviewDetail(jobId);
+  if (runtimeDetail) {
+    return {
+      review: runtimeDetail.review,
+      context: mergeContext(runtimeDetail.context, runtimeDetail.publication),
+      source: 'postgres',
+    };
   }
 
-  const [review, job] = await Promise.all([getOrCreateReview(jobId), getJob(jobId)]);
+  const detail = await persistence.reviewRecords.getReviewDetailByLegacyJobId(jobId);
+  if (!detail) {
+    return null;
+  }
 
   return {
-    review,
-    context: job ? { ...toFileBackedContext(job), source: 'file' } : undefined,
-    source: 'file',
+    review: detail.review,
+    context: mergeContext(detail.context, detail.publication),
+    source: 'postgres',
   };
 };
 
@@ -179,33 +137,25 @@ export const resolveReviewSubmissionAsset = async (
   jobId: string
 ): Promise<ResolvedSubmissionAsset | null> => {
   const persistence = getServerPersistence();
-
-  if (persistence) {
-    const runtimeAsset = await persistence.jobs.getJobSubmissionAsset(jobId);
-    if (runtimeAsset && (await fileExists(runtimeAsset.path))) {
-      return {
-        ...runtimeAsset,
-        source: 'postgres',
-      };
-    }
-
-    const dbAsset = await persistence.reviewRecords.getSubmissionAssetByLegacyJobId(jobId);
-    if (dbAsset && (await fileExists(dbAsset.path))) {
-      return {
-        ...dbAsset,
-        source: 'postgres',
-      };
-    }
+  if (!persistence) {
+    throw new Error('DATABASE_URL is not set in environment');
   }
 
-  const job = await loadFileBackedJob(jobId);
-  if (!job?.inputs.submissionFilePath) {
-    return null;
+  const runtimeAsset = await persistence.jobs.getJobSubmissionAsset(jobId);
+  if (runtimeAsset && (await fileExists(runtimeAsset.path))) {
+    return {
+      ...runtimeAsset,
+      source: 'postgres',
+    };
   }
 
-  return {
-    path: job.inputs.submissionFilePath,
-    mimeType: job.inputs.submissionMimeType ?? null,
-    source: 'file',
-  };
+  const dbAsset = await persistence.reviewRecords.getSubmissionAssetByLegacyJobId(jobId);
+  if (dbAsset && (await fileExists(dbAsset.path))) {
+    return {
+      ...dbAsset,
+      source: 'postgres',
+    };
+  }
+
+  return null;
 };

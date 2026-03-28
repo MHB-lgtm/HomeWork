@@ -102,6 +102,7 @@ export interface LegacyExamRecord {
 export interface LegacyReviewSummaryRecord {
   jobId: string;
   displayName: string | null;
+  status?: string;
   createdAt: string | null;
   updatedAt: string | null;
   annotationCount: number;

@@ -14,7 +14,7 @@ export type ReviewContextV1 = {
   submissionMimeType: string | null;
   gradingMode: 'RUBRIC' | 'GENERAL' | null;
   gradingScope: 'QUESTION' | 'DOCUMENT' | null;
-  source: 'postgres' | 'file';
+  source: 'postgres';
   publication?: ReviewPublicationV1;
 };
 
