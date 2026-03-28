@@ -21,17 +21,20 @@
 - `packages/domain-workflow`
   - canonical domain entities, rules, and repository interfaces
 - `packages/local-job-store`
-  - active file-backed job/review/exam-index persistence
+  - legacy file-backed job/review/exam-index persistence used for fallback reads and unchanged exam-index consumers
 - `packages/local-course-store`
-  - active file-backed course/lecture/RAG persistence
+  - file-backed course/lecture/RAG persistence still used for RAG and other unchanged consumers
 
 ## Current architectural boundaries
 
-- The runtime is still primarily file-backed under `HG_DATA_DIR`.
-- On `feat/postgres-runtime-slice-1`, the reviews surface now has a narrow Postgres-backed slice when `DATABASE_URL` is configured:
+- The runtime is now hybrid: Wave 1 authoring/content surfaces and `W2A` new job/worker flows are DB-first, while RAG, exam-index helpers, asset bytes, and leftover legacy fallback reads still rely on `HG_DATA_DIR`.
+- On `feat/postgres-runtime-slice-1`, the reviews surface now has a Postgres-backed slice when `DATABASE_URL` is configured:
   - `GET /api/reviews/[jobId]`
   - `PUT` / `PATCH /api/reviews/[jobId]`
   - `GET /api/reviews`
+  - `GET /api/reviews/[jobId]/submission`
+  - `GET /api/reviews/[jobId]/submission-raw`
+  - `POST /api/reviews/[jobId]/publish`
 - The current workspace also makes these `apps/web` surfaces DB-first when `DATABASE_URL` is configured:
   - `GET` / `POST /api/exams`
   - `GET /api/exams/[examId]`
@@ -41,17 +44,30 @@
   - `GET` / `POST /api/courses`
   - `GET /api/courses/[courseId]`
   - `GET` / `POST /api/courses/[courseId]/lectures`
-- Exams, rubrics, exam-index metadata, course metadata, and lecture metadata are now DB-authoritative in `apps/web`.
-- Filesystem artifacts under `HG_DATA_DIR` remain compatibility exports for unchanged consumers such as `apps/web/src/app/api/jobs/**`, `apps/web/src/app/api/courses/[courseId]/rag/**`, and the legacy worker.
+- The current workspace also makes these job/worker surfaces DB-first in `W2A`:
+  - `POST /api/jobs`
+  - `GET /api/jobs/[id]`
+  - `GET /api/jobs/[id]/submission`
+  - `GET /api/jobs/[id]/submission-raw`
+  - `GET /api/health`
+  - `apps/worker/src/scripts/runLoop.ts`
+  - `apps/worker/src/scripts/runOnce.ts`
+  - runtime review writes for new DB-authored jobs
+- Exams, rubrics, exam-index metadata, course metadata, lecture metadata, new jobs, worker heartbeat, and new review writes are now DB-authoritative.
+- Filesystem artifacts under `HG_DATA_DIR` remain compatibility exports or legacy fallback only for unchanged consumers such as `apps/web/src/app/api/courses/[courseId]/rag/**`, exam-index/rubric readers in the worker, and pre-cutover leftover job/review reads during `W2A`.
+- `W2A` now also includes offline rollback tooling via `pnpm --filter @hg/postgres-store rollback:export-jobs`, which exports `PENDING` / `RUNNING` DB jobs back into the legacy queue shape only for rollback drills.
 - `@hg/domain-workflow` exists and is tested, but broad runtime adoption is still deferred.
 - Keep auth/session concerns separate from grading domain logic.
-- Do not change `apps/worker` unless a milestone explicitly includes worker work.
-- PostgreSQL + Prisma is still not the full runtime, but it is no longer review-only: the current workspace also contains the full Wave 1 authoring/content migration work.
+- PostgreSQL + Prisma is still not the full runtime, but it is no longer review-only: the current workspace contains the full Wave 1 authoring/content migration work plus `W2A` job/worker cutover work.
 
 ## Validation guidance
 
 - Run the narrowest relevant validation for the touched area.
 - Common repo commands:
+  - `pnpm --filter @hg/postgres-store build`
+  - `pnpm --filter @hg/postgres-store test`
+  - `pnpm --filter @hg/postgres-store prisma:validate`
+  - `pnpm --filter @hg/postgres-store prisma:generate`
   - `pnpm --filter @hg/domain-workflow build`
   - `pnpm --filter @hg/domain-workflow test`
   - `pnpm --filter @hg/local-job-store build`
