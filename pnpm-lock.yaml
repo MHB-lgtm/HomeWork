@@ -77,6 +77,9 @@ importers:
       '@hg/local-job-store':
         specifier: workspace:*
         version: link:../../packages/local-job-store
+      '@hg/postgres-store':
+        specifier: workspace:*
+        version: link:../../packages/postgres-store
       '@hg/shared-schemas':
         specifier: workspace:*
         version: link:../../packages/shared-schemas

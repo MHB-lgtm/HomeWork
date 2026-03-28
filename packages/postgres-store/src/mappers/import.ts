@@ -23,6 +23,7 @@ export const getSubmissionMaterialDomainId = (jobId: string): string =>
 export const getLectureMaterialDomainId = (courseId: string, lectureId: string): string =>
   `legacy-lecture-material:${courseId}:${lectureId}`;
 export const getSubmissionAssetKey = (jobId: string): string => `job-submission:${jobId}`;
+export const getExamAssetKey = (examId: string): string => `exam-asset:${examId}`;
 export const getLectureAssetKey = (courseId: string, lectureId: string): string =>
   `lecture-asset:${courseId}:${lectureId}`;
 

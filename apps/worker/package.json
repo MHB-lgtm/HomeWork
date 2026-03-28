@@ -18,6 +18,7 @@
     "@google/generative-ai": "^0.24.1",
     "@hg/local-course-store": "workspace:*",
     "@hg/local-job-store": "workspace:*",
+    "@hg/postgres-store": "workspace:*",
     "@hg/shared-schemas": "workspace:*",
     "dotenv": "^17.2.3",
     "pdf-lib": "^1.17.1",

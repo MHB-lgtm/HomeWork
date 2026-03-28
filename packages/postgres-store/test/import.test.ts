@@ -67,6 +67,9 @@ const pickSelectedFields = (row: Record<string, unknown>, select?: Record<string
   );
 };
 
+const matchesWhere = (row: Record<string, unknown>, where: Record<string, unknown>): boolean =>
+  Object.entries(where).every(([key, value]) => row[key] === value);
+
 const createFakeModel = (uniqueKey: string, label: string) => {
   const rows = new Map<string, Record<string, unknown>>();
   let sequence = 0;
@@ -88,6 +91,10 @@ const createFakeModel = (uniqueKey: string, label: string) => {
     rows,
     async findUnique(args: { where: Record<string, unknown>; select?: Record<string, boolean> }) {
       const row = getByWhere(args.where);
+      return row ? pickSelectedFields(row, args.select) : null;
+    },
+    async findFirst(args: { where: Record<string, unknown>; select?: Record<string, boolean> }) {
+      const row = [...rows.values()].find((candidate) => matchesWhere(candidate, args.where)) ?? null;
       return row ? pickSelectedFields(row, args.select) : null;
     },
     async create(args: { data: Record<string, unknown>; select?: Record<string, boolean> }) {
@@ -115,10 +122,91 @@ const createFakeModel = (uniqueKey: string, label: string) => {
   };
 };
 
+const createFakeCompositeModel = (
+  label: string,
+  buildKey: (value: Record<string, unknown>) => string | null
+) => {
+  const rows = new Map<string, Record<string, unknown>>();
+  let sequence = 0;
+
+  const getKey = (value: Record<string, unknown>) => buildKey(value);
+
+  const getByWhere = (where: Record<string, unknown>) => {
+    if (typeof where.id === 'string') {
+      return [...rows.values()].find((row) => row.id === where.id) ?? null;
+    }
+
+    const compositeKey = getKey(where);
+    if (!compositeKey) {
+      return null;
+    }
+
+    return rows.get(compositeKey) ?? null;
+  };
+
+  return {
+    rows,
+    async findUnique(args: { where: Record<string, unknown>; select?: Record<string, boolean> }) {
+      const row = getByWhere(args.where);
+      return row ? pickSelectedFields(row, args.select) : null;
+    },
+    async create(args: { data: Record<string, unknown>; select?: Record<string, boolean> }) {
+      const row = {
+        id: `${label}-row-${++sequence}`,
+        ...args.data,
+      };
+      const key = getKey(row);
+      if (!key) {
+        throw new Error(`Invalid composite key for ${label}`);
+      }
+      rows.set(key, row);
+      return pickSelectedFields(row, args.select);
+    },
+    async update(args: {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+      select?: Record<string, boolean>;
+    }) {
+      const current = getByWhere(args.where);
+      if (!current) {
+        throw new Error(`${label} row not found`);
+      }
+
+      const next = { ...current, ...args.data };
+      const key = getKey(next);
+      if (!key) {
+        throw new Error(`Invalid composite key for ${label}`);
+      }
+      rows.set(key, next);
+      return pickSelectedFields(next, args.select);
+    },
+  };
+};
+
 const createFakePrisma = () => {
   const course = createFakeModel('domainId', 'course');
   const storedAsset = createFakeModel('assetKey', 'asset');
   const courseMaterial = createFakeModel('domainId', 'material');
+  const exam = createFakeModel('domainId', 'exam');
+  const rubric = createFakeCompositeModel('rubric', (value) => {
+    if (
+      value.examRowId_questionId &&
+      typeof value.examRowId_questionId === 'object' &&
+      value.examRowId_questionId !== null
+    ) {
+      const composite = value.examRowId_questionId as Record<string, unknown>;
+      if (typeof composite.examRowId === 'string' && typeof composite.questionId === 'string') {
+        return `${composite.examRowId}:${composite.questionId}`;
+      }
+    }
+
+    if (typeof value.examRowId === 'string' && typeof value.questionId === 'string') {
+      return `${value.examRowId}:${value.questionId}`;
+    }
+
+    return null;
+  });
+  const examIndex = createFakeModel('examRowId', 'exam-index');
   const submission = createFakeModel('domainId', 'submission');
   const review = createFakeModel('domainId', 'review');
   const reviewVersion = createFakeModel('domainId', 'review-version');
@@ -129,6 +217,9 @@ const createFakePrisma = () => {
     course,
     storedAsset,
     courseMaterial,
+    exam,
+    rubric,
+    examIndex,
     submission,
     review,
     reviewVersion,
@@ -151,6 +242,9 @@ const createFakePrisma = () => {
       course: course.rows,
       storedAsset: storedAsset.rows,
       courseMaterial: courseMaterial.rows,
+      exam: exam.rows,
+      rubric: rubric.rows,
+      examIndex: examIndex.rows,
       submission: submission.rows,
       review: review.rows,
       reviewVersion: reviewVersion.rows,
@@ -176,6 +270,43 @@ const createImportFixture = async (): Promise<string> => {
     title: 'Course 1',
     createdAt: '2026-03-26T10:00:00.000Z',
     updatedAt: '2026-03-26T10:05:00.000Z',
+  });
+
+  await writeJson('exams/exam-1/exam.json', {
+    examId: 'exam-1',
+    title: 'Midterm 1',
+    createdAt: '2026-03-26T09:00:00.000Z',
+    updatedAt: '2026-03-26T09:05:00.000Z',
+    examFilePath: 'exams/exam-1/assets/exam.pdf',
+  });
+  await writeJson('exams/exam-1/examIndex.json', {
+    version: '1.0.0',
+    examId: 'exam-1',
+    generatedAt: '2026-03-26T09:10:00.000Z',
+    updatedAt: '2026-03-26T09:10:00.000Z',
+    status: 'proposed',
+    questions: [
+      {
+        id: 'q1',
+        order: 1,
+        displayLabel: 'Question 1',
+        aliases: ['Q1', '1)'],
+        promptText: 'Solve the equation.',
+      },
+    ],
+  });
+  await writeJson('rubrics/exam-1/q-1.json', {
+    examId: 'exam-1',
+    questionId: 'q-1',
+    title: 'Rubric for Q1',
+    criteria: [
+      {
+        id: 'criterion-1',
+        label: 'Correct setup',
+        kind: 'points',
+        maxPoints: 10,
+      },
+    ],
   });
 
   await writeJson('jobs/done/job-1.json', {
@@ -208,6 +339,8 @@ const createImportFixture = async (): Promise<string> => {
 
   await fs.mkdir(path.join(tempDir, 'uploads'), { recursive: true });
   await fs.writeFile(path.join(tempDir, 'uploads', 'job-1.pdf'), 'fixture', 'utf-8');
+  await fs.mkdir(path.join(tempDir, 'exams', 'exam-1', 'assets'), { recursive: true });
+  await fs.writeFile(path.join(tempDir, 'exams', 'exam-1', 'assets', 'exam.pdf'), 'exam', 'utf-8');
 
   return tempDir;
 };
@@ -259,6 +392,9 @@ describe('importFileBackedData', () => {
       dryRun: true,
       importedCourses: 1,
       importedLectureAssets: 0,
+      importedExams: 1,
+      importedRubrics: 1,
+      importedExamIndexes: 1,
       importedSubmissions: 1,
       importedReviews: 1,
       importedPublishedResults: 1,
@@ -273,6 +409,9 @@ describe('importFileBackedData', () => {
     expect(summary.warnings).toContain('Skipping review without matching job: missing-job');
 
     expect(stores.course.size).toBe(0);
+    expect(stores.exam.size).toBe(0);
+    expect(stores.rubric.size).toBe(0);
+    expect(stores.examIndex.size).toBe(0);
     expect(stores.submission.size).toBe(0);
     expect(stores.review.size).toBe(0);
     expect(stores.publishedResult.size).toBe(0);
@@ -294,6 +433,9 @@ describe('importFileBackedData', () => {
     expect(firstRun).toMatchObject({
       dryRun: false,
       importedCourses: 1,
+      importedExams: 1,
+      importedRubrics: 1,
+      importedExamIndexes: 1,
       importedSubmissions: 1,
       importedReviews: 1,
       importedPublishedResults: 1,
@@ -303,6 +445,9 @@ describe('importFileBackedData', () => {
     expect(secondRun).toMatchObject({
       dryRun: false,
       importedCourses: 1,
+      importedExams: 1,
+      importedRubrics: 1,
+      importedExamIndexes: 1,
       importedSubmissions: 1,
       importedReviews: 1,
       importedPublishedResults: 1,
@@ -315,8 +460,11 @@ describe('importFileBackedData', () => {
     });
 
     expect(stores.course.size).toBe(2);
-    expect(stores.storedAsset.size).toBe(1);
+    expect(stores.storedAsset.size).toBe(2);
     expect(stores.courseMaterial.size).toBe(1);
+    expect(stores.exam.size).toBe(1);
+    expect(stores.rubric.size).toBe(1);
+    expect(stores.examIndex.size).toBe(1);
     expect(stores.submission.size).toBe(1);
     expect(stores.review.size).toBe(1);
     expect(stores.reviewVersion.size).toBe(1);

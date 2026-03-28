@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as path from 'path';
-import { loadExamIndex, saveExamIndex } from '@hg/local-job-store';
+import { materializeExamIndexCompatibility } from '@hg/postgres-store';
 import { ExamIndexSchema, ExamIndex } from '@hg/shared-schemas';
+import { getServerPersistence } from '../../../../../lib/server/persistence';
 
 export const runtime = 'nodejs';
 
@@ -14,6 +15,14 @@ export async function GET(
   { params }: { params: Promise<{ examId: string }> }
 ) {
   try {
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
+        { status: 500 }
+      );
+    }
+
     const dataDir = process.env.HG_DATA_DIR;
     if (!dataDir) {
       return NextResponse.json(
@@ -31,7 +40,7 @@ export async function GET(
       );
     }
 
-    const examIndex = await loadExamIndex(examId);
+    const examIndex = await persistence.examIndexes.getExamIndex(examId);
 
     // Return null if not found (consistent behavior)
     return NextResponse.json({ ok: true, data: examIndex });
@@ -53,6 +62,14 @@ export async function PUT(
   { params }: { params: Promise<{ examId: string }> }
 ) {
   try {
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
+        { status: 500 }
+      );
+    }
+
     const dataDir = process.env.HG_DATA_DIR;
     if (!dataDir) {
       return NextResponse.json(
@@ -69,6 +86,8 @@ export async function PUT(
         { status: 400 }
       );
     }
+
+    const DATA_DIR = path.resolve(dataDir);
 
     // Parse request body
     let body: unknown;
@@ -102,7 +121,7 @@ export async function PUT(
     }
 
     // Check if this is a new index (for setting generatedAt)
-    const existingIndex = await loadExamIndex(examId);
+    const existingIndex = await persistence.examIndexes.getExamIndex(examId);
     const now = new Date().toISOString();
 
     // Set updatedAt to now (ignore client value)
@@ -113,8 +132,11 @@ export async function PUT(
       examIndex.generatedAt = now;
     }
 
-    // Save atomically
-    await saveExamIndex(examIndex);
+    const savedExamIndex = await persistence.examIndexes.saveExamIndex(examIndex);
+    await materializeExamIndexCompatibility({
+      dataDir: DATA_DIR,
+      examIndex: savedExamIndex,
+    });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

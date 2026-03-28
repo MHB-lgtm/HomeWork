@@ -97,6 +97,11 @@ enum GradebookEntryStatus {
   EFFECTIVE
 }
 
+enum ExamIndexStatus {
+  PROPOSED
+  CONFIRMED
+}
+
 model User {
   id                String             @id @default(uuid()) @db.Uuid
   normalizedEmail   String?            @unique
@@ -171,6 +176,45 @@ model StoredAsset {
   metadata      Json?
   createdAt     DateTime                @default(now()) @db.Timestamptz(6)
   materials     CourseMaterial[]
+  exams         Exam[]
+}
+
+model Exam {
+  id         String      @id @default(uuid()) @db.Uuid
+  domainId   String      @unique
+  title      String
+  assetId    String      @unique @db.Uuid
+  createdAt  DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(6)
+  asset      StoredAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  rubrics    Rubric[]
+  examIndex  ExamIndex?
+}
+
+model Rubric {
+  id              String   @id @default(uuid()) @db.Uuid
+  examRowId       String   @db.Uuid
+  questionId      String
+  title           String?
+  generalGuidance String?
+  criteriaJson    Json
+  rawPayload      Json
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+  exam            Exam     @relation(fields: [examRowId], references: [id], onDelete: Cascade)
+
+  @@unique([examRowId, questionId])
+  @@index([examRowId, updatedAt(sort: Desc)])
+}
+
+model ExamIndex {
+  id         String          @id @default(uuid()) @db.Uuid
+  examRowId  String          @unique @db.Uuid
+  status     ExamIndexStatus
+  generatedAt DateTime       @db.Timestamptz(6)
+  updatedAt  DateTime        @db.Timestamptz(6)
+  payloadJson Json
+  exam       Exam            @relation(fields: [examRowId], references: [id], onDelete: Cascade)
 }
 
 model CourseMaterial {

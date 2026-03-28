@@ -1,13 +1,21 @@
 import type { Dirent } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { PrismaClient } from '@prisma/client';
-import { CourseSchema, LectureSchema, ReviewRecordSchema } from '@hg/shared-schemas';
+import type { ExamIndexStatus, PrismaClient } from '@prisma/client';
+import {
+  CourseSchema,
+  ExamIndexSchema,
+  LectureSchema,
+  ReviewRecordSchema,
+  RubricSpecSchema,
+} from '@hg/shared-schemas';
 import { ImportFileBackedOptions, ImportFileBackedSummary, LegacyJobRecord } from './types';
+import { materializeExamCompatibility, materializeExamIndexCompatibility, materializeRubricCompatibility } from './compat/file-materialization';
 import {
   deriveReviewStateFromLegacy,
   deriveSubmissionStateFromLegacy,
   getCourseDomainIdForLegacyJob,
+  getExamAssetKey,
   getGradebookEntryDomainId,
   getImportedReviewVersionDomainId,
   getLectureAssetKey,
@@ -41,11 +49,13 @@ import {
   toPrismaStoredAssetStorageKind,
   toPrismaSubmissionState,
 } from './mappers/domain';
+import { LegacyExamRecordSchema } from './schemas/exam';
 
 type ImportLogger = Pick<Console, 'log' | 'warn'>;
 
 type PlaceholderCourseRef = { id: string };
 type CourseRowRef = { id: string };
+type ExamRowRef = { id: string };
 type CourseMaterialRef = { id: string };
 type SubmissionRef = { id: string; currentPublishedResultId?: string | null };
 
@@ -75,11 +85,15 @@ const readDirEntries = async (dirPath: string): Promise<Dirent[]> => {
 };
 
 const createPreviewId = (kind: string, key: string): string => `dry-run:${kind}:${key}`;
+const isPreviewId = (value: string): boolean => value.startsWith('dry-run:');
 
 const createSummary = (dryRun: boolean): ImportFileBackedSummary => ({
   dryRun,
   importedCourses: 0,
   importedLectureAssets: 0,
+  importedExams: 0,
+  importedRubrics: 0,
+  importedExamIndexes: 0,
   importedSubmissions: 0,
   importedReviews: 0,
   importedPublishedResults: 0,
@@ -278,6 +292,7 @@ export const importFileBackedData = async (
   const logger = options.logger ?? console;
   const summary = createSummary(dryRun);
   const placeholderCourse = await ensurePlaceholderCourse(prisma, dryRun);
+  const examsByDomainId = new Map<string, ExamRowRef>();
 
   const courseEntries = await readDirEntries(path.join(dataDir, 'courses'));
   for (const courseEntry of courseEntries) {
@@ -422,6 +437,255 @@ export const importFileBackedData = async (
         'course_import_failed',
         `Failed to import course ${courseEntry.name}: ${message}`
       );
+    }
+  }
+
+  const examEntries = await readDirEntries(path.join(dataDir, 'exams'));
+  for (const examEntry of examEntries) {
+    if (!examEntry.isDirectory()) {
+      continue;
+    }
+
+    try {
+      const rawExam = await readJsonFile(path.join(dataDir, 'exams', examEntry.name, 'exam.json'));
+      const parsedExam = LegacyExamRecordSchema.safeParse(rawExam);
+      if (!parsedExam.success) {
+        recordSkipped(summary, logger, 'invalid_exam', `Skipping invalid exam ${examEntry.name}`);
+        continue;
+      }
+
+      const exam = parsedExam.data;
+      const absoluteAssetPath = resolveStoredPath(dataDir, exam.examFilePath);
+      try {
+        await fs.access(absoluteAssetPath);
+      } catch {
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_exam_asset',
+          `Skipping exam with missing asset: ${exam.examId}`
+        );
+        continue;
+      }
+
+      const existingExam = await prisma.exam.findUnique({
+        where: { domainId: exam.examId },
+        select: { id: true },
+      });
+
+      const asset = await upsertStoredAsset(prisma, dryRun, {
+        assetKey: getExamAssetKey(exam.examId),
+        logicalBucket: 'exams',
+        absolutePath: absoluteAssetPath,
+        originalName: path.basename(absoluteAssetPath),
+      });
+
+      const examRow: ExamRowRef =
+        dryRun
+          ? existingExam ?? { id: createPreviewId('exam', exam.examId) }
+          : existingExam
+            ? await prisma.exam.update({
+                where: { id: existingExam.id },
+                data: {
+                  title: exam.title,
+                  assetId: asset.id,
+                  updatedAt: toDate(exam.updatedAt),
+                },
+                select: { id: true },
+              })
+            : await prisma.exam.create({
+                data: {
+                  domainId: exam.examId,
+                  title: exam.title,
+                  assetId: asset.id,
+                  createdAt: toDate(exam.createdAt),
+                  updatedAt: toDate(exam.updatedAt),
+                },
+                select: { id: true },
+              });
+
+      examsByDomainId.set(exam.examId, examRow);
+      summary.importedExams += 1;
+      countUpdated(summary, Boolean(existingExam));
+
+      if (!dryRun) {
+        await materializeExamCompatibility({
+          dataDir,
+          exam,
+          sourceAssetPath: absoluteAssetPath,
+        });
+      }
+
+      const rawExamIndex = await readJsonFile(
+        path.join(dataDir, 'exams', examEntry.name, 'examIndex.json')
+      );
+      if (rawExamIndex) {
+        const parsedExamIndex = ExamIndexSchema.safeParse(rawExamIndex);
+        if (!parsedExamIndex.success) {
+          recordSkipped(
+            summary,
+            logger,
+            'invalid_exam_index',
+            `Skipping invalid exam index ${exam.examId}`
+          );
+        } else {
+          const examIndex = parsedExamIndex.data;
+          const existingExamIndex = dryRun
+            ? existingExam
+              ? await prisma.examIndex.findUnique({
+                  where: { examRowId: examRow.id },
+                  select: { id: true },
+                })
+              : null
+            : await prisma.examIndex.findUnique({
+                where: { examRowId: examRow.id },
+                select: { id: true },
+              });
+
+          if (!dryRun) {
+            const examIndexData = {
+              examRowId: examRow.id,
+              status:
+                (examIndex.status === 'confirmed' ? 'CONFIRMED' : 'PROPOSED') as ExamIndexStatus,
+              generatedAt: toDate(examIndex.generatedAt),
+              updatedAt: toDate(examIndex.updatedAt),
+              payloadJson: asJsonValue(examIndex),
+            };
+
+            if (existingExamIndex) {
+              await prisma.examIndex.update({
+                where: { id: existingExamIndex.id },
+                data: examIndexData,
+              });
+            } else {
+              await prisma.examIndex.create({
+                data: examIndexData,
+              });
+            }
+
+            await materializeExamIndexCompatibility({
+              dataDir,
+              examIndex,
+            });
+          }
+
+          summary.importedExamIndexes += 1;
+          countUpdated(summary, Boolean(existingExamIndex));
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      recordFailed(
+        summary,
+        logger,
+        'exam_import_failed',
+        `Failed to import exam ${examEntry.name}: ${message}`
+      );
+    }
+  }
+
+  const rubricExamEntries = await readDirEntries(path.join(dataDir, 'rubrics'));
+  for (const rubricExamEntry of rubricExamEntries) {
+    if (!rubricExamEntry.isDirectory()) {
+      continue;
+    }
+
+    const examId = rubricExamEntry.name;
+    const examRow =
+      examsByDomainId.get(examId) ??
+      (await prisma.exam.findUnique({
+        where: { domainId: examId },
+        select: { id: true },
+      }));
+
+    if (!examRow) {
+      const rubricFiles = await readDirEntries(path.join(dataDir, 'rubrics', examId));
+      for (const rubricFile of rubricFiles) {
+        if (!rubricFile.isFile() || !rubricFile.name.endsWith('.json')) {
+          continue;
+        }
+
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_exam_for_rubric',
+          `Skipping rubric without matching exam: ${examId}/${rubricFile.name.replace(/\.json$/, '')}`
+        );
+      }
+      continue;
+    }
+
+    const rubricFiles = await readDirEntries(path.join(dataDir, 'rubrics', examId));
+    for (const rubricFile of rubricFiles) {
+      if (!rubricFile.isFile() || !rubricFile.name.endsWith('.json')) {
+        continue;
+      }
+
+      try {
+        const rawRubric = await readJsonFile(path.join(dataDir, 'rubrics', examId, rubricFile.name));
+        const parsedRubric = RubricSpecSchema.safeParse(rawRubric);
+        if (!parsedRubric.success) {
+          recordSkipped(
+            summary,
+            logger,
+            'invalid_rubric',
+            `Skipping invalid rubric ${examId}/${rubricFile.name.replace(/\.json$/, '')}`
+          );
+          continue;
+        }
+
+        const rubric = parsedRubric.data;
+        const existingRubric =
+          dryRun && isPreviewId(examRow.id)
+            ? null
+            : await prisma.rubric.findUnique({
+                where: {
+                  examRowId_questionId: {
+                    examRowId: examRow.id,
+                    questionId: rubric.questionId,
+                  },
+                },
+                select: { id: true },
+              });
+
+        if (!dryRun) {
+          const rubricData = {
+            examRowId: examRow.id,
+            questionId: rubric.questionId,
+            title: rubric.title ?? null,
+            generalGuidance: rubric.generalGuidance ?? null,
+            criteriaJson: asJsonValue(rubric.criteria),
+            rawPayload: asJsonValue(rubric),
+          };
+
+          if (existingRubric) {
+            await prisma.rubric.update({
+              where: { id: existingRubric.id },
+              data: rubricData,
+            });
+          } else {
+            await prisma.rubric.create({
+              data: rubricData,
+            });
+          }
+
+          await materializeRubricCompatibility({
+            dataDir,
+            rubric,
+          });
+        }
+
+        summary.importedRubrics += 1;
+        countUpdated(summary, Boolean(existingRubric));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        recordFailed(
+          summary,
+          logger,
+          'rubric_import_failed',
+          `Failed to import rubric ${examId}/${rubricFile.name.replace(/\.json$/, '')}: ${message}`
+        );
+      }
     }
   }
 
@@ -719,6 +983,22 @@ export const importFileBackedData = async (
             return;
           }
 
+          const currentEffectivePublishedResult = await tx.publishedResult.findFirst({
+            where: {
+              submissionId: submission.id,
+              status: toPrismaPublishedResultStatus('effective'),
+            },
+            select: { id: true },
+          });
+
+          const importedPublishedResultShouldBeEffective =
+            !currentEffectivePublishedResult ||
+            currentEffectivePublishedResult.id === existingPublishedResult?.id;
+
+          const importedPublishedResultStatus = toPrismaPublishedResultStatus(
+            importedPublishedResultShouldBeEffective ? 'effective' : 'superseded'
+          );
+
           const publishedResult = existingPublishedResult
             ? await tx.publishedResult.update({
                 where: { id: existingPublishedResult.id },
@@ -728,7 +1008,7 @@ export const importFileBackedData = async (
                   reviewId: reviewRow.id,
                   sourceReviewVersionId: importedVersion.id,
                   publishedAt: toDate(job.updatedAt ?? reviewRecord.updatedAt),
-                  status: toPrismaPublishedResultStatus('effective'),
+                  status: importedPublishedResultStatus,
                   finalScore: toPrismaDecimal(envelope.score),
                   maxScore: toPrismaDecimal(envelope.maxScore),
                   summary: envelope.summary ?? 'Imported legacy result',
@@ -746,7 +1026,7 @@ export const importFileBackedData = async (
                   reviewId: reviewRow.id,
                   sourceReviewVersionId: importedVersion.id,
                   publishedAt: toDate(job.updatedAt ?? reviewRecord.updatedAt),
-                  status: toPrismaPublishedResultStatus('effective'),
+                  status: importedPublishedResultStatus,
                   finalScore: toPrismaDecimal(envelope.score),
                   maxScore: toPrismaDecimal(envelope.maxScore),
                   summary: envelope.summary ?? 'Imported legacy result',
@@ -754,6 +1034,10 @@ export const importFileBackedData = async (
                 },
                 select: { id: true },
               });
+
+          if (!importedPublishedResultShouldBeEffective) {
+            return;
+          }
 
           const existingGradebookEntry = await tx.gradebookEntry.findUnique({
             where: { domainId: getGradebookEntryDomainId(job.id) },
@@ -797,6 +1081,9 @@ export const importFileBackedData = async (
               data: { currentPublishedResultId: publishedResult.id },
             });
           }
+        }, {
+          maxWait: 10_000,
+          timeout: 30_000,
         });
       }
 

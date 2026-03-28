@@ -2,7 +2,12 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as dotenv from 'dotenv';
 import { GeminiService } from '../services/geminiService';
-import { loadExamIndex, saveExamIndex } from '@hg/local-job-store';
+import {
+  PrismaExamIndexStore,
+  disconnectPrismaClient,
+  getPrismaClient,
+  materializeExamIndexCompatibility,
+} from '@hg/postgres-store';
 import { ExamIndexSchema, ExamIndex } from '@hg/shared-schemas';
 
 // Load environment variables
@@ -135,64 +140,46 @@ async function loadExamMetadata(examId: string): Promise<ExamRecord> {
 
 async function main() {
   const { examId, force } = parseArgs();
-
-  // Check if examIndex already exists (handle backward compatibility for missing promptText)
-  let existingIndex: ExamIndex | null = null;
-  let existingIndexRaw: any = null;
-  try {
-    existingIndex = await loadExamIndex(examId);
-  } catch (error) {
-    // If validation fails, try to load raw JSON to check if it's missing promptText
-    const dataDir = getDataDir();
-    const examIndexPath = path.join(dataDir, 'exams', examId, 'examIndex.json');
-    try {
-      const content = await fs.readFile(examIndexPath, 'utf-8');
-      existingIndexRaw = JSON.parse(content);
-      // Check if it's missing promptText (backward compatibility)
-      const missingPromptText = existingIndexRaw.questions?.some((q: any) => !q.promptText);
-      if (missingPromptText) {
-        if (existingIndexRaw.status === 'proposed') {
-          console.log(`[exam-index] Existing examIndex for ${examId} is missing promptText. Regenerating...`);
-        } else if (existingIndexRaw.status === 'confirmed' && !force) {
-          console.error(`[exam-index] Exam index for ${examId} is missing promptText and status is "confirmed". Use --force to regenerate.`);
-          process.exit(1);
-        }
-        // Will regenerate below
-      } else {
-        // Validation failed for other reason, rethrow
-        throw error;
-      }
-    } catch {
-      // File doesn't exist or other error, continue
-    }
-  }
-
-  if (existingIndex) {
-    if (existingIndex.status === 'confirmed' && !force) {
-      console.error(`[exam-index] Exam index for ${examId} already exists with status "confirmed". Use --force to overwrite.`);
-      process.exit(1);
-    }
-  }
-
-  // Load exam metadata
-  const examMetadata = await loadExamMetadata(examId);
   const dataDir = getDataDir();
-  const examFilePath = path.join(dataDir, examMetadata.examFilePath);
-
-  // Check if exam file exists
-  try {
-    await fs.access(examFilePath);
-  } catch {
-    throw new Error(`Exam file not found: ${examFilePath}`);
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is not set in environment variables');
   }
 
-  // Read exam file
-  const examBuffer = await fs.readFile(examFilePath);
-  const examMimeType = inferMimeType(examFilePath);
-  const examBase64 = examBuffer.toString('base64');
+  const prisma = getPrismaClient();
+  const examIndexStore = new PrismaExamIndexStore(prisma);
 
-  // Build prompt
-  const prompt = `You are analyzing a lecturer's exam document to identify all top-level questions.
+  try {
+    let existingIndex: ExamIndex | null = null;
+    try {
+      existingIndex = await examIndexStore.getExamIndex(examId);
+    } catch (error) {
+      console.warn(
+        `[exam-index] Failed to load existing Postgres exam index for ${examId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    if (existingIndex?.status === 'confirmed' && !force) {
+      throw new Error(
+        `Exam index for ${examId} already exists with status "confirmed". Use --force to overwrite.`
+      );
+    }
+
+    const examMetadata = await loadExamMetadata(examId);
+    const examFilePath = path.join(dataDir, examMetadata.examFilePath);
+
+    try {
+      await fs.access(examFilePath);
+    } catch {
+      throw new Error(`Exam file not found: ${examFilePath}`);
+    }
+
+    const examBuffer = await fs.readFile(examFilePath);
+    const examMimeType = inferMimeType(examFilePath);
+    const examBase64 = examBuffer.toString('base64');
+
+    const prompt = `You are analyzing a lecturer's exam document to identify all top-level questions.
 
 TASK: Determine how many top-level questions exist in the attached exam document and produce a structured list.
 
@@ -235,68 +222,41 @@ JSON format (strict):
 
 Return the JSON now:`;
 
-  // Call Gemini
-  const geminiService = new GeminiService();
-  const parts = [
-    { text: prompt },
-    {
-      inlineData: {
-        data: examBase64,
-        mimeType: examMimeType,
+    const geminiService = new GeminiService();
+    const parts = [
+      { text: prompt },
+      {
+        inlineData: {
+          data: examBase64,
+          mimeType: examMimeType,
+        },
       },
-    },
-  ];
+    ];
 
-  let rawOutput: string;
-  let examIndex: ExamIndex | null = null;
+    let rawOutput = '';
+    let examIndex: ExamIndex | null = null;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      if (attempt > 0) {
-        console.log(`[exam-index] Retrying exam index generation for ${examId} (attempt ${attempt + 1})`);
-      }
-
-      // Generate response with temperature=0 for deterministic output
-      rawOutput = await geminiService.generateFromParts(parts, { temperature: 0 });
-
-      // Parse JSON robustly
-      let parsed: unknown;
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
+        if (attempt > 0) {
+          console.log(`[exam-index] Retrying exam index generation for ${examId} (attempt ${attempt + 1})`);
+        }
+
+        rawOutput = await geminiService.generateFromParts(parts, { temperature: 0 });
+
         const jsonText = extractJsonFromText(rawOutput);
-        parsed = JSON.parse(jsonText);
-      } catch (error) {
-        if (attempt === 0) {
-          // Retry on JSON parse failure
-          continue;
-        }
-        const preview = rawOutput.length > 200 ? rawOutput.substring(0, 200) : rawOutput;
-        throw new Error(`Failed to parse JSON from Gemini response. First 200 chars: ${preview}`);
-      }
+        const parsed = JSON.parse(jsonText) as Record<string, unknown>;
+        parsed.examId = examId;
 
-      // Validate against ExamIndexSchema
-      try {
-        // Ensure parsed is an object
-        if (typeof parsed !== 'object' || parsed === null) {
-          throw new Error('Response is not an object');
-        }
-
-        const parsedObj = parsed as Record<string, unknown>;
-
-        // Ensure examId matches
-        parsedObj.examId = examId;
-
-        // Add required fields
         const now = new Date().toISOString();
-        const examIndexData = {
+        const candidateExamIndex = ExamIndexSchema.parse({
           version: '1.0.0' as const,
           examId,
           generatedAt: existingIndex?.generatedAt || now,
           updatedAt: now,
           status: 'proposed' as const,
-          questions: parsedObj.questions || [],
-        };
-
-        const candidateExamIndex = ExamIndexSchema.parse(examIndexData);
+          questions: parsed.questions || [],
+        });
 
         const requiresEnglishRepair = hasNonEnglishQuestionText(
           candidateExamIndex.questions.map((question) => ({
@@ -308,43 +268,47 @@ Return the JSON now:`;
 
         if (requiresEnglishRepair) {
           if (attempt === 0) {
-            const englishRepairPrompt = `${prompt}\n\nIMPORTANT: The previous response included non-English text. Rewrite ALL text fields in English only:\n- displayLabel must be English\n- aliases must be English\n- promptText must be English\n- Preserve question meaning and order\n- Return ONLY valid JSON.`;
-            parts[0] = { text: englishRepairPrompt };
+            parts[0] = {
+              text: `${prompt}\n\nIMPORTANT: The previous response included non-English text. Rewrite ALL text fields in English only:\n- displayLabel must be English\n- aliases must be English\n- promptText must be English\n- Preserve question meaning and order\n- Return ONLY valid JSON.`,
+            };
             continue;
           }
+
           throw new Error('Gemini response still contains non-English text in question metadata');
         }
 
         examIndex = candidateExamIndex;
         break;
       } catch (error) {
-        const validationError = error instanceof Error ? error.message : String(error);
         if (attempt === 0) {
-          // Retry with repair prompt
-          const repairPrompt = `${prompt}\n\nIMPORTANT: The previous response was invalid. Please ensure:\n- questions array has at least 1 item\n- Each question has: id (q1..qN), order (1..N contiguous), displayLabel (non-empty English string), aliases (array of English strings), promptText (non-empty English string, max 800 chars)\n- promptText must contain the question statement/instructions in English\n- All ids are unique\n- All order values are unique and contiguous starting from 1\n- Return ONLY valid JSON.`;
-          parts[0] = { text: repairPrompt };
+          parts[0] = {
+            text: `${prompt}\n\nIMPORTANT: The previous response was invalid. Please ensure:\n- questions array has at least 1 item\n- Each question has: id (q1..qN), order (1..N contiguous), displayLabel (non-empty English string), aliases (array of English strings), promptText (non-empty English string, max 800 chars)\n- promptText must contain the question statement/instructions in English\n- All ids are unique\n- All order values are unique and contiguous starting from 1\n- Return ONLY valid JSON.`,
+          };
           continue;
         }
-        const preview = rawOutput.length > 200 ? rawOutput.substring(0, 200) : rawOutput;
-        throw new Error(`ExamIndex validation failed: ${validationError}. First 200 chars: ${preview}`);
-      }
-    } catch (error) {
-      if (attempt === 1) {
+
         const errorMessage = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to generate exam index: ${errorMessage}`);
+        const preview = rawOutput.length > 200 ? rawOutput.substring(0, 200) : rawOutput;
+        throw new Error(`Failed to generate exam index: ${errorMessage}. First 200 chars: ${preview}`);
       }
-      continue;
     }
+
+    if (!examIndex) {
+      throw new Error('Failed to generate exam index after retries');
+    }
+
+    const savedExamIndex = await examIndexStore.saveExamIndex(examIndex);
+    await materializeExamIndexCompatibility({
+      dataDir,
+      examIndex: savedExamIndex,
+    });
+
+    console.log(
+      `[exam-index] Generated proposed examIndex for ${examId}: ${examIndex.questions.length} question${examIndex.questions.length !== 1 ? 's' : ''}`
+    );
+  } finally {
+    await disconnectPrismaClient();
   }
-
-  if (!examIndex) {
-    throw new Error('Failed to generate exam index after retries');
-  }
-
-  // Save exam index
-  await saveExamIndex(examIndex);
-
-  console.log(`[exam-index] Generated proposed examIndex for ${examId}: ${examIndex.questions.length} question${examIndex.questions.length !== 1 ? 's' : ''}`);
 }
 
 main().catch((error) => {

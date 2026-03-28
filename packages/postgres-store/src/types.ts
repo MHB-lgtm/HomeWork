@@ -25,6 +25,14 @@ export interface ImportFileBackedOptions {
   logger?: Pick<Console, 'log' | 'warn'>;
 }
 
+export interface LegacyExamRecord {
+  examId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  examFilePath: string;
+}
+
 export interface LegacyReviewSummaryRecord {
   jobId: string;
   displayName: string | null;
@@ -69,6 +77,9 @@ export interface ImportFileBackedSummary {
   dryRun: boolean;
   importedCourses: number;
   importedLectureAssets: number;
+  importedExams: number;
+  importedRubrics: number;
+  importedExamIndexes: number;
   importedSubmissions: number;
   importedReviews: number;
   importedPublishedResults: number;

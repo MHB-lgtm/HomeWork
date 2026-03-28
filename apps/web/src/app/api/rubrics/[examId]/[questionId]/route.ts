@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { getServerPersistence } from '../../../../../lib/server/persistence';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +12,14 @@ export async function GET(
   { params }: { params: Promise<{ examId: string; questionId: string }> }
 ) {
   try {
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
+      );
+    }
+
     const dataDir = process.env.HG_DATA_DIR;
     if (!dataDir) {
       return NextResponse.json(
@@ -30,25 +37,16 @@ export async function GET(
       );
     }
 
-    const DATA_DIR = path.resolve(dataDir);
-    const rubricFilePath = path.join(DATA_DIR, 'rubrics', examId, `${questionId}.json`);
-
-    try {
-      const content = await fs.readFile(rubricFilePath, 'utf-8');
-      const rubric = JSON.parse(content);
-      return NextResponse.json(rubric);
-    } catch (error) {
-      // Check if file doesn't exist
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return NextResponse.json(
-          { error: 'Rubric not found' },
-          { status: 404 }
-        );
-      }
-      throw error;
+    const rubric = await persistence.rubrics.getRubric(examId, questionId);
+    if (!rubric) {
+      return NextResponse.json(
+        { error: 'Rubric not found' },
+        { status: 404 }
+      );
     }
+
+    return NextResponse.json(rubric);
   } catch (error) {
-    console.error('Error fetching rubric:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       { error: `Failed to fetch rubric: ${errorMessage}` },
