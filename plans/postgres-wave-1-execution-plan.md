@@ -1,190 +1,130 @@
 # Postgres Wave 1 Execution Plan
 
-Status: approved execution plan for Wave 1 implementation
-Last updated: 2026-03-27
+Status: implemented Wave 1 execution record
+Last updated: 2026-03-28
 
 ## Summary
 
-Full Wave 1 is too large to finish safely in one pass. Repo inspection shows a real boundary between:
+Wave 1 is now split and implemented as:
 
-- grading-input content that directly blocks Wave 2,
-- course and lecture content that remains coupled to unchanged RAG runtime.
-
-Wave 1 is therefore split into exactly two parts:
-
-- `W1A`: exams, rubrics, and exam-index metadata registration
+- `W1A`: exams, rubrics, and exam-index metadata
 - `W1B`: courses and lectures
 
-`W1A` is the next implementation target because `/api/jobs` and the legacy worker still depend directly on exam metadata, rubric files, and `examIndex.json`.
+Across both halves, the user-facing authoring surfaces in `apps/web` are now DB-first, while unchanged legacy consumers still read compatibility artifacts from `HG_DATA_DIR`.
 
-## Repo Truth That Drives The Split
+Wave 1 is complete when read as an authoring/input-source migration:
 
-- `apps/web/src/app/api/exams/**`, `apps/web/src/app/api/rubrics/**`, and `apps/web/src/app/api/exams/[examId]/index/route.ts` are still fully file-backed.
-- `apps/web/src/app/api/jobs/route.ts` still resolves grading inputs through `apps/web/src/lib/exams.ts` and `apps/web/src/lib/rubrics.ts`.
-- `apps/worker/src/scripts/generateExamIndex.ts` still reads `exam.json` and writes `examIndex.json` directly.
-- `apps/worker/src/core/loadExamIndex.ts` and `apps/worker/src/core/listExamQuestionIds.ts` still read `examIndex.json` and rubric JSON files directly.
-- `courses` and `lectures` are also file-backed, but their unchanged runtime consumers are mainly RAG-adjacent:
-  - `apps/web/src/app/api/courses/**`
-  - `apps/web/src/app/api/courses/[courseId]/rag/**`
-  - `apps/worker/src/core/attachStudyPointers.ts`
-- `@hg/postgres-store` already has partial building blocks for `Course`, `StoredAsset`, and lecture import, but it has no runtime models yet for exams, rubrics, exam indexes, or lecture metadata as a first-class runtime row.
+- exams are DB-first
+- rubrics are DB-first
+- exam-index metadata registration is DB-first
+- courses are DB-first
+- lectures are DB-first
 
-## W1A
+Wave 2 remains the next operational cutover because jobs, worker queue state, worker heartbeat, and new review generation are still file-backed.
 
-### Goal
+## Implemented W1A
 
-Make exams, rubrics, and exam-index metadata Postgres-first in `apps/web`, while preserving legacy worker and job-route compatibility through one-way DB-to-filesystem materialization only.
+Implemented DB-first surfaces:
 
-### Systems Moved
+- `GET` / `POST /api/exams`
+- `GET /api/exams/[examId]`
+- `GET` / `PUT /api/exams/[examId]/index`
+- `GET` / `POST /api/rubrics`
+- `GET /api/rubrics/[examId]/[questionId]`
 
-- exam metadata ownership
-- exam asset ownership metadata
-- rubric storage
-- exam-index metadata registration
-- narrow exam-index writer path in `apps/worker/src/scripts/generateExamIndex.ts`
-
-### Required Postgres Runtime Additions
-
-Add runtime models in `packages/postgres-store/prisma/schema.prisma`:
-
-- `Exam`
-  - `domainId` stores the existing `examId`
-  - `title`
-  - `assetId -> StoredAsset`
-  - `createdAt`
-  - `updatedAt`
-- `Rubric`
-  - `examId -> Exam`
-  - `questionId`
-  - `title`
-  - `generalGuidance`
-  - `criteriaJson`
-  - `rawPayload`
-  - `createdAt`
-  - `updatedAt`
-  - unique on `(examId, questionId)`
-- `ExamIndex`
-  - `examId -> Exam`
-  - `status`
-  - `generatedAt`
-  - `updatedAt`
-  - `payloadJson`
-  - unique on `examId`
-
-Rules:
-
-- asset bytes stay on the filesystem
-- Postgres owns the metadata, not the blob
-- standalone exams do not reuse `CourseMaterial`
-- rubric and exam-index payloads stay in `jsonb`
-
-### Runtime Stores And Queries
-
-Add Postgres runtime stores under `packages/postgres-store/src/**`:
-
-- `PrismaExamStore`
-  - `listExams`
-  - `getExam`
-  - `createExam`
-- `PrismaRubricStore`
-  - `listRubricQuestionIds`
-  - `getRubric`
-  - `saveRubric`
-- `PrismaExamIndexStore`
-  - `getExamIndex`
-  - `saveExamIndex`
-
-Expand `apps/web/src/lib/server/persistence.ts` so the web runtime resolves these stores directly.
-
-### Web Cutover
-
-Flip these routes to DB-first:
-
-- `apps/web/src/app/api/exams/route.ts`
-- `apps/web/src/app/api/exams/[examId]/route.ts`
-- `apps/web/src/app/api/exams/[examId]/index/route.ts`
-- `apps/web/src/app/api/rubrics/route.ts`
-- `apps/web/src/app/api/rubrics/[examId]/[questionId]/route.ts`
-
-Behavior rules:
-
-- reads come from Postgres
-- writes go to Postgres
-- compatibility files are materialized only after successful DB writes
-- no direct JSON file writes remain in these routes
-- `apps/web/src/app/api/jobs/**` remains unchanged and keeps consuming compatibility files
-
-Environment rules:
-
-- migrated W1A routes require `DATABASE_URL`
-- W1A write paths also require `HG_DATA_DIR`
-- missing DB configuration is a persistence error, not a reason to fall back to direct file authoring
-
-### Compatibility Materialization
-
-Add a narrow exporter module in `@hg/postgres-store` that atomically materializes only:
+Implemented compatibility outputs:
 
 - `exams/<examId>/exam.json`
-- `exams/<examId>/assets/<original-file>`
+- `exams/<examId>/assets/*`
 - `rubrics/<examId>/<questionId>.json`
 - `exams/<examId>/examIndex.json`
 
-Rules:
+Unchanged consumers still using those outputs:
 
-- DB rows are authoritative
-- compatibility files are derived outputs only
-- exporters must be idempotent and atomic
-- exporters run after:
-  - web writes
-  - importer writes
-  - exam-index saves from the worker script
-
-Legacy consumers still depending on these outputs:
-
-- `apps/web/src/app/api/jobs/route.ts`
+- `apps/web/src/app/api/jobs/**`
 - `apps/web/src/lib/exams.ts`
 - `apps/web/src/lib/rubrics.ts`
-- `apps/worker/src/scripts/generateExamIndex.ts`
 - `apps/worker/src/core/loadExamIndex.ts`
 - `apps/worker/src/core/listExamQuestionIds.ts`
+- `apps/worker/src/scripts/generateExamIndex.ts` for exam asset reads
 
-### Import / Backfill
+## Implemented W1B
 
-Extend `packages/postgres-store/src/import-file-backed.ts` to backfill:
+Implemented DB-first surfaces:
 
-- `exams/*/exam.json`
-- exam assets referenced by exam metadata
-- `rubrics/**`
-- `exams/*/examIndex.json`
+- `GET` / `POST /api/courses`
+- `GET /api/courses/[courseId]`
+- `GET` / `POST /api/courses/[courseId]/lectures`
 
-Importer requirements:
+Implemented runtime additions:
 
-- rerunnable
-- keep `--dry-run`
-- explicit unresolved and failed categories
-- second-run idempotent
-- no silent drops
+- dedicated `Lecture` runtime table in Postgres
+- `PrismaCourseStore`
+- `PrismaLectureStore`
+- rerunnable import of `course.json`, `lecture.json`, and lecture assets into:
+  - `Course`
+  - `Lecture`
+  - `StoredAsset`
+  - companion `CourseMaterial` lecture projection
 
-Add summary counters:
+Implemented compatibility outputs:
 
-- `importedExams`
-- `importedRubrics`
-- `importedExamIndexes`
+- `courses/<courseId>/course.json`
+- `courses/<courseId>/lectures/<lectureId>/lecture.json`
+- `courses/<courseId>/lectures/<lectureId>/assets/*`
 
-### Narrow Worker Change Allowed In W1A
+Unchanged consumers still using those outputs:
 
-`apps/worker/src/scripts/generateExamIndex.ts` may change only in this narrow way:
+- `apps/web/src/app/api/courses/[courseId]/rag/**`
+- `packages/local-course-store/src/fileCourseRagIndex.ts`
+- `apps/worker/src/core/attachStudyPointers.ts`
 
-- still read exam assets from compatibility-backed filesystem paths
-- stop treating `examIndex.json` as authoritative output
-- save the validated exam index through `PrismaExamIndexStore`
-- let the save path materialize `examIndex.json`
+## Export-Failure Policy
 
-This is not worker queue migration.
+Wave 1 now uses one explicit policy for DB-authoritative writes followed by compatibility export:
 
-### Validation And Acceptance
+1. validate request input first
+2. write authoritative DB state
+3. run compatibility materialization immediately after
+4. if export succeeds, return normal success
+5. if export fails:
+   - do not roll back the DB write
+   - do not delete the created DB row
+   - do not fall back to direct file authoring
+   - return `500` with code `COMPAT_EXPORT_FAILED`
+   - include the created entity id in the error payload
+   - log the entity id and failed export targets
 
-Run:
+Recovery rule:
+
+- DB remains the source of truth
+- repair is done by rerunning deterministic exporters through importer/backfill or direct reuse of the exporter helpers
+
+Importer rule:
+
+- if DB upsert succeeds but compatibility export fails, the importer records the row as `failed`, leaves DB state in place, and continues
+- second-run idempotency is expected to heal missing compatibility files without duplicating DB rows
+
+## Scope Guard
+
+Wave 1 does not implement course or lecture edit/delete flows.
+
+Repo inspection confirmed that the current product has no existing:
+
+- `PUT` / `PATCH` / `DELETE` course routes
+- `PUT` / `PATCH` / `DELETE` lecture routes
+- course edit/delete UI actions
+- lecture edit/delete UI actions
+- client methods for course/lecture update/delete
+
+So Wave 1 scope remains:
+
+- course create/list/get
+- lecture upload/list
+
+## Validation Expectations
+
+Wave 1 validation still means keeping these green:
 
 - `pnpm.cmd --filter @hg/postgres-store prisma:validate`
 - `pnpm.cmd --filter @hg/postgres-store prisma:generate`
@@ -198,99 +138,30 @@ Run:
 Wave-specific checks:
 
 - importer dry-run
-- real importer run
-- second importer run
-- parity counts for exams, rubrics, and exam indexes
-- sampled payload parity for one exam, one rubric, and one exam index
-- exported compatibility files exist and match DB-owned payloads
+- importer real run
+- importer second real run
+- parity counts for:
+  - courses
+  - lectures
+  - exams
+  - rubrics
+  - exam indexes
+- manual create/read smoke for:
+  - exams
+  - rubrics
+  - courses
+  - lectures
+  - course RAG rebuild via compatibility outputs
 
-Manual checks:
+## Next Scope
 
-- create an exam in `/exams` and confirm it still appears there
-- verify exported `exam.json` and asset file exist
-- save a rubric in `/rubrics` and confirm it reloads correctly
-- create a job from `/` and confirm it still resolves exam and rubric inputs
-- run exam index generation and confirm `GET /api/exams/[examId]/index` is DB-backed while `examIndex.json` still exists as an exported compatibility file
+Wave 1 is complete enough to stop safely.
 
-## W1B
+The next approved scope is Wave 2:
 
-### Goal
+- jobs API cutover
+- worker queue and status cutover
+- worker heartbeat cutover
+- new review persistence cutover
 
-Make courses and lectures Postgres-first in `apps/web`, while preserving current RAG routes and worker study-pointer consumers through one-way DB-to-filesystem materialization until Wave 3.
-
-### Systems Moved
-
-- course metadata ownership
-- lecture metadata ownership
-- lecture asset ownership metadata
-
-### Required Runtime Additions
-
-Reuse `Course` rows, but add a dedicated `Lecture` runtime model:
-
-- `domainId` stores the existing `lectureId`
-- `courseId -> Course`
-- `assetId -> StoredAsset`
-- `title`
-- `sourceType`
-- `externalUrl`
-- `createdAt`
-- `updatedAt`
-
-Add `PrismaLectureStore` with:
-
-- `listLectures`
-- `getLecture`
-- `createLecture`
-
-Do not overload `CourseMaterial` for lecture runtime metadata.
-
-### Web Cutover
-
-Flip these routes to DB-first:
-
-- `apps/web/src/app/api/courses/route.ts`
-- `apps/web/src/app/api/courses/[courseId]/route.ts`
-- `apps/web/src/app/api/courses/[courseId]/lectures/route.ts`
-
-Do not migrate `apps/web/src/app/api/courses/[courseId]/rag/**` in W1B.
-
-### Compatibility Materialization
-
-Materialize only the files still needed by unchanged RAG consumers:
-
-- `courses/<courseId>/course.json`
-- `courses/<courseId>/lectures/<lectureId>/lecture.json`
-- lecture asset files under their current layout
-
-Those files remain compatibility outputs only.
-
-### Import / Backfill And Validation
-
-Extend importer coverage for:
-
-- `courses/*/course.json`
-- `courses/*/lectures/*/lecture.json`
-- lecture assets
-
-Validate parity for:
-
-- courses
-- lectures
-
-Manual checks:
-
-- create a course and confirm it appears in `/courses`
-- upload a lecture and confirm it appears under `/courses/[courseId]`
-- rebuild and query RAG successfully through compatibility files
-
-## Defaults
-
-- `W1A` is the implementation target now.
-- `W1A` and `W1B` are the only Wave 1 split.
-- `DATABASE_URL` is required for migrated Wave 1 surfaces.
-- `HG_DATA_DIR` remains required for asset bytes and compatibility exports.
-- no auth/session/membership work
-- no queue/claim/lease/heartbeat/job-status migration
-- no review fallback removal
-- no RAG runtime migration before Wave 3
+Do not open auth or student-facing publication work before the grading pipeline moves.

@@ -1,6 +1,6 @@
 # Homework Grader Architecture
 
-Last updated: 2026-03-27
+Last updated: 2026-03-28
 Status: canonical current-state architecture document
 Scope: implemented repo structure, completed milestones, approved next direction, and deferred decisions
 
@@ -9,7 +9,7 @@ Scope: implemented repo structure, completed milestones, approved next direction
 Homework Grader is a pnpm monorepo for a grading system that is still primarily local-first and file-backed, with:
 
 - a committed Postgres-backed review and publication slice on the current branch, including a lecturer-facing publication lens inside `/reviews`,
-- a current Wave 1A working-tree migration that makes exam metadata, rubric storage, and exam-index metadata DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers.
+- a current Wave 1 migration that makes exam metadata, rubric storage, exam-index metadata, course metadata, and lecture metadata DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers.
 
 Today the repo contains:
 
@@ -19,7 +19,7 @@ Today the repo contains:
 - `packages/domain-workflow` as the storage-agnostic domain foundation package.
 - `packages/local-job-store` as the active file-backed job, review, and exam-index store.
 - `packages/local-course-store` as the active file-backed course, lecture, and RAG store.
-- `packages/postgres-store` as the shared PostgreSQL + Prisma persistence package for the current review slice and the current Wave 1A exam/rubric/index slice.
+- `packages/postgres-store` as the shared PostgreSQL + Prisma persistence package for the current review slice and the current Wave 1 authoring/content slice.
 
 The repo is still operationally centered on file-backed grading flows under `HG_DATA_DIR`. The domain foundation milestone is complete, but runtime adoption of that foundation has intentionally not happened yet in the committed baseline.
 
@@ -124,7 +124,7 @@ Owns:
 - Postgres review-side query helpers,
 - repository implementations for the domain foundation,
 - import tooling used by the current review and publication slice,
-- runtime stores and compatibility materializers for exams, rubrics, and exam-index metadata in the current Wave 1A working tree.
+- runtime stores and compatibility materializers for the current Wave 1 exams/rubrics/index and courses/lectures slices.
 
 ## 3. What is implemented today
 
@@ -151,19 +151,23 @@ Current branch addition:
 - `/reviews` now acts as a narrow lecturer-facing published lens for imported reviews,
 - `import-file-backed` supports `--dry-run`, structured reporting, and rerunnable import into Postgres.
 
-Current Wave 1A working-tree addition:
+Current Wave 1 addition:
 
 - `GET` / `POST /api/exams` are DB-first,
 - `GET /api/exams/[examId]` is DB-first,
 - `GET` / `PUT /api/exams/[examId]/index` are DB-first for exam-index metadata,
 - `GET` / `POST /api/rubrics` are DB-first,
 - `GET /api/rubrics/[examId]/[questionId]` is DB-first,
+- `GET` / `POST /api/courses` are DB-first,
+- `GET /api/courses/[courseId]` is DB-first,
+- `GET` / `POST /api/courses/[courseId]/lectures` are DB-first,
 - exam metadata, rubric data, and exam-index metadata are now imported into Postgres and can be materialized back into legacy filesystem artifacts,
+- course metadata and lecture metadata are now authored in Postgres and materialized back into legacy filesystem artifacts,
 - `apps/worker/src/scripts/generateExamIndex.ts` now saves exam-index metadata to Postgres first and then exports `examIndex.json` as a compatibility file.
 
 ### 3.2 Current persistence model
 
-The primary persistence model is file-backed under `HG_DATA_DIR`.
+The primary persistence model is still file-backed under `HG_DATA_DIR`, but Wave 1 authoring surfaces in `apps/web` are now DB-first.
 
 Key persisted areas:
 
@@ -171,11 +175,11 @@ Key persisted areas:
 - `reviews/` for `ReviewRecord` JSON documents,
 - `exams/` for exam packages and `examIndex.json`,
 - `rubrics/` for rubric JSON files,
-- `courses/` for course metadata, lectures, and RAG files,
+- `courses/` for compatibility-exported course and lecture metadata plus still-authoritative RAG files,
 - `uploads/` for copied submissions and derived PDFs,
 - `worker/heartbeat.json` for worker liveness.
 
-There is now a committed Prisma schema, Postgres persistence package, and narrow review / publication runtime use of PostgreSQL on this branch. In the current working tree, exams, rubrics, and exam-index metadata are also DB-first in `apps/web`. The rest of the product remains file-backed.
+There is now a committed Prisma schema, Postgres persistence package, and narrow review / publication runtime use of PostgreSQL on this branch. In the current workspace, exams, rubrics, exam-index metadata, courses, and lectures are also DB-first in `apps/web`. The rest of the product remains file-backed.
 
 ### 3.3 Current runtime boundaries
 
@@ -273,8 +277,6 @@ The following runtime concerns are still intentionally file-backed today:
 
 - job queue storage,
 - review persistence,
-- course persistence,
-- lecture persistence,
 - course RAG manifests and chunks,
 - uploaded submissions and derived files,
 - worker heartbeat.
@@ -285,15 +287,19 @@ The following artifacts still exist on disk in the current working tree, but now
 - `exams/<examId>/assets/*`
 - `rubrics/<examId>/*.json`
 - `exams/<examId>/examIndex.json`
+- `courses/<courseId>/course.json`
+- `courses/<courseId>/lectures/<lectureId>/lecture.json`
+- `courses/<courseId>/lectures/<lectureId>/assets/*`
 
 The following runtime surfaces still rely on the file-backed model:
 
 - `apps/web/src/app/api/jobs/**`
 - `apps/web/src/app/api/reviews/**`
-- `apps/web/src/app/api/courses/**`
+- `apps/web/src/app/api/courses/[courseId]/rag/**`
 - `apps/worker/src/lib/processNextPendingJob.ts`
 - `apps/worker/src/core/loadExamIndex.ts`
 - `apps/worker/src/core/listExamQuestionIds.ts`
+- `apps/worker/src/core/attachStudyPointers.ts`
 
 ## 7. Persistence boundaries today
 
