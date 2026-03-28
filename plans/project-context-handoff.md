@@ -1,6 +1,6 @@
 # Project Context Handoff
 
-Last updated: 2026-03-28
+Last updated: 2026-03-29
 Purpose: high-signal handoff for a fresh engineer or fresh model
 
 ## 1. Project description
@@ -13,7 +13,7 @@ The repo now has:
 - a completed storage-agnostic domain foundation package,
 - a committed Postgres + Prisma review and publication slice on the current branch,
 - completed Wave 1 changes that make exams, rubrics, exam-index metadata, courses, and lectures DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers,
-- implemented `W2A` changes that make `POST /api/jobs`, worker queue/lease lifecycle, worker heartbeat, and new review writes DB-first while preserving read-only fallback for leftover legacy file jobs during the migration window.
+- completed Wave 2 changes that make live jobs, reviews, and worker health DB-first while keeping rollback export and leftover file artifacts outside the live runtime path.
 - implemented offline rollback tooling that can export `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
 ## 2. Repo structure and responsibilities
@@ -33,11 +33,11 @@ The repo now has:
 - `packages/domain-workflow`
   - canonical domain entities, states, repository interfaces, services, and projections
 - `packages/local-job-store`
-  - legacy file-backed job/review/exam-index persistence still used for fallback reads and unchanged exam-index helpers
+  - legacy file-backed job/review/exam-index persistence retained for rollback/export tooling and unchanged exam-index helpers
 - `packages/local-course-store`
   - file-backed course/lecture/RAG persistence still used for RAG and study-pointer consumers
 - `packages/postgres-store`
-  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, and `W2A` job/worker runtime stores
+  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, and completed Wave 2 job/worker runtime stores
 
 ### Plans and docs
 
@@ -50,7 +50,7 @@ The repo now has:
 - `plans/postgres-prisma-identity-design.md`
   - approved persistence and identity design direction beyond the original review slice
 - `plans/postgres-wave-2-execution-plan.md`
-  - current execution record for implemented `W2A` and pending `W2B`
+  - current execution record for completed Wave 2
 
 ## 3. Current milestone status
 
@@ -68,7 +68,7 @@ Current branch context:
 - branch: `feat/postgres-runtime-slice-1`
 - the Postgres runtime review and publication slices are already committed on this branch
 - the current workspace also contains completed Wave 1 exam/rubric/exam-index/course/lecture migration work
-- the current workspace also contains implemented `W2A` job/worker/runtime cutover work
+- the current workspace also contains completed Wave 2 job/worker/runtime cutover work
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -108,22 +108,22 @@ Current branch context:
   - `GET /api/courses/[courseId]`
   - `GET` / `POST /api/courses/[courseId]/lectures`
   - `apps/worker/src/scripts/generateExamIndex.ts` saving exam-index metadata to Postgres first, then exporting `examIndex.json`
-- implemented `W2A` runtime adoption:
+- completed Wave 2 runtime adoption:
   - `POST /api/jobs`
   - `GET /api/jobs/[id]`
   - `GET /api/jobs/[id]/submission`
   - `GET /api/jobs/[id]/submission-raw`
   - `GET /api/health`
-  - `GET /api/reviews` preferring runtime DB jobs first, imported DB reviews second, and legacy file leftovers last
+  - `GET /api/reviews` listing only runtime DB jobs plus imported DB reviews
   - `GET /api/reviews/[jobId]` returning DB-backed empty review context for pending runtime jobs with no saved version yet
   - `PUT` / `PATCH /api/reviews/[jobId]` and `POST /api/reviews/[jobId]/publish` working for new DB-authored jobs through `Submission.legacyJobId`
   - `apps/worker/src/scripts/runLoop.ts` and `runOnce.ts` claiming jobs from Postgres with explicit lease renewal
-  - new jobs not writing `jobs/*.json`, `reviews/*.json`, or `worker/heartbeat.json` in normal runtime
+  - live runtime no longer writing or reading `jobs/*.json`, `reviews/*.json`, or `worker/heartbeat.json`
   - `pnpm --filter @hg/postgres-store rollback:export-jobs` exporting `PENDING` / `RUNNING` DB jobs into legacy queue files only as offline rollback tooling
 
 ## 5. What is intentionally not implemented yet
 
-- broad PostgreSQL/Prisma runtime adoption beyond the review slice, Wave 1 surfaces, and `W2A`
+- broad PostgreSQL/Prisma runtime adoption beyond the review slice, Wave 1 surfaces, and completed Wave 2
 - committed user identity model in product runtime
 - committed memberships or course-scoped authz
 - assignment runtime lifecycle
@@ -134,7 +134,6 @@ Current branch context:
 - notifications
 - analytics snapshots
 - export pipelines
-- `W2B` cleanup of leftover legacy job/review/health fallback paths
 - Wave 3 migration of course RAG and remaining exam-index read-side runtime
 
 ## 6. Current persistence model
@@ -143,13 +142,13 @@ The repo is now hybrid.
 
 Main persisted areas under `HG_DATA_DIR`:
 
-- `jobs/` for leftover pre-cutover legacy records only
-- `reviews/` for leftover pre-cutover legacy records only
+- `jobs/` for archive-only pre-cutover legacy records
+- `reviews/` for archive-only pre-cutover legacy records
 - `exams/`
 - `rubrics/`
 - `courses/`
 - `uploads/`
-- `worker/heartbeat.json` for temporary fallback only when no DB heartbeat exists yet
+- `worker/heartbeat.json` as an archive-only legacy artifact
 
 Current DB-first exceptions in the workspace:
 
@@ -160,16 +159,16 @@ Current DB-first exceptions in the workspace:
 - imported reviews can publish the current review result into `PublishedResult` and `GradebookEntry`
 - exams, rubrics, and exam-index metadata are DB-first in `apps/web`
 - courses and lectures are DB-first in `apps/web`
-- `POST /api/jobs`, worker queue/lease lifecycle, worker heartbeat, and new review writes are DB-first in `W2A`
+- jobs, reviews, and worker health are DB-first in completed Wave 2
 - legacy files under `exams/**`, `rubrics/**`, `examIndex.json`, and `courses/**` remain compatibility outputs for unchanged job, RAG, and worker flows
-- leftover `jobs/`, `reviews/`, and `worker/heartbeat.json` files remain read-only fallback only during `W2A`
+- leftover `jobs/`, `reviews/`, and `worker/heartbeat.json` files are archive-only and are no longer part of live runtime
 - rollback export back into legacy queue files exists only as explicit offline tooling, not as a runtime dual-write path
 
 Runtime code still depends directly on:
 
 - `@hg/postgres-store`
 - `@hg/local-course-store`
-- `@hg/local-job-store` for fallback reads and unchanged exam-index helpers
+- `@hg/local-job-store` for rollback-compatible file tooling and unchanged exam-index helpers
 - app-local file helpers for exams and rubrics plus unchanged RAG/exam-index readers
 
 ## 7. Current domain and publication model
@@ -190,12 +189,12 @@ Most important concepts:
 Important clarification:
 
 - these are implemented as domain contracts and tests,
-- the current runtime now adopts DB-backed review/publication flows for imported reviews and DB-authored `W2A` jobs,
+- the current runtime now adopts DB-backed review/publication flows for imported reviews and DB-authored runtime jobs,
 - broader publication, gradebook, and student-facing lifecycle surfaces are still deferred.
 
 ## 8. Next milestone
 
-The approved direction is still PostgreSQL + Prisma, and the current workspace has already moved beyond review-only work into completed Wave 1 and implemented `W2A`.
+The approved direction is still PostgreSQL + Prisma, and the current workspace has already moved beyond review-only work into completed Wave 1 and completed Wave 2.
 
 Already implemented seams in the workspace:
 
@@ -217,10 +216,9 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- close and harden `W2A` if it is still dirty
-- then move to `W2B` to remove active file-backed job/review/health fallback paths
-- after `W2B`, move to Wave 3 for RAG and remaining exam-index runtime migration
-- do not jump to auth before the grading pipeline moves
+- move to Wave 3 for RAG and remaining exam-index runtime migration
+- keep rollback export offline-only and do not reintroduce live fallback reads
+- do not jump to auth before the derived-runtime migration work lands
 
 ## 9. Main constraints and do-not-change-yet boundaries
 
@@ -285,6 +283,7 @@ Current branch:
 
 Relevant recent commits:
 
+- `13fe16b feat(postgres): finalize wave 2 with db-only jobs reviews and health runtime`
 - `309b67e feat(postgres): add published lens to reviews list`
 - `8804be7 feat(postgres): add narrow review publication flow`
 - `853d1af docs: align branch handoff and architecture with postgres review slices`
@@ -294,7 +293,7 @@ Relevant recent commits:
 
 Current dirty context:
 
-- current Wave 1 and `W2A` work should include:
+- current Wave 1 and Wave 2 work should include:
   - `apps/web/src/app/api/exams/**`
   - `apps/web/src/app/api/jobs/**`
   - `apps/web/src/app/api/health/route.ts`
@@ -338,8 +337,8 @@ Canonical docs to read first:
 - plans/postgres-wave-2-execution-plan.md
 
 Current runtime shape:
-- now hybrid DB-first plus file-backed compatibility/fallback under HG_DATA_DIR
-- apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, and W2A jobs/health
+- now hybrid DB-first plus file-backed compatibility/archive artifacts under HG_DATA_DIR
+- apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, and Wave 2 jobs/health
 - apps/worker now claims new jobs from Postgres and writes new review state to Postgres
 - @hg/domain-workflow exists and is tested, but broad runtime adoption is still deferred
 - current branch has committed Postgres-backed review and publication slices
@@ -348,14 +347,15 @@ Current runtime shape:
 - imported review list rows can expose publication summary
 - /reviews is the current lecturer-facing published lens for imported reviews
 - exams, rubrics, exam-index metadata, courses, and lectures are now DB-first in apps/web
-- POST /api/jobs, worker queue/lease lifecycle, worker heartbeat, and new review writes are now DB-first in W2A
+- POST /api/jobs, worker queue/lease lifecycle, worker heartbeat, and review runtime are now DB-first in Wave 2
 - HG_DATA_DIR files under exams/**, rubrics/**, examIndex.json, and courses/** remain compatibility outputs for unchanged consumers
-- leftover jobs/, reviews/, and worker/heartbeat.json remain read-only fallback only during W2A
+- leftover jobs/, reviews/, and worker/heartbeat.json are archive-only and not part of live runtime
 - rollback export to legacy queue files exists only as offline tooling for drills/rollback windows
 
 Current branch context:
 - branch: feat/postgres-runtime-slice-1
 - recent commits:
+  - 13fe16b feat(postgres): finalize wave 2 with db-only jobs reviews and health runtime
   - 245e428 feat(postgres): harden review read side and import flow
   - 4b16945 feat(postgres): finalize first prisma review seam and local db bring-up
   - c1f09e1 docs(plan): add postgres prisma identity design artifact
@@ -382,14 +382,14 @@ Important code to read:
 - apps/worker/src/scripts/runLoop.ts
 
 Key architecture boundary:
-- runtime is no longer review-only on the Postgres path: Wave 1 plus W2A are active in the workspace
+- runtime is no longer review-only on the Postgres path: Wave 1 plus Wave 2 are active in the workspace
 - implemented review seams on this branch:
   - GET /api/reviews/[jobId]
   - PUT/PATCH /api/reviews/[jobId]
   - GET /api/reviews
   - GET /api/reviews/[jobId]/submission*
   - POST /api/reviews/[jobId]/publish
-- implemented W2A seams in the workspace:
+- implemented Wave 2 seams in the workspace:
   - POST /api/jobs
   - GET /api/jobs/[id]
   - GET /api/jobs/[id]/submission*

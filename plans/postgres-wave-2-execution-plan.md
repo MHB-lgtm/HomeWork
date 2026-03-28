@@ -1,23 +1,23 @@
 # Postgres Wave 2 Execution Plan
 
-Status: Wave 2A implemented, Wave 2B pending
-Last updated: 2026-03-28
+Status: Wave 2 complete
+Last updated: 2026-03-29
 
 ## Summary
 
-Wave 2 is split into:
+Wave 2 was split into:
 
 - `W2A`: jobs API, DB queue/lease lifecycle, worker heartbeat, new review writes, and new review publication
 - `W2B`: cleanup of active file-backed job/review/health runtime paths
 
-This execution record now reflects implemented `W2A` behavior:
+This execution record now reflects completed Wave 2 behavior:
 
 - `POST /api/jobs` is DB-first
 - worker queue claim/complete/fail is DB-first
 - worker heartbeat is DB-first
 - new job reviews are DB-first
 - imported legacy reviews remain readable
-- pre-cutover file jobs remain read-only fallback during `W2A`
+- file-only leftover jobs/reviews/heartbeat artifacts are archive-only
 
 ## Implemented W2A Boundary
 
@@ -57,25 +57,23 @@ Rollback tooling in `W2A`:
 - it exports `reviews/<jobId>.json` only when a current DB review version exists
 - it is not called from web or worker runtime code
 
-## Fallback Rules
+## Implemented W2B Closure
 
-`W2A` keeps read-only fallback only for legacy leftover traffic:
+Wave 2B removed the last active file-backed runtime seams for jobs, reviews, and health:
 
-- `/api/jobs/[id]` and submission asset routes:
-  - DB-first
-  - file-backed fallback only when no DB job exists
-- `/api/reviews/**`:
-  - DB runtime jobs first
-  - imported legacy DB reviews second
-  - file-backed legacy fallback last
-- `/api/health`:
-  - DB heartbeat first
-  - file-backed fallback only when no DB heartbeat exists yet
+- `/api/jobs/[id]` and submission asset routes are DB-only
+- `/api/reviews/**` resolves only from:
+  - DB runtime jobs
+  - imported legacy DB reviews
+- `/api/health` reads only from `WorkerHeartbeat`
+- `apps/web` no longer imports `@hg/local-job-store`
+- live runtime no longer reads or writes `jobs/*.json`, `reviews/*.json`, or `worker/heartbeat.json`
+- file-only leftover legacy artifacts are archive-only
 
 Write-path rule:
 
 - new writes do not fall back to file-backed queue or review files
-- rollback export exists only as tooling, not as a live peer write path
+- rollback export exists only as offline tooling, not as a live peer write path
 
 ## Validation Summary
 
@@ -118,18 +116,19 @@ Manual smoke summary:
 
 ## Rollback Window
 
-`W2A` rollback is limited and explicit:
+Wave 2 rollback is limited and explicit:
 
 - stop DB-backed worker loop
 - export pending/running DB jobs into legacy file queue only if rollback is needed
 - keep DB rows for audit/replay
 - do not re-enable live dual-write after cutover
 
-## W2B Next
+## Next
 
-`W2B` remains the cleanup wave:
+Wave 2 is closed.
 
-- remove active `/api/jobs/**` fallback to local job files
-- remove file-backed health fallback
-- remove active runtime dependence on file-backed review/job metadata for current traffic
-- make legacy queue drain-only or archive-only
+The next step is Wave 3:
+
+- migrate course RAG runtime off filesystem manifests/chunks
+- migrate remaining exam-index read-side/runtime consumers off `examIndex.json`
+- keep rollback exporter offline-only while those derived systems are still migrating
