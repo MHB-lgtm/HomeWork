@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getJob } from '@hg/local-job-store';
+import { getServerPersistence } from '@/lib/server/persistence';
 
 export const runtime = 'nodejs';
 
@@ -8,20 +9,32 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
-
     const { id: jobId } = await params;
 
     if (!jobId) {
       return NextResponse.json(
         { error: 'Job ID is required' },
         { status: 400 }
+      );
+    }
+
+    const persistence = getServerPersistence();
+    const runtimeJob = persistence ? await persistence.jobs.getJobStatus(jobId) : null;
+    if (runtimeJob) {
+      return NextResponse.json({
+        status: runtimeJob.status,
+        resultJson: runtimeJob.resultJson,
+        errorMessage: runtimeJob.errorMessage,
+        submissionMimeType: runtimeJob.submissionMimeType,
+        gradingMode: runtimeJob.gradingMode,
+        gradingScope: runtimeJob.gradingScope,
+      });
+    }
+
+    if (!process.env.HG_DATA_DIR) {
+      return NextResponse.json(
+        { error: 'HG_DATA_DIR is not set in environment' },
+        { status: 500 }
       );
     }
 

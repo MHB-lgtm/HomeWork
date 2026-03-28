@@ -1,4 +1,6 @@
 export type LegacyJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+export type RuntimeGradingMode = 'RUBRIC' | 'GENERAL';
+export type RuntimeGradingScope = 'QUESTION' | 'DOCUMENT';
 
 export interface LegacyJobRecord {
   id: string;
@@ -12,11 +14,75 @@ export interface LegacyJobRecord {
     examFilePath?: string;
     submissionFilePath?: string;
     submissionMimeType?: string;
+    questionFilePath?: string;
+    notes?: string;
     gradingMode?: 'RUBRIC' | 'GENERAL';
     gradingScope?: 'QUESTION' | 'DOCUMENT';
   };
+  rubric?: unknown;
   resultJson?: unknown;
   errorMessage?: string;
+}
+
+export interface RuntimeJobStatusRecord {
+  jobId: string;
+  status: LegacyJobStatus;
+  resultJson?: unknown | null;
+  errorMessage?: string | null;
+  submissionMimeType?: string | null;
+  gradingMode?: RuntimeGradingMode | null;
+  gradingScope?: RuntimeGradingScope | null;
+}
+
+export interface RuntimeJobClaimRecord extends RuntimeJobStatusRecord {
+  courseId?: string | null;
+  examId: string;
+  questionId?: string | null;
+  examFilePath: string;
+  submissionFilePath: string;
+  questionFilePath?: string | null;
+  notes?: string | null;
+  rubric?: import('@hg/shared-schemas').RubricSpec | null;
+  claimedAt: string;
+  leaseExpiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuntimeReviewSummaryRecord {
+  jobId: string;
+  displayName: string | null;
+  status: LegacyJobStatus;
+  examId?: string;
+  questionId?: string | null;
+  gradingMode?: RuntimeGradingMode | null;
+  gradingScope?: RuntimeGradingScope | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  annotationCount: number;
+  hasResult: boolean;
+  publication?: LegacyReviewPublicationRecord;
+}
+
+export interface RuntimeWorkerHeartbeatRecord {
+  workerId: string;
+  pid: number;
+  hostname: string;
+  startedAt: string;
+  lastSeenAt: string;
+}
+
+export interface RollbackJobExportSummary {
+  dataDir: string;
+  requestedJobId: string | null;
+  exportedJobs: number;
+  exportedReviews: number;
+  skippedJobs: number;
+  exportedJobIds: string[];
+  exportedReviewJobIds: string[];
+  skippedJobIds: string[];
+  warningCounts: Record<string, number>;
+  warnings: string[];
 }
 
 export interface ImportFileBackedOptions {
@@ -81,6 +147,10 @@ export interface ImportFileBackedSummary {
   importedExams: number;
   importedRubrics: number;
   importedExamIndexes: number;
+  importedJobsPending: number;
+  importedJobsRunning: number;
+  importedJobsDone: number;
+  importedJobsFailed: number;
   importedSubmissions: number;
   importedReviews: number;
   importedPublishedResults: number;

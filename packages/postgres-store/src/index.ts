@@ -3,10 +3,18 @@ export type {
   ImportFileBackedOptions,
   ImportFileBackedSummary,
   LegacyExamRecord,
+  LegacyJobStatus,
   LegacyReviewContextRecord,
   LegacyReviewDetailRecord,
   LegacyJobRecord,
   LegacyReviewPublicationRecord,
+  RuntimeGradingMode,
+  RuntimeGradingScope,
+  RuntimeJobClaimRecord,
+  RuntimeJobStatusRecord,
+  RuntimeReviewSummaryRecord,
+  RuntimeWorkerHeartbeatRecord,
+  RollbackJobExportSummary,
   LegacySubmissionAssetRecord,
   LegacyReviewSummaryRecord,
 } from './types';
@@ -16,6 +24,8 @@ export { PrismaSubmissionRepository } from './repos/submission-repository';
 export { PrismaReviewRepository } from './repos/review-repository';
 export { PrismaPublicationRepository } from './repos/publication-repository';
 export { PrismaLegacyReviewRecordStore } from './queries/review-records';
+export { PrismaJobStore } from './queries/job-store';
+export { PrismaWorkerHeartbeatStore } from './queries/worker-heartbeat-store';
 export { PrismaCourseStore } from './queries/course-store';
 export { PrismaExamStore } from './queries/exam-store';
 export { PrismaRubricStore } from './queries/rubric-store';
@@ -49,3 +59,4 @@ export {
   materializeRubricCompatibility,
   materializeExamIndexCompatibility,
 } from './compat/file-materialization';
+export { exportRuntimeJobsToLegacyQueue } from './compat/rollback-export';

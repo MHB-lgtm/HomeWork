@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
 import * as path from 'path';
-import { createJob } from '@hg/local-job-store';
-import { loadRubric, RubricNotFoundError } from '../../../lib/rubrics';
-import { getExam, ExamNotFoundError } from '../../../lib/exams';
+import { getServerPersistence } from '../../../lib/server/persistence';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
+      );
+    }
+
     const dataDir = process.env.HG_DATA_DIR;
     if (!dataDir) {
       return NextResponse.json(
@@ -69,28 +74,16 @@ export async function POST(request: NextRequest) {
     }
 
     const DATA_DIR = path.resolve(dataDir);
-    const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
-    await fs.mkdir(UPLOADS_DIR, { recursive: true });
 
-    // Load exam
-    let exam;
-    try {
-      exam = await getExam(DATA_DIR, examId);
-    } catch (error) {
-      if (error instanceof ExamNotFoundError) {
-        return NextResponse.json(
-          { error: 'Exam not found. Create it at /exams first.' },
-          { status: 404 }
-        );
-      }
-      throw error;
+    const exam = await persistence.exams.getExam(DATA_DIR, examId);
+    if (!exam) {
+      return NextResponse.json(
+        { error: 'Exam not found. Create it at /exams first.' },
+        { status: 404 }
+      );
     }
 
-    // Resolve exam file path (relative to DATA_DIR)
-    const examFilePath = path.join(DATA_DIR, exam.examFilePath);
-
-    // Load rubric only for RUBRIC mode
-    let rubric;
+    let rubric = null;
     if (gradingMode === 'RUBRIC') {
       if (!questionId) {
         return NextResponse.json(
@@ -98,31 +91,17 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      try {
-        rubric = await loadRubric(DATA_DIR, examId, questionId);
-      } catch (error) {
-        if (error instanceof RubricNotFoundError) {
-          return NextResponse.json(
-            { error: 'Rubric not found. Create it at /rubrics first.' },
-            { status: 404 }
-          );
-        }
-        throw error;
+
+      rubric = await persistence.rubrics.getRubric(examId, questionId);
+      if (!rubric) {
+        return NextResponse.json(
+          { error: 'Rubric not found. Create it at /rubrics first.' },
+          { status: 404 }
+        );
       }
     }
 
-    // Generate unique filenames for submission and optional question
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 9);
-    const submissionExt = path.extname(submissionFile.name);
-    const submissionFileName = `submission_${timestamp}_${random}${submissionExt}`;
-    const submissionPath = path.join(UPLOADS_DIR, submissionFileName);
-
-    // Write submission file
     const submissionBuffer = Buffer.from(await submissionFile.arrayBuffer());
-    await fs.writeFile(submissionPath, submissionBuffer);
-
-    // Determine submission MIME type
     let submissionMimeType: string | undefined;
     if (submissionMode === 'pdf') {
       submissionMimeType = 'application/pdf';
@@ -142,29 +121,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Write optional question file if provided and has content
-    let questionPath: string | undefined;
-    if (questionFile && questionFile.size > 0) {
-      const questionExt = path.extname(questionFile.name);
-      const questionFileName = `question_${timestamp}_${random}${questionExt}`;
-      questionPath = path.join(UPLOADS_DIR, questionFileName);
-      const questionBuffer = Buffer.from(await questionFile.arrayBuffer());
-      await fs.writeFile(questionPath, questionBuffer);
-    }
-
-    // Create job
-    const { jobId } = await createJob({
-      courseId: courseId || undefined,
-      examId, // Store examId in job inputs
-      examSourcePath: examFilePath,
-      questionId: questionId || '', // Empty string if not required (for GENERAL + DOCUMENT)
-      submissionSourcePath: submissionPath,
-      submissionMimeType,
-      questionSourcePath: questionPath,
+    const { jobId } = await persistence.jobs.createJob({
+      dataDir: DATA_DIR,
+      courseId,
+      examId,
+      examSourcePath: path.resolve(DATA_DIR, exam.examFilePath),
+      questionId: questionId || undefined,
       notes: notes || undefined,
       rubric,
       gradingMode: gradingMode as 'RUBRIC' | 'GENERAL',
       gradingScope: gradingScope as 'QUESTION' | 'DOCUMENT',
+      submission: {
+        originalName: submissionFile.name,
+        buffer: submissionBuffer,
+        mimeType: submissionMimeType,
+      },
+      question:
+        questionFile && questionFile.size > 0
+          ? {
+              originalName: questionFile.name,
+              buffer: Buffer.from(await questionFile.arrayBuffer()),
+              mimeType: questionFile.type || undefined,
+            }
+          : null,
     });
 
     return NextResponse.json({ jobId });

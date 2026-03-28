@@ -48,6 +48,7 @@ export const parseLegacyJobRecord = (raw: unknown): LegacyJobRecord | null => {
     createdAt: typeof record.createdAt === 'string' ? record.createdAt : undefined,
     updatedAt: typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
     inputs,
+    rubric: record.rubric,
     resultJson: record.resultJson,
     errorMessage: typeof record.errorMessage === 'string' ? record.errorMessage : undefined,
   };

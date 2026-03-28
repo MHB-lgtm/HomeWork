@@ -64,6 +64,7 @@ type CourseRowRef = { id: string };
 type ExamRowRef = { id: string };
 type CourseMaterialRef = { id: string };
 type SubmissionRef = { id: string; currentPublishedResultId?: string | null };
+type GradingJobRef = { id: string };
 
 const readJsonFile = async (filePath: string): Promise<unknown | null> => {
   try {
@@ -101,6 +102,10 @@ const createSummary = (dryRun: boolean): ImportFileBackedSummary => ({
   importedExams: 0,
   importedRubrics: 0,
   importedExamIndexes: 0,
+  importedJobsPending: 0,
+  importedJobsRunning: 0,
+  importedJobsDone: 0,
+  importedJobsFailed: 0,
   importedSubmissions: 0,
   importedReviews: 0,
   importedPublishedResults: 0,
@@ -249,6 +254,69 @@ const upsertStoredAsset = async (
     data: {
       assetKey: params.assetKey,
       ...data,
+    },
+    select: { id: true },
+  });
+};
+
+const countImportedJob = (
+  summary: ImportFileBackedSummary,
+  status?: string
+) => {
+  switch (status) {
+    case 'RUNNING':
+      summary.importedJobsRunning += 1;
+      break;
+    case 'DONE':
+      summary.importedJobsDone += 1;
+      break;
+    case 'FAILED':
+      summary.importedJobsFailed += 1;
+      break;
+    case 'PENDING':
+    default:
+      summary.importedJobsPending += 1;
+      break;
+  }
+};
+
+const ensureLegacyJobCourseRow = async (
+  prisma: PrismaClient,
+  dryRun: boolean,
+  placeholderCourse: PlaceholderCourseRef,
+  job: LegacyJobRecord
+): Promise<CourseRowRef> => {
+  const courseDomainId = getCourseDomainIdForLegacyJob(job.inputs?.courseId);
+
+  if (courseDomainId === PLACEHOLDER_COURSE_DOMAIN_ID) {
+    return placeholderCourse;
+  }
+
+  const existingCourse = await prisma.course.findUnique({
+    where: { domainId: courseDomainId },
+    select: { id: true },
+  });
+
+  if (dryRun) {
+    return existingCourse ?? { id: createPreviewId('course', courseDomainId) };
+  }
+
+  if (existingCourse) {
+    return prisma.course.update({
+      where: { id: existingCourse.id },
+      data: {
+        legacyCourseKey: job.inputs?.courseId ?? null,
+      },
+      select: { id: true },
+    });
+  }
+
+  return prisma.course.create({
+    data: {
+      domainId: courseDomainId,
+      legacyCourseKey: job.inputs?.courseId ?? null,
+      title: `Imported course ${courseDomainId}`,
+      status: toPrismaCourseStatus('active'),
     },
     select: { id: true },
   });
@@ -792,6 +860,325 @@ export const importFileBackedData = async (
   }
 
   const jobsById = await loadLegacyJobs(dataDir, summary, logger);
+
+  for (const job of jobsById.values()) {
+    try {
+      const normalizedStatus: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' =
+        job.status === 'RUNNING' ||
+        job.status === 'DONE' ||
+        job.status === 'FAILED' ||
+        job.status === 'PENDING'
+          ? job.status
+          : 'PENDING';
+
+      countImportedJob(summary, normalizedStatus);
+
+      if (!job.inputs?.submissionFilePath) {
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_submission_file_path',
+          `Skipping job without submission file path: ${job.id}`
+        );
+        continue;
+      }
+
+      if (!job.inputs.examFilePath) {
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_exam_snapshot_path',
+          `Skipping job without exam snapshot path: ${job.id}`
+        );
+        continue;
+      }
+
+      if (!job.inputs.examId) {
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_exam_id',
+          `Skipping job without examId: ${job.id}`
+        );
+        continue;
+      }
+
+      const examRow =
+        examsByDomainId.get(job.inputs.examId) ??
+        (await prisma.exam.findUnique({
+          where: { domainId: job.inputs.examId },
+          select: { id: true },
+        }));
+
+      if (!examRow) {
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_exam_for_job',
+          `Skipping job without matching exam: ${job.id}`
+        );
+        continue;
+      }
+
+      const submissionAbsolutePath = resolveStoredPath(dataDir, job.inputs.submissionFilePath);
+      const examSnapshotAbsolutePath = resolveStoredPath(dataDir, job.inputs.examFilePath);
+      const questionAbsolutePath = job.inputs.questionFilePath
+        ? resolveStoredPath(dataDir, job.inputs.questionFilePath)
+        : null;
+
+      try {
+        await fs.access(submissionAbsolutePath);
+      } catch {
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_submission_asset',
+          `Skipping job with missing submission asset: ${job.id}`
+        );
+        continue;
+      }
+
+      try {
+        await fs.access(examSnapshotAbsolutePath);
+      } catch {
+        recordUnresolved(
+          summary,
+          logger,
+          'missing_exam_snapshot_asset',
+          `Skipping job with missing exam snapshot asset: ${job.id}`
+        );
+        continue;
+      }
+
+      if (questionAbsolutePath) {
+        try {
+          await fs.access(questionAbsolutePath);
+        } catch {
+          recordUnresolved(
+            summary,
+            logger,
+            'missing_question_asset',
+            `Skipping job with missing question asset: ${job.id}`
+          );
+          continue;
+        }
+      }
+
+      const resolvedCourseRow = await ensureLegacyJobCourseRow(
+        prisma,
+        dryRun,
+        placeholderCourse,
+        job
+      );
+      const submissionDomainId = getSubmissionDomainId(job.id);
+      const submissionMaterialDomainId = getSubmissionMaterialDomainId(job.id);
+      const reviewDomainId = getReviewDomainId(job.id);
+      const existingSubmission = await prisma.submission.findUnique({
+        where: { domainId: submissionDomainId },
+        select: { id: true, currentPublishedResultId: true },
+      });
+      const existingSubmissionMaterial = await prisma.courseMaterial.findUnique({
+        where: { domainId: submissionMaterialDomainId },
+        select: { id: true },
+      });
+      const existingReview = await prisma.review.findUnique({
+        where: { domainId: reviewDomainId },
+        select: { id: true },
+      });
+      const existingGradingJob = await prisma.gradingJob.findUnique({
+        where: { domainId: job.id },
+        select: { id: true },
+      });
+
+      const submissionAsset = await upsertStoredAsset(prisma, dryRun, {
+        assetKey: getSubmissionAssetKey(job.id),
+        logicalBucket: 'job_submissions',
+        absolutePath: submissionAbsolutePath,
+        mimeType: job.inputs.submissionMimeType,
+        originalName: path.basename(submissionAbsolutePath),
+      });
+      const examSnapshotAsset = await upsertStoredAsset(prisma, dryRun, {
+        assetKey: `job-exam-snapshot:${job.id}`,
+        logicalBucket: 'job_exam_snapshots',
+        absolutePath: examSnapshotAbsolutePath,
+        originalName: path.basename(examSnapshotAbsolutePath),
+      });
+      const questionAsset = questionAbsolutePath
+        ? await upsertStoredAsset(prisma, dryRun, {
+            assetKey: `job-question:${job.id}`,
+            logicalBucket: 'job_questions',
+            absolutePath: questionAbsolutePath,
+            originalName: path.basename(questionAbsolutePath),
+          })
+        : null;
+
+      const jobCreatedAt = job.createdAt ?? new Date().toISOString();
+      const jobUpdatedAt = job.updatedAt ?? jobCreatedAt;
+
+      const submissionMaterial: CourseMaterialRef =
+        dryRun
+          ? existingSubmissionMaterial ?? {
+              id: createPreviewId('material', submissionMaterialDomainId),
+            }
+          : existingSubmissionMaterial
+            ? await prisma.courseMaterial.update({
+                where: { id: existingSubmissionMaterial.id },
+                data: {
+                  courseId: resolvedCourseRow.id,
+                  assetId: submissionAsset.id,
+                  kind: toPrismaCourseMaterialKind('submission_pdf'),
+                  title: path.basename(submissionAbsolutePath),
+                  updatedAt: toDate(jobUpdatedAt),
+                },
+                select: { id: true },
+              })
+            : await prisma.courseMaterial.create({
+                data: {
+                  domainId: submissionMaterialDomainId,
+                  courseId: resolvedCourseRow.id,
+                  assetId: submissionAsset.id,
+                  kind: toPrismaCourseMaterialKind('submission_pdf'),
+                  title: path.basename(submissionAbsolutePath),
+                  createdAt: toDate(jobCreatedAt),
+                  updatedAt: toDate(jobUpdatedAt),
+                },
+                select: { id: true },
+              });
+
+      const submission: SubmissionRef =
+        dryRun
+          ? existingSubmission ?? {
+              id: createPreviewId('submission', submissionDomainId),
+              currentPublishedResultId: null,
+            }
+          : existingSubmission
+            ? await prisma.submission.update({
+                where: { id: existingSubmission.id },
+                data: {
+                  courseId: resolvedCourseRow.id,
+                  materialId: submissionMaterial.id,
+                  state: toPrismaSubmissionState(
+                    deriveSubmissionStateFromLegacy(job, null, false)
+                  ),
+                  updatedAt: toDate(jobUpdatedAt),
+                },
+                select: { id: true, currentPublishedResultId: true },
+              })
+            : await prisma.submission.create({
+                data: {
+                  domainId: submissionDomainId,
+                  courseId: resolvedCourseRow.id,
+                  studentUserId: null,
+                  moduleType: 'LEGACY_JOB',
+                  legacyJobId: job.id,
+                  materialId: submissionMaterial.id,
+                  submittedAt: toDate(jobCreatedAt),
+                  state: toPrismaSubmissionState(
+                    deriveSubmissionStateFromLegacy(job, null, false)
+                  ),
+                  createdAt: toDate(jobCreatedAt),
+                  updatedAt: toDate(jobUpdatedAt),
+                },
+                select: { id: true, currentPublishedResultId: true },
+              });
+
+      if (!dryRun) {
+        if (existingReview) {
+          await prisma.review.update({
+            where: { id: existingReview.id },
+            data: {
+              courseId: resolvedCourseRow.id,
+              submissionId: submission.id,
+              updatedAt: toDate(jobUpdatedAt),
+            },
+          });
+        } else {
+          await prisma.review.create({
+            data: {
+              domainId: reviewDomainId,
+              courseId: resolvedCourseRow.id,
+              submissionId: submission.id,
+              state: toPrismaReviewState('draft'),
+              createdAt: toDate(jobCreatedAt),
+              updatedAt: toDate(jobUpdatedAt),
+            },
+          });
+        }
+
+        const rubric = job.rubric ? RubricSpecSchema.safeParse(job.rubric) : null;
+        const rubricJsonValue = rubric && rubric.success ? asJsonValue(rubric.data) : undefined;
+        const gradingMode: 'RUBRIC' | 'GENERAL' =
+          job.inputs.gradingMode === 'GENERAL' ? 'GENERAL' : 'RUBRIC';
+        const gradingScope: 'QUESTION' | 'DOCUMENT' =
+          job.inputs.gradingScope === 'DOCUMENT' ? 'DOCUMENT' : 'QUESTION';
+        const gradingJobData = {
+          courseId:
+            job.inputs.courseId?.trim() && resolvedCourseRow.id !== placeholderCourse.id
+              ? resolvedCourseRow.id
+              : null,
+          submissionId: submission.id,
+          examRowId: examRow.id,
+          examSnapshotAssetId: examSnapshotAsset.id,
+          submissionAssetId: submissionAsset.id,
+          questionAssetId: questionAsset?.id ?? null,
+          status: normalizedStatus,
+          questionId: job.inputs.questionId?.trim() || null,
+          submissionMimeType: job.inputs.submissionMimeType ?? null,
+          gradingMode,
+          gradingScope,
+          notes: job.inputs.notes?.trim() || null,
+          rubricJson: rubricJsonValue,
+          resultJson: job.resultJson ? asJsonValue(job.resultJson) : undefined,
+          errorMessage: job.errorMessage ?? null,
+          claimedAt:
+            normalizedStatus === 'RUNNING' ? toDate(jobUpdatedAt) : null,
+          leaseExpiresAt:
+            normalizedStatus === 'RUNNING' ? toDate(jobUpdatedAt) : null,
+          completedAt:
+            normalizedStatus === 'DONE' ? toDate(jobUpdatedAt) : null,
+          failedAt:
+            normalizedStatus === 'FAILED' ? toDate(jobUpdatedAt) : null,
+          updatedAt: toDate(jobUpdatedAt),
+        };
+
+        if (existingGradingJob) {
+          await prisma.gradingJob.update({
+            where: { id: existingGradingJob.id },
+            data: gradingJobData,
+            select: { id: true },
+          });
+        } else {
+          await prisma.gradingJob.create({
+            data: {
+              domainId: job.id,
+              createdAt: toDate(jobCreatedAt),
+              ...gradingJobData,
+            },
+            select: { id: true },
+          });
+        }
+      }
+
+      countUpdated(
+        summary,
+        Boolean(
+          existingGradingJob ||
+            existingSubmission ||
+            existingSubmissionMaterial ||
+            existingReview
+        )
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      recordFailed(
+        summary,
+        logger,
+        'job_import_failed',
+        `Failed to import job ${job.id}: ${message}`
+      );
+    }
+  }
+
   const reviewEntries = await readDirEntries(path.join(dataDir, 'reviews'));
 
   for (const reviewEntry of reviewEntries) {
@@ -1207,7 +1594,7 @@ export const importFileBackedData = async (
   }
 
   logger.log(
-    `[postgres-store] ${dryRun ? 'dry-run ' : ''}import summary courses=${summary.importedCourses} lectures=${summary.importedLectures} submissions=${summary.importedSubmissions} reviews=${summary.importedReviews} published=${summary.importedPublishedResults} updated=${summary.updatedRecords} skipped=${summary.skippedRecords} unresolved=${summary.unresolvedRecords} failed=${summary.failedRecords}`
+    `[postgres-store] ${dryRun ? 'dry-run ' : ''}import summary courses=${summary.importedCourses} lectures=${summary.importedLectures} exams=${summary.importedExams} rubrics=${summary.importedRubrics} examIndexes=${summary.importedExamIndexes} jobsPending=${summary.importedJobsPending} jobsRunning=${summary.importedJobsRunning} jobsDone=${summary.importedJobsDone} jobsFailed=${summary.importedJobsFailed} submissions=${summary.importedSubmissions} reviews=${summary.importedReviews} published=${summary.importedPublishedResults} updated=${summary.updatedRecords} skipped=${summary.skippedRecords} unresolved=${summary.unresolvedRecords} failed=${summary.failedRecords}`
   );
 
   return summary;

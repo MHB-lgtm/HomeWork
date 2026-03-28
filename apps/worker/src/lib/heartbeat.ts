@@ -1,5 +1,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
+import { getWorkerRuntimePersistence } from './runtimePersistence';
 
 // Get data directory from environment variable
 const getDataDir = (): string => {
@@ -18,8 +20,22 @@ const getHeartbeatPath = (): string => {
 /**
  * Write heartbeat file with current timestamp and process ID
  */
-export async function writeHeartbeat(): Promise<void> {
+export async function writeHeartbeat(args?: {
+  workerId?: string;
+  startedAt?: string;
+}): Promise<void> {
   try {
+    if (process.env.DATABASE_URL) {
+      const persistence = getWorkerRuntimePersistence();
+      await persistence.workerHeartbeats.touchHeartbeat({
+        workerId: args?.workerId ?? `${os.hostname()}:${process.pid}`,
+        pid: process.pid,
+        hostname: os.hostname(),
+        startedAt: args?.startedAt ?? new Date().toISOString(),
+      });
+      return;
+    }
+
     const heartbeatPath = getHeartbeatPath();
     const heartbeatDir = path.dirname(heartbeatPath);
 

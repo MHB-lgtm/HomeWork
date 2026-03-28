@@ -136,6 +136,21 @@ export const getResolvedReviewDetail = async (
   const persistence = getServerPersistence();
 
   if (persistence) {
+      const runtimeDetail = await persistence.jobs.getRuntimeReviewDetail(jobId);
+      if (runtimeDetail) {
+        const runtimeContext = mergeContext(
+          runtimeDetail.context,
+          runtimeDetail.publication,
+          null,
+          'postgres'
+        );
+        return {
+          review: runtimeDetail.review,
+          context: runtimeContext,
+          source: 'postgres',
+        };
+      }
+
       const detail = await persistence.reviewRecords.getReviewDetailByLegacyJobId(jobId);
       if (detail) {
         const fileJob = detail.context ? null : await loadFileBackedJob(jobId);
@@ -166,6 +181,14 @@ export const resolveReviewSubmissionAsset = async (
   const persistence = getServerPersistence();
 
   if (persistence) {
+    const runtimeAsset = await persistence.jobs.getJobSubmissionAsset(jobId);
+    if (runtimeAsset && (await fileExists(runtimeAsset.path))) {
+      return {
+        ...runtimeAsset,
+        source: 'postgres',
+      };
+    }
+
     const dbAsset = await persistence.reviewRecords.getSubmissionAssetByLegacyJobId(jobId);
     if (dbAsset && (await fileExists(dbAsset.path))) {
       return {

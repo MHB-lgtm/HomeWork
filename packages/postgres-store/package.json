@@ -12,7 +12,8 @@
     "test": "vitest run",
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
-    "import:file-backed": "pnpm run build && node dist/scripts/import-file-backed.js"
+    "import:file-backed": "pnpm run build && node dist/scripts/import-file-backed.js",
+    "rollback:export-jobs": "pnpm run build && node dist/scripts/export-runtime-jobs.js"
   },
   "dependencies": {
     "@hg/domain-workflow": "workspace:*",

@@ -109,6 +109,23 @@ enum ExamIndexStatus {
   CONFIRMED
 }
 
+enum GradingJobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum GradingMode {
+  RUBRIC
+  GENERAL
+}
+
+enum GradingScope {
+  QUESTION
+  DOCUMENT
+}
+
 model User {
   id                String             @id @default(uuid()) @db.Uuid
   normalizedEmail   String?            @unique
@@ -152,6 +169,7 @@ model Course {
   reviews           Review[]
   publishedResults  PublishedResult[]
   gradebookEntries  GradebookEntry[]
+  gradingJobs       GradingJob[]
 }
 
 model CourseMembership {
@@ -186,6 +204,9 @@ model StoredAsset {
   materials     CourseMaterial[]
   exams         Exam[]
   lectures      Lecture[]
+  examSnapshotJobs GradingJob[] @relation("GradingJobExamSnapshotAsset")
+  submissionJobs  GradingJob[] @relation("GradingJobSubmissionAsset")
+  questionJobs    GradingJob[] @relation("GradingJobQuestionAsset")
 }
 
 model Exam {
@@ -198,6 +219,7 @@ model Exam {
   asset      StoredAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
   rubrics    Rubric[]
   examIndex  ExamIndex?
+  gradingJobs GradingJob[]
 }
 
 model Rubric {
@@ -280,6 +302,7 @@ model Submission {
   material                 CourseMaterial       @relation(fields: [materialId], references: [id], onDelete: Restrict)
   review                   Review?
   publishedResults         PublishedResult[]
+  gradingJob               GradingJob?
 
   @@index([courseId, studentUserId, submittedAt(sort: Desc)])
 }
@@ -370,4 +393,54 @@ model GradebookEntry {
   publishedResult   PublishedResult      @relation(fields: [publishedResultId], references: [id], onDelete: Cascade)
 
   @@index([courseId, publishedAt(sort: Desc)])
+}
+
+model GradingJob {
+  id                  String           @id @default(uuid()) @db.Uuid
+  domainId            String           @unique
+  courseId            String?          @db.Uuid
+  submissionId        String           @unique @db.Uuid
+  examRowId           String           @db.Uuid
+  examSnapshotAssetId String           @db.Uuid
+  submissionAssetId   String           @db.Uuid
+  questionAssetId     String?          @db.Uuid
+  status              GradingJobStatus
+  questionId          String?
+  submissionMimeType  String?
+  gradingMode         GradingMode
+  gradingScope        GradingScope
+  notes               String?
+  rubricJson          Json?
+  resultJson          Json?
+  errorMessage        String?
+  workerId            String?
+  claimedAt           DateTime?        @db.Timestamptz(6)
+  leaseExpiresAt      DateTime?        @db.Timestamptz(6)
+  completedAt         DateTime?        @db.Timestamptz(6)
+  failedAt            DateTime?        @db.Timestamptz(6)
+  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
+  course              Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  submission          Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  exam                Exam             @relation(fields: [examRowId], references: [id], onDelete: Restrict)
+  examSnapshotAsset   StoredAsset      @relation("GradingJobExamSnapshotAsset", fields: [examSnapshotAssetId], references: [id], onDelete: Restrict)
+  submissionAsset     StoredAsset      @relation("GradingJobSubmissionAsset", fields: [submissionAssetId], references: [id], onDelete: Restrict)
+  questionAsset       StoredAsset?     @relation("GradingJobQuestionAsset", fields: [questionAssetId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt(sort: Asc)])
+  @@index([status, leaseExpiresAt])
+  @@index([workerId])
+  @@index([courseId, createdAt(sort: Desc)])
+}
+
+model WorkerHeartbeat {
+  id         String   @id @default(uuid()) @db.Uuid
+  workerId   String   @unique
+  pid        Int
+  hostname   String
+  startedAt  DateTime @db.Timestamptz(6)
+  lastSeenAt DateTime @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([lastSeenAt(sort: Desc)])
 }

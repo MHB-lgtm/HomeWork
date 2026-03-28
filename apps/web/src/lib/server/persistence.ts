@@ -2,14 +2,18 @@ import {
   PrismaCourseStore,
   PrismaExamIndexStore,
   PrismaExamStore,
+  PrismaJobStore,
   PrismaLectureStore,
   PrismaLegacyReviewRecordStore,
   PrismaRubricStore,
+  PrismaWorkerHeartbeatStore,
   getPrismaClient,
 } from '@hg/postgres-store';
 
 type ServerPersistence = {
   reviewRecords: PrismaLegacyReviewRecordStore;
+  jobs: PrismaJobStore;
+  workerHeartbeats: PrismaWorkerHeartbeatStore;
   courses: PrismaCourseStore;
   exams: PrismaExamStore;
   lectures: PrismaLectureStore;
@@ -28,6 +32,8 @@ export const getServerPersistence = (): ServerPersistence | null => {
     const prisma = getPrismaClient();
     cachedPersistence = {
       reviewRecords: new PrismaLegacyReviewRecordStore(prisma),
+      jobs: new PrismaJobStore(prisma),
+      workerHeartbeats: new PrismaWorkerHeartbeatStore(prisma),
       courses: new PrismaCourseStore(prisma),
       exams: new PrismaExamStore(prisma),
       lectures: new PrismaLectureStore(prisma),

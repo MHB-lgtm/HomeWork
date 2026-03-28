@@ -239,6 +239,7 @@ const createFakePrisma = () => {
   const reviewVersion = createFakeModel('domainId', 'review-version');
   const publishedResult = createFakeModel('domainId', 'published-result');
   const gradebookEntry = createFakeModel('domainId', 'gradebook-entry');
+  const gradingJob = createFakeModel('domainId', 'grading-job');
 
   const prisma: any = {
     course,
@@ -253,6 +254,7 @@ const createFakePrisma = () => {
     reviewVersion,
     publishedResult,
     gradebookEntry,
+    gradingJob,
     async $transaction(fn: (tx: any) => Promise<unknown>) {
       return fn({
         review,
@@ -260,6 +262,7 @@ const createFakePrisma = () => {
         publishedResult,
         gradebookEntry,
         submission,
+        gradingJob,
       });
     },
   };
@@ -279,6 +282,7 @@ const createFakePrisma = () => {
       reviewVersion: reviewVersion.rows,
       publishedResult: publishedResult.rows,
       gradebookEntry: gradebookEntry.rows,
+      gradingJob: gradingJob.rows,
     },
   };
 };
@@ -358,6 +362,7 @@ const createImportFixture = async (): Promise<string> => {
       courseId: 'course-1',
       examId: 'exam-1',
       questionId: 'q-1',
+      examFilePath: 'exams/exam-1/assets/exam.pdf',
       submissionFilePath: 'uploads/job-1.pdf',
       submissionMimeType: 'application/pdf',
     },
@@ -444,6 +449,10 @@ describe('importFileBackedData', () => {
       importedExams: 1,
       importedRubrics: 1,
       importedExamIndexes: 1,
+      importedJobsPending: 0,
+      importedJobsRunning: 0,
+      importedJobsDone: 1,
+      importedJobsFailed: 0,
       importedSubmissions: 1,
       importedReviews: 1,
       importedPublishedResults: 1,
@@ -487,6 +496,10 @@ describe('importFileBackedData', () => {
       importedExams: 1,
       importedRubrics: 1,
       importedExamIndexes: 1,
+      importedJobsPending: 0,
+      importedJobsRunning: 0,
+      importedJobsDone: 1,
+      importedJobsFailed: 0,
       importedSubmissions: 1,
       importedReviews: 1,
       importedPublishedResults: 1,
@@ -501,6 +514,10 @@ describe('importFileBackedData', () => {
       importedExams: 1,
       importedRubrics: 1,
       importedExamIndexes: 1,
+      importedJobsPending: 0,
+      importedJobsRunning: 0,
+      importedJobsDone: 1,
+      importedJobsFailed: 0,
       importedSubmissions: 1,
       importedReviews: 1,
       importedPublishedResults: 1,
@@ -513,7 +530,7 @@ describe('importFileBackedData', () => {
     });
 
     expect(stores.course.size).toBe(2);
-    expect(stores.storedAsset.size).toBe(3);
+    expect(stores.storedAsset.size).toBe(4);
     expect(stores.courseMaterial.size).toBe(2);
     expect(stores.lecture.size).toBe(1);
     expect(stores.exam.size).toBe(1);
@@ -524,6 +541,7 @@ describe('importFileBackedData', () => {
     expect(stores.reviewVersion.size).toBe(1);
     expect(stores.publishedResult.size).toBe(1);
     expect(stores.gradebookEntry.size).toBe(1);
+    expect(stores.gradingJob.size).toBe(1);
     expect(stores.submission.get(getSubmissionDomainId('job-1'))?.currentPublishedResultId).toBe(
       stores.publishedResult.get(getPublishedResultDomainId('job-1'))?.id
     );

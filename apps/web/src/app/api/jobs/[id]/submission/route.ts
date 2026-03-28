@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { getJob } from '@hg/local-job-store';
+import { getServerPersistence } from '@/lib/server/persistence';
 
 export const runtime = 'nodejs';
 
@@ -14,14 +15,6 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
-
     const { id: jobId } = await params;
 
     if (!jobId) {
@@ -31,26 +24,39 @@ export async function GET(
       );
     }
 
-    // Load job record
-    const job = await getJob(jobId);
+    const persistence = getServerPersistence();
+    const runtimeSubmission = persistence
+      ? await persistence.jobs.getJobSubmissionAsset(jobId)
+      : null;
 
-    if (!job) {
-      return NextResponse.json(
-        { error: 'Job not found' },
-        { status: 404 }
-      );
+    let submissionPath: string | null = runtimeSubmission?.path ?? null;
+    if (!submissionPath) {
+      if (!process.env.HG_DATA_DIR) {
+        return NextResponse.json(
+          { error: 'HG_DATA_DIR is not set in environment' },
+          { status: 500 }
+        );
+      }
+
+      const job = await getJob(jobId);
+      if (!job) {
+        return NextResponse.json(
+          { error: 'Job not found' },
+          { status: 404 }
+        );
+      }
+
+      submissionPath = job.inputs.submissionFilePath || null;
     }
 
-    // Check if submission file path exists
-    if (!job.inputs.submissionFilePath) {
+    if (!submissionPath) {
       return NextResponse.json(
         { error: 'Submission file path not found in job' },
         { status: 404 }
       );
     }
 
-    // Check file extension
-    const ext = path.extname(job.inputs.submissionFilePath).toLowerCase();
+    const ext = path.extname(submissionPath).toLowerCase();
     const supportedExtensions = ['.png', '.jpg', '.jpeg'];
     
     if (!supportedExtensions.includes(ext)) {
@@ -66,7 +72,7 @@ export async function GET(
     // Read file
     let fileBuffer: Buffer;
     try {
-      fileBuffer = await fs.readFile(job.inputs.submissionFilePath);
+      fileBuffer = await fs.readFile(submissionPath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return NextResponse.json(

@@ -166,27 +166,49 @@ const mergeDbSummary = (
 
 export async function GET() {
   try {
-    if (!process.env.HG_DATA_DIR) {
+    if (!process.env.HG_DATA_DIR && !getServerPersistence()) {
       return NextResponse.json(
         { ok: false, error: 'HG_DATA_DIR is not set in environment' },
         { status: 500 }
       );
     }
 
-    const jobsById = await loadAllJobMetadata();
-    const summariesByJobId = await loadFileBackedReviewSummaries(jobsById);
     const persistence = getServerPersistence();
+    const summariesByJobId = new Map<string, ReviewSummary>();
+
+    if (persistence) {
+      const runtimeSummaries = await persistence.jobs.listRuntimeReviewSummaries();
+      for (const runtimeSummary of runtimeSummaries) {
+        summariesByJobId.set(runtimeSummary.jobId, {
+          ...runtimeSummary,
+          questionId: runtimeSummary.questionId ?? undefined,
+          gradingMode: runtimeSummary.gradingMode ?? undefined,
+          gradingScope: runtimeSummary.gradingScope ?? undefined,
+        });
+      }
+    }
+
+    const jobsById = process.env.HG_DATA_DIR ? await loadAllJobMetadata() : new Map<string, JobRecord>();
 
     if (persistence) {
       const dbSummaries = await persistence.reviewRecords.listReviewSummariesByLegacyJobId();
 
       for (const dbSummary of dbSummaries) {
-        const existingSummary = summariesByJobId.get(dbSummary.jobId);
-        const job = existingSummary ? null : jobsById.get(dbSummary.jobId) ?? null;
-        summariesByJobId.set(
-          dbSummary.jobId,
-          mergeDbSummary(dbSummary, existingSummary, job)
-        );
+        if (summariesByJobId.has(dbSummary.jobId)) {
+          continue;
+        }
+
+        const job = jobsById.get(dbSummary.jobId) ?? null;
+        summariesByJobId.set(dbSummary.jobId, mergeDbSummary(dbSummary, undefined, job));
+      }
+    }
+
+    if (process.env.HG_DATA_DIR) {
+      const fileSummaries = await loadFileBackedReviewSummaries(jobsById);
+      for (const [jobId, summary] of fileSummaries) {
+        if (!summariesByJobId.has(jobId)) {
+          summariesByJobId.set(jobId, summary);
+        }
       }
     }
 
