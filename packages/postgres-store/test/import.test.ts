@@ -287,7 +287,9 @@ const createFakePrisma = () => {
   };
 };
 
-const createImportFixture = async (): Promise<string> => {
+const createImportFixture = async (options?: {
+  blockCourseCompatibilityTarget?: boolean;
+}): Promise<string> => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'hg-postgres-import-'));
   tempDirs.push(tempDir);
 
@@ -381,6 +383,10 @@ const createImportFixture = async (): Promise<string> => {
     ...aiReview,
     jobId: 'missing-job',
   });
+
+  if (options?.blockCourseCompatibilityTarget) {
+    await fs.writeFile(path.join(tempDir, 'courses', 'course-1', 'rag'), 'blocked', 'utf-8');
+  }
 
   await fs.mkdir(path.join(tempDir, 'uploads'), { recursive: true });
   await fs.writeFile(path.join(tempDir, 'uploads', 'job-1.pdf'), 'fixture', 'utf-8');
@@ -563,6 +569,36 @@ describe('importFileBackedData', () => {
       submissionMimeType: 'application/pdf',
       gradingMode: null,
       gradingScope: null,
+    });
+  });
+
+  it('does not emit compatibility files by default during import', async () => {
+    const dataDir = await createImportFixture({ blockCourseCompatibilityTarget: true });
+    const { prisma } = createFakePrisma();
+
+    const summary = await importFileBackedData(prisma, {
+      dataDir,
+      logger: silentLogger,
+    });
+
+    expect(summary.failedRecords).toBe(0);
+    expect(summary.warningCounts.course_compat_export_failed).toBeUndefined();
+  });
+
+  it('emits compatibility files only when explicitly requested', async () => {
+    const dataDir = await createImportFixture({ blockCourseCompatibilityTarget: true });
+    const { prisma } = createFakePrisma();
+
+    const summary = await importFileBackedData(prisma, {
+      dataDir,
+      emitCompatFiles: true,
+      logger: silentLogger,
+    });
+
+    expect(summary.failedRecords).toBe(1);
+    expect(summary.warningCounts).toMatchObject({
+      course_compat_export_failed: 1,
+      missing_job: 1,
     });
   });
 });

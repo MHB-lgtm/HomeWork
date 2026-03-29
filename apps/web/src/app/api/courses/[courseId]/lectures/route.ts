@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  CompatibilityMaterializationError,
   PostgresCourseNotFoundError,
   PostgresUnsupportedLectureTypeError,
-  materializeLectureCompatibility,
 } from '@hg/postgres-store';
 import * as path from 'path';
 import { getServerPersistence } from '../../../../../lib/server/persistence';
@@ -84,7 +82,7 @@ export async function POST(
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { lecture, absoluteAssetPath } = await persistence.lectures.createLecture({
+    const { lecture } = await persistence.lectures.createLecture({
       dataDir: path.resolve(dataDir),
       courseId: params.courseId,
       title,
@@ -93,37 +91,6 @@ export async function POST(
       contentType: file.type,
       externalUrl: externalUrl || undefined,
     });
-
-    try {
-      await materializeLectureCompatibility({
-        dataDir: path.resolve(dataDir),
-        lecture,
-        sourceAssetPath: absoluteAssetPath,
-      });
-    } catch (error) {
-      if (error instanceof CompatibilityMaterializationError) {
-        console.error('[courses] lecture compatibility export failed', {
-          courseId: params.courseId,
-          lectureId: lecture.lectureId,
-          targets: error.targets,
-        });
-
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'Lecture saved to Postgres but compatibility export failed',
-            code: error.code,
-            data: {
-              courseId: params.courseId,
-              lectureId: lecture.lectureId,
-            },
-          },
-          { status: 500 }
-        );
-      }
-
-      throw error;
-    }
 
     return NextResponse.json({ ok: true, data: { lectureId: lecture.lectureId } });
   } catch (error) {

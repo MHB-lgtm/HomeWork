@@ -18,6 +18,11 @@ const parseDryRunArg = (): boolean => {
   return args.includes('--dry-run');
 };
 
+const parseEmitCompatFilesArg = (): boolean => {
+  const args = process.argv.slice(2);
+  return args.includes('--emit-compat-files');
+};
+
 const main = async () => {
   const prisma = getPrismaClient();
 
@@ -25,6 +30,7 @@ const main = async () => {
     const summary = await importFileBackedData(prisma, {
       dataDir: parseDataDirArg(),
       dryRun: parseDryRunArg(),
+      emitCompatFiles: parseEmitCompatFilesArg(),
     });
     console.log(JSON.stringify(summary, null, 2));
   } finally {

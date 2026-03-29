@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { materializeExamCompatibility } from '@hg/postgres-store';
 import { getServerPersistence } from '../../../lib/server/persistence';
 
 export const runtime = 'nodejs';
@@ -144,12 +143,6 @@ export async function POST(request: NextRequest) {
       mimeType: examFile.type || undefined,
     });
 
-    await materializeExamCompatibility({
-      dataDir: DATA_DIR,
-      exam: createdExam.exam,
-      sourceAssetPath: createdExam.assetPath,
-    });
-
     const indexing = await runExamIndexGeneration(createdExam.exam.examId);
 
     return NextResponse.json({
@@ -169,7 +162,7 @@ export async function POST(request: NextRequest) {
  * GET /api/exams
  * List all exams
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const persistence = getServerPersistence();
     if (!persistence) {
@@ -179,16 +172,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
-        { status: 500 }
-      );
-    }
-
-    const DATA_DIR = path.resolve(dataDir);
-    const exams = await persistence.exams.listExams(DATA_DIR);
+    const exams = await persistence.exams.listExams();
 
     return NextResponse.json(exams);
   } catch (error) {

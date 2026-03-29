@@ -88,6 +88,7 @@ export interface RollbackJobExportSummary {
 export interface ImportFileBackedOptions {
   dataDir?: string;
   dryRun?: boolean;
+  emitCompatFiles?: boolean;
   logger?: Pick<Console, 'log' | 'warn'>;
 }
 

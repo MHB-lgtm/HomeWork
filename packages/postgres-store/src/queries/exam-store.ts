@@ -5,8 +5,17 @@ import { StoredAssetStorageKind } from '@prisma/client';
 import { toIsoString } from '../mappers/domain';
 import type { LegacyExamRecord } from '../types';
 
-const toRelativeDataPath = (dataDir: string, filePath: string): string =>
-  path.relative(dataDir, filePath).split(path.sep).join('/');
+const toBucketRelativePath = (logicalBucket: string, filePath: string): string => {
+  const segments = filePath.split(/[\\/]+/).filter(Boolean);
+  const bucketIndex = segments.lastIndexOf(logicalBucket);
+  if (bucketIndex === -1) {
+    throw new Error(
+      `Stored asset path does not include logical bucket "${logicalBucket}": ${filePath}`
+    );
+  }
+
+  return segments.slice(bucketIndex).join('/');
+};
 
 const createExamId = (): string =>
   `exam-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
@@ -29,15 +38,14 @@ const mapExamRow = (
     title: string;
     createdAt: Date;
     updatedAt: Date;
-    asset: { path: string };
-  },
-  dataDir: string
+    asset: { path: string; logicalBucket: string };
+  }
 ): LegacyExamRecord => ({
   examId: row.domainId,
   title: row.title,
   createdAt: toIsoString(row.createdAt),
   updatedAt: toIsoString(row.updatedAt),
-  examFilePath: toRelativeDataPath(dataDir, row.asset.path),
+  examFilePath: toBucketRelativePath(row.asset.logicalBucket, row.asset.path),
 });
 
 export class PrismaExamStore {
@@ -45,12 +53,13 @@ export class PrismaExamStore {
     private readonly prisma: Pick<PrismaClient, 'exam' | 'storedAsset' | '$transaction'>
   ) {}
 
-  async listExams(dataDir: string): Promise<LegacyExamRecord[]> {
+  async listExams(): Promise<LegacyExamRecord[]> {
     const rows = await this.prisma.exam.findMany({
       include: {
         asset: {
           select: {
             path: true,
+            logicalBucket: true,
           },
         },
       },
@@ -59,16 +68,17 @@ export class PrismaExamStore {
       },
     });
 
-    return rows.map((row) => mapExamRow(row, dataDir));
+    return rows.map(mapExamRow);
   }
 
-  async getExam(dataDir: string, examId: string): Promise<LegacyExamRecord | null> {
+  async getExam(examId: string): Promise<LegacyExamRecord | null> {
     const row = await this.prisma.exam.findUnique({
       where: { domainId: examId },
       include: {
         asset: {
           select: {
             path: true,
+            logicalBucket: true,
           },
         },
       },
@@ -78,7 +88,7 @@ export class PrismaExamStore {
       return null;
     }
 
-    return mapExamRow(row, dataDir);
+    return mapExamRow(row);
   }
 
   async createExam(args: {
@@ -123,6 +133,7 @@ export class PrismaExamStore {
             asset: {
               select: {
                 path: true,
+                logicalBucket: true,
               },
             },
           },
@@ -132,7 +143,7 @@ export class PrismaExamStore {
       });
 
       return {
-        exam: mapExamRow(created, args.dataDir),
+        exam: mapExamRow(created),
         assetPath: asset.absolutePath,
       };
     } catch (error) {

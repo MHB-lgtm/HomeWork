@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as path from 'path';
-import { materializeRubricCompatibility } from '@hg/postgres-store';
 import { RubricSpecSchema } from '@hg/shared-schemas';
 import { getServerPersistence } from '../../../lib/server/persistence';
 
@@ -12,14 +10,6 @@ export async function GET(request: NextRequest) {
     if (!persistence) {
       return NextResponse.json(
         { ok: false, error: 'DATABASE_URL is not set in environment' },
-        { status: 500 }
-      );
-    }
-
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
         { status: 500 }
       );
     }
@@ -55,14 +45,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
-
     const body = await request.json();
 
     let rubric;
@@ -76,11 +58,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const savedRubric = await persistence.rubrics.saveRubric(rubric);
-    await materializeRubricCompatibility({
-      dataDir: path.resolve(dataDir),
-      rubric: savedRubric,
-    });
+    await persistence.rubrics.saveRubric(rubric);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

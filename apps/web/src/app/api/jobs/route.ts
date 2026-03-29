@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     const DATA_DIR = path.resolve(dataDir);
 
-    const exam = await persistence.exams.getExam(DATA_DIR, examId);
+    const exam = await persistence.exams.getExam(examId);
     if (!exam) {
       return NextResponse.json(
         { error: 'Exam not found. Create it at /exams first.' },

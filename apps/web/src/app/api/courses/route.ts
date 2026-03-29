@@ -1,9 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as path from 'path';
-import {
-  CompatibilityMaterializationError,
-  materializeCourseCompatibility,
-} from '@hg/postgres-store';
 import { getServerPersistence } from '../../../lib/server/persistence';
 
 export const runtime = 'nodejs';
@@ -41,14 +36,6 @@ export async function POST(request: NextRequest) {
   if (persistence instanceof NextResponse) return persistence;
 
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
-        { status: 500 }
-      );
-    }
-
     const body = await request.json();
     const title = (body?.title as string | undefined)?.trim();
 
@@ -60,32 +47,6 @@ export async function POST(request: NextRequest) {
     }
 
     const course = await persistence.courses.createCourse({ title });
-
-    try {
-      await materializeCourseCompatibility({
-        dataDir: path.resolve(dataDir),
-        course,
-      });
-    } catch (error) {
-      if (error instanceof CompatibilityMaterializationError) {
-        console.error('[courses] compatibility export failed', {
-          courseId: course.courseId,
-          targets: error.targets,
-        });
-
-        return NextResponse.json(
-          {
-            ok: false,
-            error: 'Course saved to Postgres but compatibility export failed',
-            code: error.code,
-            data: { courseId: course.courseId },
-          },
-          { status: 500 }
-        );
-      }
-
-      throw error;
-    }
 
     return NextResponse.json({ ok: true, data: { courseId: course.courseId } });
   } catch (error) {

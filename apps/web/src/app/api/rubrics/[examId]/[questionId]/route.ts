@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
  * Retrieve a rubric by examId and questionId
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ examId: string; questionId: string }> }
 ) {
   try {
@@ -16,14 +16,6 @@ export async function GET(
     if (!persistence) {
       return NextResponse.json(
         { error: 'DATABASE_URL is not set in environment' },
-        { status: 500 }
-      );
-    }
-
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
         { status: 500 }
       );
     }

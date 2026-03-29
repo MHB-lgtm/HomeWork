@@ -364,6 +364,7 @@ export const importFileBackedData = async (
   const dataDir = path.resolve(configuredDataDir);
 
   const dryRun = options.dryRun ?? false;
+  const emitCompatFiles = !dryRun && (options.emitCompatFiles ?? false);
   const logger = options.logger ?? console;
   const summary = createSummary(dryRun);
   const placeholderCourse = await ensurePlaceholderCourse(prisma, dryRun);
@@ -420,7 +421,7 @@ export const importFileBackedData = async (
       summary.importedCourses += 1;
       countUpdated(summary, Boolean(existingCourse));
 
-      if (!dryRun) {
+      if (emitCompatFiles) {
         try {
           await materializeCourseCompatibility({
             dataDir,
@@ -569,20 +570,22 @@ export const importFileBackedData = async (
               });
             }
 
-            try {
-              await materializeLectureCompatibility({
-                dataDir,
-                lecture,
-                sourceAssetPath: absolutePath,
-              });
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              recordFailed(
-                summary,
-                logger,
-                'lecture_compat_export_failed',
-                `Failed to export lecture compatibility ${course.courseId}/${lecture.lectureId}: ${message}`
-              );
+            if (emitCompatFiles) {
+              try {
+                await materializeLectureCompatibility({
+                  dataDir,
+                  lecture,
+                  sourceAssetPath: absolutePath,
+                });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                recordFailed(
+                  summary,
+                  logger,
+                  'lecture_compat_export_failed',
+                  `Failed to export lecture compatibility ${course.courseId}/${lecture.lectureId}: ${message}`
+                );
+              }
             }
           }
 
@@ -678,12 +681,22 @@ export const importFileBackedData = async (
       summary.importedExams += 1;
       countUpdated(summary, Boolean(existingExam));
 
-      if (!dryRun) {
-        await materializeExamCompatibility({
-          dataDir,
-          exam,
-          sourceAssetPath: absoluteAssetPath,
-        });
+      if (emitCompatFiles) {
+        try {
+          await materializeExamCompatibility({
+            dataDir,
+            exam,
+            sourceAssetPath: absoluteAssetPath,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          recordFailed(
+            summary,
+            logger,
+            'exam_compat_export_failed',
+            `Failed to export exam compatibility ${exam.examId}: ${message}`
+          );
+        }
       }
 
       const rawExamIndex = await readJsonFile(
@@ -733,10 +746,22 @@ export const importFileBackedData = async (
               });
             }
 
-            await materializeExamIndexCompatibility({
-              dataDir,
-              examIndex,
-            });
+            if (emitCompatFiles) {
+              try {
+                await materializeExamIndexCompatibility({
+                  dataDir,
+                  examIndex,
+                });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                recordFailed(
+                  summary,
+                  logger,
+                  'exam_index_compat_export_failed',
+                  `Failed to export exam index compatibility ${exam.examId}: ${message}`
+                );
+              }
+            }
           }
 
           summary.importedExamIndexes += 1;
@@ -839,10 +864,22 @@ export const importFileBackedData = async (
             });
           }
 
-          await materializeRubricCompatibility({
-            dataDir,
-            rubric,
-          });
+          if (emitCompatFiles) {
+            try {
+              await materializeRubricCompatibility({
+                dataDir,
+                rubric,
+              });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              recordFailed(
+                summary,
+                logger,
+                'rubric_compat_export_failed',
+                `Failed to export rubric compatibility ${examId}/${rubric.questionId}: ${message}`
+              );
+            }
+          }
         }
 
         summary.importedRubrics += 1;
