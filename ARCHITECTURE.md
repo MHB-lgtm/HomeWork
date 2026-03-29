@@ -6,12 +6,13 @@ Scope: implemented repo structure, completed milestones, approved next direction
 
 ## 1. Repo overview
 
-Homework Grader is a pnpm monorepo for a grading system that is now hybrid: key authoring and live grading runtime paths are DB-first, while several derived systems and asset paths still rely on local files under `HG_DATA_DIR`, with:
+Homework Grader is a pnpm monorepo for a grading system that is now DB-first for live application state, while local files under `HG_DATA_DIR` remain for asset bytes and explicit offline/archive tooling, with:
 
 - a committed Postgres-backed review and publication slice on the current branch, including a lecturer-facing publication lens inside `/reviews`,
 - a completed Wave 1 migration that makes exam metadata, rubric storage, exam-index metadata, course metadata, and lecture metadata DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers,
-- a completed Wave 2 migration that makes jobs, reviews, and worker health DB-first in live runtime while leaving rollback export and archive-only legacy files outside the live request path.
-- a completed Wave 3 migration that makes live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers.
+- a completed Wave 2 migration that makes jobs, reviews, and worker health DB-first in live runtime while leaving rollback export and archive-only legacy files outside the live request path,
+- a completed Wave 3 migration that makes live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers,
+- a completed Wave 4A cleanup that removes live compatibility writes and narrows `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling.
 
 Today the repo contains:
 
@@ -21,9 +22,9 @@ Today the repo contains:
 - `packages/domain-workflow` as the storage-agnostic domain foundation package.
 - `packages/local-job-store` as the legacy file-backed job, review, and exam-index store still retained for rollback/export tooling, archive reads, and debug parity checks.
 - `packages/local-course-store` as the legacy file-backed course, lecture, and RAG store retained for archive/debug parity and compatibility-oriented tooling.
-- `packages/postgres-store` as the shared PostgreSQL + Prisma persistence package for the review/publication slice, completed Wave 1 authoring/content slice, completed Wave 2 job/worker slice, and completed Wave 3 derived-runtime slice.
+- `packages/postgres-store` as the shared PostgreSQL + Prisma persistence package for the review/publication slice, completed Wave 1 authoring/content slice, completed Wave 2 job/worker slice, completed Wave 3 derived-runtime slice, and completed Wave 4A cleanup work.
 
-The repo is no longer review-only or hybrid-only on the Postgres path: Wave 1, Wave 2, and Wave 3 now make exams, rubrics, exam-index state, courses, lectures, course RAG, jobs, reviews, and worker heartbeat DB-first in live runtime. The domain foundation milestone is complete, but broad runtime adoption of that foundation is still intentionally incomplete.
+The repo is no longer review-only or hybrid-only on the Postgres path: Wave 1, Wave 2, and Wave 3 now make exams, rubrics, exam-index state, courses, lectures, course RAG, jobs, reviews, and worker heartbeat DB-first in live runtime, and completed Wave 4A removes the last live compatibility writes from those DB-backed surfaces. The domain foundation milestone is complete, but broad runtime adoption of that foundation is still intentionally incomplete.
 
 ## 2. Package and app map
 
@@ -166,8 +167,8 @@ Current Wave 1 addition:
 - `GET` / `POST /api/courses` are DB-first,
 - `GET /api/courses/[courseId]` is DB-first,
 - `GET` / `POST /api/courses/[courseId]/lectures` are DB-first,
-- exam metadata, rubric data, and exam-index metadata are now imported into Postgres and can be materialized back into legacy filesystem artifacts,
-- course metadata and lecture metadata are now authored in Postgres and materialized back into legacy filesystem artifacts,
+- exam metadata, rubric data, and exam-index metadata are now imported into Postgres and can be materialized back into legacy filesystem artifacts only through explicit offline/import tooling,
+- course metadata and lecture metadata are now authored in Postgres and may be materialized back into legacy filesystem artifacts only through explicit offline/import tooling,
 - `apps/worker/src/scripts/generateExamIndex.ts` now saves exam-index metadata only to Postgres in normal runtime.
 
 Current Wave 2 addition:
@@ -196,21 +197,32 @@ Current Wave 3 addition:
 - `apps/worker/src/core/attachStudyPointers.ts` uses the same Postgres-backed lexical retrieval path,
 - `CourseRagIndex` and `CourseRagChunk` are now the DB-authoritative lexical RAG runtime state.
 
+Current Wave 4A addition:
+
+- live `POST /api/exams` no longer writes `exams/<examId>/exam.json`,
+- live `POST /api/rubrics` no longer writes `rubrics/<examId>/*.json`,
+- live `POST /api/courses` no longer writes `courses/<courseId>/course.json`,
+- live `POST /api/courses/[courseId]/lectures` no longer writes `courses/<courseId>/lectures/<lectureId>/lecture.json`,
+- `GET /api/exams` and `GET /api/exams/[examId]` are DB-backed metadata reads with no `HG_DATA_DIR` requirement,
+- `GET /api/rubrics`, `GET /api/rubrics/[examId]/[questionId]`, and `POST /api/rubrics` no longer require `HG_DATA_DIR`,
+- `POST /api/courses` no longer requires `HG_DATA_DIR`,
+- `import-file-backed` emits compatibility files only when `--emit-compat-files` is passed.
+
 ### 3.2 Current persistence model
 
-The primary persistence model is now DB-first for live application state. Filesystem usage remains for asset bytes, compatibility exports, archive-only legacy files, rollback tooling, and debug parity checks under `HG_DATA_DIR`.
+The primary persistence model is now DB-first for live application state. Filesystem usage remains for asset bytes, archive-only legacy files, rollback tooling, and explicit offline compatibility/debug materialization under `HG_DATA_DIR`.
 
 Key persisted areas:
 
 - `jobs/` for archive-only pre-cutover legacy job records,
 - `reviews/` for archive-only pre-cutover legacy `ReviewRecord` JSON documents,
-- `exams/` for exam packages and compatibility/debug `examIndex.json`,
-- `rubrics/` for rubric JSON files,
-- `courses/` for compatibility-exported course and lecture metadata plus archive/debug RAG files,
+- `exams/` for exam packages and archive/debug `examIndex.json`,
+- `rubrics/` for archive/debug rubric JSON files,
+- `courses/` for archive/debug course and lecture metadata plus archive/debug RAG files,
 - `uploads/` for copied submissions and derived PDFs,
 - `worker/heartbeat.json` as an archive-only legacy artifact.
 
-There is now a committed Prisma schema, Postgres persistence package, and active PostgreSQL runtime use for reviews/publication, Wave 1 authoring surfaces, completed Wave 2 job/worker runtime, and completed Wave 3 derived-runtime systems. The remaining file-backed areas are compatibility exports, archive-only legacy artifacts, rollback/debug tooling, and asset bytes.
+There is now a committed Prisma schema, Postgres persistence package, and active PostgreSQL runtime use for reviews/publication, Wave 1 authoring surfaces, completed Wave 2 job/worker runtime, completed Wave 3 derived-runtime systems, and completed Wave 4A compatibility-write cleanup. The remaining file-backed areas are archive-only legacy artifacts, explicit offline compatibility/debug tooling, rollback tooling, and asset bytes.
 
 ### 3.3 Current runtime boundaries
 
@@ -219,7 +231,7 @@ Committed runtime boundaries are still direct:
 - `apps/web` now uses Postgres runtime stores for reviews, Wave 1 authoring/content surfaces, Wave 2 jobs/health, and Wave 3 exam-index/RAG reads,
 - `apps/worker` now uses Postgres runtime stores for queue claims, leases, heartbeat, exam-index reads, and study-pointer retrieval,
 - `packages/domain-workflow` is not yet the main runtime dependency of route handlers or worker flows,
-- file path semantics still exist in runtime code for asset bytes, compatibility exports, and debug/archive tooling, even though the domain package now defines storage-neutral contracts.
+- file path semantics still exist in runtime code for asset bytes and debug/archive tooling, even though the domain package now defines storage-neutral contracts.
 
 ### 3.4 Current auth and authorization state
 
@@ -309,7 +321,7 @@ The following runtime concerns are still intentionally file-backed today:
 - uploaded submissions and derived files,
 - archive-only pre-cutover `jobs/` and `reviews/` records,
 - archive-only `worker/heartbeat.json`,
-- compatibility-exported exam/course/lecture artifacts,
+- explicit offline compatibility/debug exam/course/lecture artifacts,
 - archive/debug `examIndex.json`, `manifest.json`, and `chunks.jsonl` leftovers when present.
 
 The following file-backed tooling still exists, but only as explicit offline rollback or compatibility tooling:
@@ -438,7 +450,7 @@ The following are intentionally not implemented yet:
 - analytics snapshots,
 - notifications,
 - export pipelines,
-- Wave 4 cleanup of compatibility writes and legacy runtime retirement.
+- Wave 4B legacy runtime/package retirement after the completed Wave 4A compatibility-write cleanup.
 
 ## 11. Open architectural questions
 

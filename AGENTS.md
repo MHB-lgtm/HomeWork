@@ -27,7 +27,7 @@
 
 ## Current architectural boundaries
 
-- The live runtime is now DB-first across Wave 1, Wave 2, and Wave 3 surfaces. Remaining filesystem usage under `HG_DATA_DIR` is limited to asset bytes, compatibility exports, archive-only leftovers, rollback tooling, and debug parity checks.
+- The live runtime is now DB-first across Wave 1, Wave 2, Wave 3, and completed Wave 4A surfaces. Remaining filesystem usage under `HG_DATA_DIR` is limited to asset bytes, archive-only leftovers, rollback tooling, and explicit offline compatibility/debug tooling.
 - On `feat/postgres-runtime-slice-1`, the reviews surface now has a Postgres-backed slice when `DATABASE_URL` is configured:
   - `GET /api/reviews/[jobId]`
   - `PUT` / `PATCH /api/reviews/[jobId]`
@@ -64,8 +64,12 @@
   - `apps/worker/src/core/loadExamIndex.ts`
   - `apps/worker/src/core/listExamQuestionIds.ts`
   - `apps/worker/src/core/attachStudyPointers.ts`
+- The current workspace also completes Wave 4A:
+  - live `POST /api/exams`, `POST /api/rubrics`, `POST /api/courses`, and `POST /api/courses/[courseId]/lectures` no longer materialize compatibility files
+  - DB-backed metadata reads for exams, rubrics, courses, and lectures no longer require `HG_DATA_DIR`
+  - `import:file-backed` emits compatibility files only when `--emit-compat-files` is passed
 - Exams, rubrics, exam-index state, course metadata, lecture metadata, course RAG state, jobs, worker heartbeat, and review runtime are now DB-authoritative.
-- Filesystem artifacts under `HG_DATA_DIR` remain compatibility exports or archive-only leftovers for offline rollback drills, debug parity checks, and asset storage only.
+- Filesystem artifacts under `HG_DATA_DIR` remain archive-only leftovers, explicit offline compatibility/debug artifacts, rollback tooling, and asset storage only.
 - Wave 2 also includes offline rollback tooling via `pnpm --filter @hg/postgres-store rollback:export-jobs`, which exports `PENDING` / `RUNNING` DB jobs back into the legacy queue shape only for rollback drills.
 - `@hg/domain-workflow` exists and is tested, but broad runtime adoption is still deferred.
 - Keep auth/session concerns separate from grading domain logic.

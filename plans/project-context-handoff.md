@@ -5,7 +5,7 @@ Purpose: high-signal handoff for a fresh engineer or fresh model
 
 ## 1. Project description
 
-Homework Grader is a pnpm monorepo for a grading system that now runs as a hybrid DB-first and local-file runtime.
+Homework Grader is a pnpm monorepo for a grading system that now runs as a DB-first live runtime with local files retained for asset bytes and explicit offline/archive tooling.
 
 The repo now has:
 
@@ -15,6 +15,7 @@ The repo now has:
 - completed Wave 1 changes that make exams, rubrics, exam-index metadata, courses, and lectures DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers,
 - completed Wave 2 changes that make live jobs, reviews, and worker health DB-first while keeping rollback export and leftover file artifacts outside the live runtime path.
 - completed Wave 3 changes that make live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers.
+- completed Wave 4A changes that remove live compatibility writes and narrow `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling.
 - implemented offline rollback tooling that can export `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
 ## 2. Repo structure and responsibilities
@@ -38,7 +39,7 @@ The repo now has:
 - `packages/local-course-store`
   - legacy file-backed course/lecture/RAG persistence retained for archive/debug parity and compatibility-oriented tooling
 - `packages/postgres-store`
-  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, completed Wave 2 job/worker runtime stores, and completed Wave 3 derived-runtime stores
+  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, completed Wave 2 job/worker runtime stores, completed Wave 3 derived-runtime stores, and completed Wave 4A cleanup work
 
 ### Plans and docs
 
@@ -54,6 +55,8 @@ The repo now has:
   - current execution record for completed Wave 2
 - `plans/postgres-wave-3-execution-plan.md`
   - current execution record for completed Wave 3
+- `plans/postgres-wave-4a-execution-plan.md`
+  - current execution record for completed Wave 4A
 
 ## 3. Current milestone status
 
@@ -67,6 +70,7 @@ Completed:
 - `Wave 1`
 - `Wave 2`
 - `Wave 3`
+- `Wave 4A`
 
 Current branch context:
 
@@ -75,6 +79,7 @@ Current branch context:
 - the current workspace also contains completed Wave 1 exam/rubric/exam-index/course/lecture migration work
 - the current workspace also contains completed Wave 2 job/worker/runtime cutover work
 - the current workspace also contains completed Wave 3 exam-index/RAG/study-pointer cutover work
+- the current workspace also contains completed Wave 4A cleanup of live compatibility writes and broad `HG_DATA_DIR` metadata-read requirements
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -137,10 +142,15 @@ Current branch context:
   - `apps/worker/src/core/attachStudyPointers.ts`
   - `apps/worker/src/scripts/generateExamIndex.ts` writing only to Postgres in normal runtime
   - `CourseRagIndex` / `CourseRagChunk` lexical RAG runtime state in Postgres
+- completed Wave 4A runtime cleanup:
+  - live `POST /api/exams`, `POST /api/rubrics`, `POST /api/courses`, and `POST /api/courses/[courseId]/lectures` no longer materialize compatibility files
+  - DB-backed metadata reads for exams and rubrics no longer require `HG_DATA_DIR`
+  - `POST /api/courses` no longer requires `HG_DATA_DIR`
+  - `import:file-backed` emits compatibility files only when `--emit-compat-files` is passed
 
 ## 5. What is intentionally not implemented yet
 
-- broad PostgreSQL/Prisma runtime adoption beyond the review slice, Wave 1 surfaces, and completed Wave 2
+- Wave 4B legacy runtime/package retirement after the completed Wave 4A cleanup
 - committed user identity model in product runtime
 - committed memberships or course-scoped authz
 - assignment runtime lifecycle
@@ -151,11 +161,11 @@ Current branch context:
 - notifications
 - analytics snapshots
 - export pipelines
-- Wave 4 cleanup of compatibility writes and legacy runtime retirement
+- Wave 4B legacy runtime/package retirement after the completed Wave 4A cleanup
 
 ## 6. Current persistence model
 
-The repo is now hybrid.
+The repo is now DB-first in live runtime.
 
 Main persisted areas under `HG_DATA_DIR`:
 
@@ -178,7 +188,7 @@ Current DB-first exceptions in the workspace:
 - courses and lectures are DB-first in `apps/web`
 - jobs, reviews, and worker health are DB-first in completed Wave 2
 - exam-index reads, RAG routes, and study pointers are DB-first in completed Wave 3
-- legacy files under `exams/**`, `rubrics/**`, `examIndex.json`, and `courses/**` remain compatibility outputs or debug/archive leftovers only
+- legacy files under `exams/**`, `rubrics/**`, `examIndex.json`, and `courses/**` remain explicit offline compatibility/debug artifacts or archive leftovers only
 - leftover `jobs/`, `reviews/`, and `worker/heartbeat.json` files are archive-only and are no longer part of live runtime
 - rollback export back into legacy queue files exists only as explicit offline tooling, not as a runtime dual-write path
 
@@ -234,7 +244,7 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move to Wave 4 cleanup and legacy runtime retirement
+- move to Wave 4B cleanup and legacy runtime retirement
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - do not jump to auth before compatibility-write retirement and legacy cleanup land
 
