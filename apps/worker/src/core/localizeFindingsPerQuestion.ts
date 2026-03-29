@@ -1,12 +1,12 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import {
   GeneralFindingsLocalizationV1Schema,
   Finding,
   Annotation,
 } from '@hg/shared-schemas';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -42,7 +42,7 @@ function extractJsonFromText(text: string): string {
 }
 
 export type LocalizeFindingsPerQuestionInput = {
-  job: JobRecord;
+  job: WorkerJobRecord;
   questionId: string;
   pageIndices?: number[]; // original submission pages selected for mini-PDF (0-based)
   miniPdfPath?: string; // created in PR B; contains full pages in the same order as pageIndices

@@ -1,11 +1,11 @@
 import { ExamIndex } from '@hg/shared-schemas';
-import { JobRecord } from '@hg/local-job-store';
 import { getWorkerRuntimePersistence } from '../lib/runtimePersistence';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 /**
  * Resolve examId from the runtime job payload.
  */
-export async function resolveExamId(job: JobRecord): Promise<string | null> {
+export async function resolveExamId(job: WorkerJobRecord): Promise<string | null> {
   return job.inputs.examId ?? null;
 }
 

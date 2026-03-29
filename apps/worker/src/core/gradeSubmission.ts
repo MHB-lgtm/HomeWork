@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import {
   RubricEvaluationRawSchema,
@@ -8,6 +7,7 @@ import {
   RubricEvaluationResult,
   RubricValidationError,
 } from '@hg/shared-schemas';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -44,7 +44,7 @@ function extractJsonFromText(text: string): string {
 
 type GradeSubmissionResult = { type: 'rubric'; result: RubricEvaluationResult };
 
-export async function gradeSubmission(job: JobRecord): Promise<GradeSubmissionResult> {
+export async function gradeSubmission(job: WorkerJobRecord): Promise<GradeSubmissionResult> {
   if (!job.rubric) {
     throw new Error('Rubric is required for grading');
   }

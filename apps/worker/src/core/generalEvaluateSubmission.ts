@@ -1,8 +1,8 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import { GeneralEvaluationSchema, GeneralEvaluation } from '@hg/shared-schemas';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -42,7 +42,7 @@ type GeneralEvaluateResult = { type: 'general'; result: GeneralEvaluation };
 /**
  * Evaluate submission in General mode (findings-only, no scoring)
  */
-export async function generalEvaluateSubmission(job: JobRecord): Promise<GeneralEvaluateResult> {
+export async function generalEvaluateSubmission(job: WorkerJobRecord): Promise<GeneralEvaluateResult> {
   const gradingMode = job.inputs.gradingMode || 'RUBRIC';
   const gradingScope = job.inputs.gradingScope || 'QUESTION';
 

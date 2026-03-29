@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import {
   GeneralEvaluationSchema,
@@ -13,6 +12,7 @@ import { mapQuestionPages } from './mapQuestionPages';
 import { extractMiniPdf } from './extractMiniPdf';
 import { loadExamIndexForWorker, resolveExamId } from './loadExamIndex';
 import { ExamIndex, QuestionEntry } from '@hg/shared-schemas';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -108,7 +108,7 @@ function buildFallbackSummary(questionId: string, findings: Array<{ title: strin
  * Evaluate submission per-question in General mode
  * For each questionId: maps pages, extracts mini-PDF if needed, and evaluates with >=1 finding
  */
-export async function generalEvaluatePerQuestion(job: JobRecord): Promise<GeneralEvaluatePerQuestionResult> {
+export async function generalEvaluatePerQuestion(job: WorkerJobRecord): Promise<GeneralEvaluatePerQuestionResult> {
   const gradingMode = job.inputs.gradingMode || 'RUBRIC';
   const gradingScope = job.inputs.gradingScope || 'QUESTION';
 
@@ -273,7 +273,7 @@ Return the JSON now:`;
     // Step 1: Map pages (if not DOCUMENT)
     if (questionId !== 'DOCUMENT') {
       // Create a temporary job-like object for mapping with question metadata
-      const mappingJob: JobRecord = {
+      const mappingJob: WorkerJobRecord = {
         ...job,
         inputs: {
           ...job.inputs,

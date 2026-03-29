@@ -65,9 +65,6 @@ importers:
       '@google/generative-ai':
         specifier: ^0.24.1
         version: 0.24.1
-      '@hg/local-job-store':
-        specifier: workspace:*
-        version: link:../../packages/local-job-store
       '@hg/postgres-store':
         specifier: workspace:*
         version: link:../../packages/postgres-store

@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { JobRecord } from '@hg/local-job-store';
 import type {
   LegacyReviewContextRecord,
   RuntimeJobClaimRecord,
@@ -12,6 +11,7 @@ import { localizeMistakes } from '../core/localizeMistakes';
 import { localizeFindingsPerQuestion } from '../core/localizeFindingsPerQuestion';
 import { attachStudyPointers } from '../core/attachStudyPointers';
 import { getWorkerRuntimePersistence } from './runtimePersistence';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 export interface ProcessResult {
   processed: boolean;
@@ -25,7 +25,7 @@ type ProcessNextPendingJobOptions = {
 
 const DEFAULT_LEASE_MS = 30_000;
 
-const toLegacyJobRecord = (job: RuntimeJobClaimRecord): JobRecord => ({
+const toWorkerJobRecord = (job: RuntimeJobClaimRecord): WorkerJobRecord => ({
   id: job.jobId,
   status: job.status,
   createdAt: job.createdAt,
@@ -99,7 +99,7 @@ export async function processNextPendingJob(
     return { processed: false };
   }
 
-  const job = toLegacyJobRecord(claimedJob);
+  const job = toWorkerJobRecord(claimedJob);
   const jobId = job.id;
   const gradingMode = job.inputs.gradingMode || 'RUBRIC';
   console.log(`[worker] Processing job ${jobId} (mode: ${gradingMode})`);

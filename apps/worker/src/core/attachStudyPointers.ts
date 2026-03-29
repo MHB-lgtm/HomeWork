@@ -1,10 +1,10 @@
 import { StudyPointerV1 } from '@hg/shared-schemas';
-import { JobRecord } from '@hg/local-job-store';
 import {
   PostgresCourseRagCourseNotFoundError,
   PostgresCourseRagIndexNotBuiltError,
 } from '@hg/postgres-store';
 import { getWorkerRuntimePersistence } from '../lib/runtimePersistence';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 const MAX_TARGETS = 10;
 const MAX_POINTERS_PER_TARGET = 3;
@@ -146,7 +146,7 @@ const extractTargets = (resultJson: any): StudyPointerTarget[] => {
 };
 
 export async function attachStudyPointers(args: {
-  job: JobRecord;
+  job: WorkerJobRecord;
   resultJson: any;
 }): Promise<StudyPointersPayload | null> {
   const { job, resultJson } = args;
