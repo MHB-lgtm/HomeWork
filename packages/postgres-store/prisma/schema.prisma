@@ -126,6 +126,10 @@ enum GradingScope {
   DOCUMENT
 }
 
+enum CourseRagMethod {
+  LEXICAL_V1
+}
+
 model User {
   id                String             @id @default(uuid()) @db.Uuid
   normalizedEmail   String?            @unique
@@ -170,6 +174,8 @@ model Course {
   publishedResults  PublishedResult[]
   gradebookEntries  GradebookEntry[]
   gradingJobs       GradingJob[]
+  ragIndex          CourseRagIndex?
+  ragChunks         CourseRagChunk[]
 }
 
 model CourseMembership {
@@ -261,8 +267,41 @@ model Lecture {
   updatedAt   DateTime          @updatedAt @db.Timestamptz(6)
   course      Course            @relation(fields: [courseId], references: [id], onDelete: Cascade)
   asset       StoredAsset       @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  ragChunks   CourseRagChunk[]
 
   @@index([courseId, createdAt(sort: Desc)])
+}
+
+model CourseRagIndex {
+  id           String          @id @default(uuid()) @db.Uuid
+  courseId     String          @unique @db.Uuid
+  method       CourseRagMethod
+  builtAt      DateTime        @db.Timestamptz(6)
+  lectureCount Int
+  chunkCount   Int
+  chunkingJson Json
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
+  course       Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  chunks       CourseRagChunk[]
+}
+
+model CourseRagChunk {
+  id          String         @id @default(uuid()) @db.Uuid
+  indexId     String         @db.Uuid
+  courseId    String         @db.Uuid
+  lectureId   String         @db.Uuid
+  chunkId     String
+  order       Int
+  text        String
+  anchorsJson Json?
+  createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+  index       CourseRagIndex @relation(fields: [indexId], references: [id], onDelete: Cascade)
+  course      Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lecture     Lecture        @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  @@unique([indexId, chunkId])
+  @@index([courseId, lectureId, order])
 }
 
 model CourseMaterial {

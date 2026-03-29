@@ -1,5 +1,6 @@
 import {
   PrismaCourseStore,
+  PrismaCourseRagStore,
   PrismaExamIndexStore,
   PrismaExamStore,
   PrismaJobStore,
@@ -17,6 +18,7 @@ type ServerPersistence = {
   courses: PrismaCourseStore;
   exams: PrismaExamStore;
   lectures: PrismaLectureStore;
+  courseRag: PrismaCourseRagStore;
   rubrics: PrismaRubricStore;
   examIndexes: PrismaExamIndexStore;
 };
@@ -37,6 +39,7 @@ export const getServerPersistence = (): ServerPersistence | null => {
       courses: new PrismaCourseStore(prisma),
       exams: new PrismaExamStore(prisma),
       lectures: new PrismaLectureStore(prisma),
+      courseRag: new PrismaCourseRagStore(prisma),
       rubrics: new PrismaRubricStore(prisma),
       examIndexes: new PrismaExamIndexStore(prisma),
     };

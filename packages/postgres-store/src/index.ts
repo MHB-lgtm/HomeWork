@@ -31,6 +31,11 @@ export { PrismaExamStore } from './queries/exam-store';
 export { PrismaRubricStore } from './queries/rubric-store';
 export { PrismaExamIndexStore } from './queries/exam-index-store';
 export {
+  PrismaCourseRagStore,
+  CourseNotFoundError as PostgresCourseRagCourseNotFoundError,
+  IndexNotBuiltError as PostgresCourseRagIndexNotBuiltError,
+} from './queries/course-rag-store';
+export {
   PrismaLectureStore,
   CourseNotFoundError as PostgresCourseNotFoundError,
   LectureNotFoundError as PostgresLectureNotFoundError,

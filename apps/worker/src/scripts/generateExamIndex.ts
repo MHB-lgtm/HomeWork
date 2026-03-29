@@ -6,7 +6,6 @@ import {
   PrismaExamIndexStore,
   disconnectPrismaClient,
   getPrismaClient,
-  materializeExamIndexCompatibility,
 } from '@hg/postgres-store';
 import { ExamIndexSchema, ExamIndex } from '@hg/shared-schemas';
 
@@ -55,14 +54,6 @@ function parseArgs(): { examId: string; force: boolean } {
     examId: examId as string,
     force,
   };
-}
-
-function getDataDir(): string {
-  const dataDir = process.env.HG_DATA_DIR;
-  if (!dataDir) {
-    throw new Error('HG_DATA_DIR is not set in environment variables');
-  }
-  return path.resolve(dataDir);
 }
 
 function inferMimeType(filePath: string): string {
@@ -115,32 +106,36 @@ function hasNonEnglishQuestionText(questions: Array<{
 }
 
 interface ExamRecord {
-  examId: string;
   title: string;
-  createdAt: string;
-  updatedAt: string;
-  examFilePath: string;
+  assetPath: string;
 }
 
 async function loadExamMetadata(examId: string): Promise<ExamRecord> {
-  const dataDir = getDataDir();
-  const examMetadataPath = path.join(dataDir, 'exams', examId, 'exam.json');
+  const prisma = getPrismaClient();
+  const row = await prisma.exam.findUnique({
+    where: { domainId: examId },
+    select: {
+      title: true,
+      asset: {
+        select: {
+          path: true,
+        },
+      },
+    },
+  });
 
-  try {
-    const content = await fs.readFile(examMetadataPath, 'utf-8');
-    const parsed = JSON.parse(content) as ExamRecord;
-    return parsed;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new Error(`Exam not found: ${examId}`);
-    }
-    throw error;
+  if (!row) {
+    throw new Error(`Exam not found: ${examId}`);
   }
+
+  return {
+    title: row.title,
+    assetPath: row.asset.path,
+  };
 }
 
 async function main() {
   const { examId, force } = parseArgs();
-  const dataDir = getDataDir();
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set in environment variables');
   }
@@ -167,7 +162,7 @@ async function main() {
     }
 
     const examMetadata = await loadExamMetadata(examId);
-    const examFilePath = path.join(dataDir, examMetadata.examFilePath);
+    const examFilePath = examMetadata.assetPath;
 
     try {
       await fs.access(examFilePath);
@@ -298,13 +293,9 @@ Return the JSON now:`;
     }
 
     const savedExamIndex = await examIndexStore.saveExamIndex(examIndex);
-    await materializeExamIndexCompatibility({
-      dataDir,
-      examIndex: savedExamIndex,
-    });
 
     console.log(
-      `[exam-index] Generated proposed examIndex for ${examId}: ${examIndex.questions.length} question${examIndex.questions.length !== 1 ? 's' : ''}`
+      `[exam-index] Generated proposed examIndex for ${savedExamIndex.examId}: ${savedExamIndex.questions.length} question${savedExamIndex.questions.length !== 1 ? 's' : ''}`
     );
   } finally {
     await disconnectPrismaClient();

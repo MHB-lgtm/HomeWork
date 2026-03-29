@@ -9,7 +9,6 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@hg/local-course-store": "workspace:*",
     "@hg/postgres-store": "workspace:*",
     "@hg/shared-schemas": "workspace:*",
     "clsx": "^2.1.1",

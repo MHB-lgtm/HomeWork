@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@hg/local-course-store": "workspace:*",
     "@hg/local-job-store": "workspace:*",
     "@hg/postgres-store": "workspace:*",
     "@hg/shared-schemas": "workspace:*",

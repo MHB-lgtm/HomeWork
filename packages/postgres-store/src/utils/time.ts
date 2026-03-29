@@ -19,3 +19,16 @@ export const parseTimecode = (raw: string): number | null => {
 
   return hours * 3600 + minutes * 60 + seconds + millis / 1000;
 };
+
+export const buildTimeUrl = (url: string, startSec: number): string => {
+  const normalized = url.trim();
+  const seconds = Math.max(0, Math.floor(startSec));
+
+  if (/youtube\.com|youtu\.be/i.test(normalized)) {
+    const hasQuery = normalized.includes('?');
+    const joiner = hasQuery ? '&' : '?';
+    return `${normalized}${joiner}t=${seconds}`;
+  }
+
+  return normalized;
+};

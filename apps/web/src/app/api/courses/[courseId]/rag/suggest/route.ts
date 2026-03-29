@@ -3,26 +3,31 @@ import {
   SuggestRequestV1Schema,
   SuggestResponseV1,
 } from '@hg/shared-schemas';
-import { CourseNotFoundError, IndexNotBuiltError, suggestStudyPointers } from '@hg/local-course-store';
+import {
+  PostgresCourseRagCourseNotFoundError,
+  PostgresCourseRagIndexNotBuiltError,
+} from '@hg/postgres-store';
+import { getServerPersistence } from '../../../../../../lib/server/persistence';
 
 export const runtime = 'nodejs';
 
-const ensureDataDir = () => {
-  if (!process.env.HG_DATA_DIR) {
-    return NextResponse.json<{ ok: false; error: string; code: 'HG_DATA_DIR_MISSING' }>(
-      { ok: false, error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+const ensurePersistence = () => {
+  const persistence = getServerPersistence();
+  if (!persistence) {
+    return NextResponse.json<{ ok: false; error: string; code: 'DATABASE_URL_MISSING' }>(
+      { ok: false, error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
       { status: 500 }
     );
   }
-  return null;
+  return persistence;
 };
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { courseId: string } }
 ): Promise<NextResponse<SuggestResponseV1 | { ok: false; error: string; code?: string }>> {
-  const dataDirError = ensureDataDir();
-  if (dataDirError) return dataDirError;
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
 
   try {
     const body = await request.json();
@@ -44,7 +49,7 @@ export async function POST(
       );
     }
 
-    const result = await suggestStudyPointers(params.courseId, {
+    const result = await persistence.courseRag.suggestStudyPointers(params.courseId, {
       issueText,
       k,
     });
@@ -67,14 +72,14 @@ export async function POST(
       );
     }
 
-    if (error instanceof IndexNotBuiltError) {
+    if (error instanceof PostgresCourseRagIndexNotBuiltError) {
       return NextResponse.json(
         { ok: false, error: 'INDEX_NOT_BUILT', code: 'INDEX_NOT_BUILT' },
         { status: 409 }
       );
     }
 
-    if (error instanceof CourseNotFoundError) {
+    if (error instanceof PostgresCourseRagCourseNotFoundError) {
       return NextResponse.json(
         { ok: false, error: 'COURSE_NOT_FOUND', code: 'COURSE_NOT_FOUND' },
         { status: 404 }

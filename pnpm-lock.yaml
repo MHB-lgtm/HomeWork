@@ -10,9 +10,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@hg/local-course-store':
-        specifier: workspace:*
-        version: link:../../packages/local-course-store
       '@hg/postgres-store':
         specifier: workspace:*
         version: link:../../packages/postgres-store
@@ -68,9 +65,6 @@ importers:
       '@google/generative-ai':
         specifier: ^0.24.1
         version: 0.24.1
-      '@hg/local-course-store':
-        specifier: workspace:*
-        version: link:../../packages/local-course-store
       '@hg/local-job-store':
         specifier: workspace:*
         version: link:../../packages/local-job-store
