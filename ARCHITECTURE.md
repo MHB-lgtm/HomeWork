@@ -35,6 +35,7 @@ Owns:
 
 - page routes under `apps/web/src/app/**`,
 - API routes under `apps/web/src/app/api/**`,
+- the Auth.js login/session boundary,
 - exam upload and job creation request boundaries,
 - course and lecture management UI/API,
 - review browsing and review-editing UI/API.
@@ -51,6 +52,7 @@ Current primary page routes:
 
 Current API route groups:
 
+- `apps/web/src/app/api/auth/**`
 - `apps/web/src/app/api/exams/**`
 - `apps/web/src/app/api/jobs/**`
 - `apps/web/src/app/api/reviews/**`
@@ -218,6 +220,17 @@ Current Wave 4B addition:
 - `apps/web` and `apps/worker` no longer import `@hg/local-course-store`,
 - live runtime application state can now be described as fully Postgres-first, with archived local-store packages retained only for offline/archive workflows.
 
+Current Auth M1 addition:
+
+- `apps/web` now owns an Auth.js-backed session boundary,
+- non-auth pages are private-by-default for authenticated staff only,
+- non-auth API routes are private-by-default for authenticated staff only,
+- `GET /api/health` is now restricted to `SUPER_ADMIN`,
+- canonical session identity now resolves through Postgres `User`,
+- provider linkage now uses `AuthAccount`,
+- coarse staff access is currently derived from `SUPER_ADMIN` or any active `COURSE_ADMIN` / `LECTURER` membership,
+- full course-scoped authorization remains deferred to the next milestone.
+
 ### 3.2 Current persistence model
 
 The primary persistence model is now DB-first for live application state. Filesystem usage remains for asset bytes, archive-only legacy files, rollback tooling, and explicit offline compatibility/debug materialization under `HG_DATA_DIR`.
@@ -246,14 +259,23 @@ Committed runtime boundaries are now:
 
 ### 3.4 Current auth and authorization state
 
-Current committed runtime state is unauthenticated:
+Current committed runtime state now has a web-only auth/session foundation:
 
-- no session middleware,
-- no user model,
-- no course membership model,
-- no course-scoped authorization enforcement.
+- `apps/web` owns the Auth.js login/session boundary,
+- session identity is resolved against canonical Postgres `User` rows,
+- provider linkage is stored in `AuthAccount`,
+- `IdentityAlias` remains available for legacy and institutional identity mapping,
+- non-auth pages and non-auth API routes are private-by-default for the current internal staff product,
+- `SUPER_ADMIN` remains the only global elevated role,
+- active `COURSE_ADMIN` / `LECTURER` memberships currently grant coarse staff access,
+- `STUDENT` remains schema-level only for now,
+- worker runtime remains out of scope and does not depend on web session/auth.
 
-Any auth, membership, or RBAC behavior described in plan docs is still planned or deferred, not implemented.
+Still not implemented:
+
+- course-scoped route filtering and enforcement,
+- student-facing own-data authorization,
+- membership-management runtime surfaces.
 
 ## 4. Domain & Workflow Foundation milestone
 
@@ -391,7 +413,7 @@ The approved persistence direction is PostgreSQL + Prisma.
 
 This is now the active persistence design direction for the repo. Older Firebase / Firestore notes are historical context only and should not be treated as the current approved path for the next milestone.
 
-Persistence cutover for live application state is now complete through Wave 4B. The next milestone, if any, should be post-cutover work such as auth foundation or product-facing capabilities, not another persistence migration wave.
+Persistence cutover for live application state is now complete through Wave 4B. Auth M1 is now closed. The next milestone should be course memberships and course-scoped staff authorization, not another persistence migration wave.
 
 Current design source of truth:
 
@@ -451,9 +473,8 @@ Important boundary:
 
 The following are intentionally not implemented yet:
 
-- user identity and session runtime,
-- course memberships,
-- course-scoped authz,
+- course-scoped membership filtering and enforcement,
+- membership-management runtime surfaces,
 - assignment runtime lifecycle,
 - first-class exam-batch runtime lifecycle,
 - broader published-result runtime surfaces,
@@ -465,7 +486,8 @@ The following are intentionally not implemented yet:
 - analytics snapshots,
 - notifications,
 - export pipelines,
-- post-cutover auth and product work.
+- student-safe own-data access,
+- broader post-cutover product work.
 
 ## 11. Open architectural questions
 
@@ -487,7 +509,7 @@ The main open or deferred architectural decisions are:
    - how quickly the product should move from job-oriented runtime flows to canonical `Submission` / `Assignment` / `ExamBatch` ownership.
 
 6. Auth milestone sequencing
-   - when the deferred auth foundation should land relative to Postgres persistence and identity-backed data.
+   - how quickly the repo should move from coarse staff access to true course-scoped authorization and later student-safe access.
 
 ## 12. Validation commands that matter today
 

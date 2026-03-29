@@ -17,6 +17,7 @@ The repo now has:
 - completed Wave 3 changes that make live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers.
 - completed Wave 4A changes that remove live compatibility writes and narrow `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling.
 - completed Wave 4B changes that retire live local-store package usage from `apps/web` and `apps/worker` and declare final Postgres cutover for live application state.
+- completed Auth M1 changes that add an Auth.js web-session boundary, canonical Postgres-backed session identity, and private-by-default staff access in `apps/web`.
 - implemented offline rollback tooling that can export `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
 ## 2. Repo structure and responsibilities
@@ -49,7 +50,9 @@ The repo now has:
 - `plans/domain-workflow-foundation.md`
   - record of the completed domain-foundation milestone
 - `plans/auth-foundation.md`
-  - deferred auth/session milestone plan
+  - record of the now-implemented auth/session foundation boundary
+- `plans/auth-membership-authorization-execution-plan.md`
+  - active auth/membership/authorization execution record with M1 closed and M2 next
 - `plans/postgres-prisma-identity-design.md`
   - approved persistence and identity design direction beyond the original review slice
 - `plans/postgres-wave-2-execution-plan.md`
@@ -75,6 +78,7 @@ Completed:
 - `Wave 3`
 - `Wave 4A`
 - `Wave 4B`
+- `Auth M1`
 
 Current branch context:
 
@@ -85,6 +89,7 @@ Current branch context:
 - the current workspace also contains completed Wave 3 exam-index/RAG/study-pointer cutover work
 - the current workspace also contains completed Wave 4A cleanup of live compatibility writes and broad `HG_DATA_DIR` metadata-read requirements
 - the current workspace also contains completed Wave 4B retirement of live local-store package usage and final Postgres cutover cleanup
+- the current workspace now also contains completed Auth M1 identity/session foundation work in `apps/web`
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -158,11 +163,18 @@ Current branch context:
   - `apps/web` no longer carries the unused file-backed `src/lib/exams.ts` or `src/lib/rubrics.ts` helpers
   - `apps/web` and `apps/worker` no longer import `@hg/local-course-store`
   - live runtime application state is now fully Postgres-first, with archived local-store packages retained only for offline/archive workflows
+- completed Auth M1 foundation:
+  - `apps/web` now has Auth.js-backed session handling
+  - canonical session identity resolves through Postgres `User`
+  - provider linkage uses `AuthAccount`
+  - non-auth pages and non-auth APIs are private-by-default for authenticated staff users
+  - `/api/health` is now `SUPER_ADMIN`-only
+  - review publish and new review metadata mutations now attribute session-backed `user:<id>` actors
 
 ## 5. What is intentionally not implemented yet
 
-- committed user identity model in product runtime
-- committed memberships or course-scoped authz
+- course-scoped membership enforcement beyond coarse staff derivation
+- membership-management runtime surfaces
 - assignment runtime lifecycle
 - exam-batch runtime lifecycle
 - broader `PublishedResult` / `GradebookEntry` runtime surfaces
@@ -256,9 +268,11 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move to post-cutover work such as auth foundation, identity-backed data, or product-facing capabilities
+- move to post-cutover auth/product work, starting with course memberships and course-scoped authorization
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - treat the archived local-store packages as offline/debug code, not as a live runtime path
+- keep auth/authz separate from grading-domain logic
+- keep worker out of scope unless a later auth milestone proves a tiny compatibility change is unavoidable
 
 ## 9. Main constraints and do-not-change-yet boundaries
 
@@ -337,7 +351,7 @@ Relevant recent commits:
 
 Current dirty context:
 
-- after the runtime commit above, expect only the docs closure for Wave 4B plus any intentionally untracked local planning notes
+- expect only the intentionally untracked local cutover note unless new work has started
 - always confirm with `git status` before assuming a clean tree
 
 ## 13. Copy-paste handoff block
@@ -355,6 +369,7 @@ Canonical docs to read first:
 Current runtime shape:
 - live runtime is DB-first plus file-backed compatibility/archive artifacts under HG_DATA_DIR
 - apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, Wave 2 jobs/health, and Wave 3 exam-index/RAG routes
+- apps/web now also owns an Auth.js session boundary with private-by-default staff access
 - apps/worker claims new jobs from Postgres, writes new review state to Postgres, and reads exam-index/study-pointer derived state from Postgres
 - @hg/domain-workflow exists and is tested, but broad runtime adoption is still deferred
 - current branch has committed Postgres-backed review and publication slices
@@ -424,6 +439,11 @@ Key architecture boundary:
 - implemented Wave 4 cleanup:
   - live compatibility writes removed
   - archived local-store packages no longer imported by apps/web or apps/worker
+- implemented Auth M1 in the workspace:
+  - non-auth pages and APIs require authenticated staff access
+  - `/api/health` requires `SUPER_ADMIN`
+  - canonical session identity resolves through Postgres `User`
+  - provider linkage uses `AuthAccount`
 - publication state is visible in both review detail and review list for imported reviews
 - Submission.legacyJobId is the bridge from current jobId route params to DB-backed review records
 ```
