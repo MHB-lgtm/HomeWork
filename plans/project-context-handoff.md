@@ -16,6 +16,7 @@ The repo now has:
 - completed Wave 2 changes that make live jobs, reviews, and worker health DB-first while keeping rollback export and leftover file artifacts outside the live runtime path.
 - completed Wave 3 changes that make live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers.
 - completed Wave 4A changes that remove live compatibility writes and narrow `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling.
+- completed Wave 4B changes that retire live local-store package usage from `apps/web` and `apps/worker` and declare final Postgres cutover for live application state.
 - implemented offline rollback tooling that can export `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
 ## 2. Repo structure and responsibilities
@@ -35,11 +36,11 @@ The repo now has:
 - `packages/domain-workflow`
   - canonical domain entities, states, repository interfaces, services, and projections
 - `packages/local-job-store`
-  - legacy file-backed job/review/exam-index persistence retained for rollback/export tooling, archive reads, and debug parity checks
+  - archived file-backed job/review/exam-index persistence retained for rollback/export tooling, archive reads, and debug parity checks
 - `packages/local-course-store`
-  - legacy file-backed course/lecture/RAG persistence retained for archive/debug parity and compatibility-oriented tooling
+  - archived file-backed course/lecture/RAG persistence retained for archive/debug parity and compatibility-oriented tooling
 - `packages/postgres-store`
-  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, completed Wave 2 job/worker runtime stores, completed Wave 3 derived-runtime stores, and completed Wave 4A cleanup work
+  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, completed Wave 2 job/worker runtime stores, completed Wave 3 derived-runtime stores, completed Wave 4A cleanup work, and completed Wave 4B final-cutover cleanup
 
 ### Plans and docs
 
@@ -57,6 +58,8 @@ The repo now has:
   - current execution record for completed Wave 3
 - `plans/postgres-wave-4a-execution-plan.md`
   - current execution record for completed Wave 4A
+- `plans/postgres-wave-4b-execution-plan.md`
+  - current execution record for completed Wave 4B
 
 ## 3. Current milestone status
 
@@ -71,6 +74,7 @@ Completed:
 - `Wave 2`
 - `Wave 3`
 - `Wave 4A`
+- `Wave 4B`
 
 Current branch context:
 
@@ -80,6 +84,7 @@ Current branch context:
 - the current workspace also contains completed Wave 2 job/worker/runtime cutover work
 - the current workspace also contains completed Wave 3 exam-index/RAG/study-pointer cutover work
 - the current workspace also contains completed Wave 4A cleanup of live compatibility writes and broad `HG_DATA_DIR` metadata-read requirements
+- the current workspace also contains completed Wave 4B retirement of live local-store package usage and final Postgres cutover cleanup
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -147,10 +152,15 @@ Current branch context:
   - DB-backed metadata reads for exams and rubrics no longer require `HG_DATA_DIR`
   - `POST /api/courses` no longer requires `HG_DATA_DIR`
   - `import:file-backed` emits compatibility files only when `--emit-compat-files` is passed
+- completed Wave 4B runtime cleanup:
+  - `apps/worker` no longer imports `@hg/local-job-store` and now uses a worker-local `WorkerJobRecord` type
+  - the disabled legacy `job:create` entrypoint has been removed from `apps/worker`
+  - `apps/web` no longer carries the unused file-backed `src/lib/exams.ts` or `src/lib/rubrics.ts` helpers
+  - `apps/web` and `apps/worker` no longer import `@hg/local-course-store`
+  - live runtime application state is now fully Postgres-first, with archived local-store packages retained only for offline/archive workflows
 
 ## 5. What is intentionally not implemented yet
 
-- Wave 4B legacy runtime/package retirement after the completed Wave 4A cleanup
 - committed user identity model in product runtime
 - committed memberships or course-scoped authz
 - assignment runtime lifecycle
@@ -161,7 +171,6 @@ Current branch context:
 - notifications
 - analytics snapshots
 - export pipelines
-- Wave 4B legacy runtime/package retirement after the completed Wave 4A cleanup
 
 ## 6. Current persistence model
 
@@ -195,9 +204,12 @@ Current DB-first exceptions in the workspace:
 Runtime code still depends directly on:
 
 - `@hg/postgres-store`
+- selected asset-oriented local file reads in web and worker code paths
+
+Archived/offline code remains available in:
+
 - `@hg/local-course-store`
-- `@hg/local-job-store` for rollback-compatible file tooling, archive reads, and debug parity checks
-- app-local file helpers for exams and rubrics plus asset-oriented local file reads
+- `@hg/local-job-store`
 
 ## 7. Current domain and publication model
 
@@ -222,7 +234,7 @@ Important clarification:
 
 ## 8. Next milestone
 
-The approved direction is still PostgreSQL + Prisma, and the current workspace has already moved beyond review-only work into completed Wave 1 and completed Wave 2.
+The approved persistence direction is still PostgreSQL + Prisma, and the live persistence cutover is now complete through `W4B`.
 
 Already implemented seams in the workspace:
 
@@ -244,9 +256,9 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move to Wave 4B cleanup and legacy runtime retirement
+- move to post-cutover work such as auth foundation, identity-backed data, or product-facing capabilities
 - keep rollback export offline-only and do not reintroduce live fallback reads
-- do not jump to auth before compatibility-write retirement and legacy cleanup land
+- treat the archived local-store packages as offline/debug code, not as a live runtime path
 
 ## 9. Main constraints and do-not-change-yet boundaries
 
@@ -286,6 +298,8 @@ Read these first for current branch understanding:
 - `plans/postgres-prisma-identity-design.md`
 - `plans/postgres-wave-2-execution-plan.md`
 - `plans/postgres-wave-3-execution-plan.md`
+- `plans/postgres-wave-4a-execution-plan.md`
+- `plans/postgres-wave-4b-execution-plan.md`
 - `packages/domain-workflow/src/**`
 - `packages/domain-workflow/test/**`
 - `packages/shared-schemas/src/**`
@@ -312,6 +326,7 @@ Current branch:
 
 Relevant recent commits:
 
+- `5ffa1f9 feat(postgres): finalize wave 4b legacy runtime retirement`
 - `13fe16b feat(postgres): finalize wave 2 with db-only jobs reviews and health runtime`
 - `309b67e feat(postgres): add published lens to reviews list`
 - `8804be7 feat(postgres): add narrow review publication flow`
@@ -322,35 +337,7 @@ Relevant recent commits:
 
 Current dirty context:
 
-- current Wave 1 and Wave 2 work should include:
-  - `apps/web/src/app/api/exams/**`
-  - `apps/web/src/app/api/jobs/**`
-  - `apps/web/src/app/api/health/route.ts`
-  - `apps/web/src/app/api/courses/**`
-  - `apps/web/src/app/api/rubrics/**`
-  - `apps/web/src/app/api/reviews/**`
-  - `apps/web/src/lib/server/persistence.ts`
-  - `apps/web/src/lib/server/reviewDetail.ts`
-  - `apps/worker/src/lib/heartbeat.ts`
-  - `apps/worker/src/lib/processNextPendingJob.ts`
-  - `apps/worker/src/lib/runtimePersistence.ts`
-  - `apps/worker/src/scripts/generateExamIndex.ts`
-  - `apps/worker/src/scripts/createJob.ts`
-  - `apps/worker/src/scripts/runLoop.ts`
-  - `apps/worker/src/scripts/runOnce.ts`
-  - `packages/postgres-store/prisma/schema.prisma`
-  - `packages/postgres-store/prisma/migrations/**`
-  - `packages/postgres-store/src/import-file-backed.ts`
-  - `packages/postgres-store/src/queries/course-store.ts`
-  - `packages/postgres-store/src/queries/exam-store.ts`
-  - `packages/postgres-store/src/queries/rubric-store.ts`
-  - `packages/postgres-store/src/queries/exam-index-store.ts`
-  - `packages/postgres-store/src/queries/lecture-store.ts`
-  - `packages/postgres-store/src/queries/job-store.ts`
-  - `packages/postgres-store/src/queries/worker-heartbeat-store.ts`
-  - `packages/postgres-store/src/compat/file-materialization.ts`
-  - `plans/postgres-wave-1-execution-plan.md`
-  - `plans/postgres-wave-2-execution-plan.md`
+- after the runtime commit above, expect only the docs closure for Wave 4B plus any intentionally untracked local planning notes
 - always confirm with `git status` before assuming a clean tree
 
 ## 13. Copy-paste handoff block
@@ -363,12 +350,12 @@ Canonical docs to read first:
 - plans/domain-workflow-foundation.md
 - plans/auth-foundation.md
 - plans/postgres-prisma-identity-design.md
-- plans/postgres-wave-2-execution-plan.md
+- plans/postgres-wave-4b-execution-plan.md
 
 Current runtime shape:
 - live runtime is DB-first plus file-backed compatibility/archive artifacts under HG_DATA_DIR
 - apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, Wave 2 jobs/health, and Wave 3 exam-index/RAG routes
-- apps/worker now claims new jobs from Postgres, writes new review state to Postgres, and reads exam-index/study-pointer derived state from Postgres
+- apps/worker claims new jobs from Postgres, writes new review state to Postgres, and reads exam-index/study-pointer derived state from Postgres
 - @hg/domain-workflow exists and is tested, but broad runtime adoption is still deferred
 - current branch has committed Postgres-backed review and publication slices
 - imported reviews can publish through POST /api/reviews/[jobId]/publish
@@ -378,6 +365,7 @@ Current runtime shape:
 - exams, rubrics, exam-index metadata, courses, and lectures are now DB-first in apps/web
 - POST /api/jobs, worker queue/lease lifecycle, worker heartbeat, and review runtime are now DB-first in Wave 2
 - GET/PUT /api/exams/[examId]/index, course RAG routes, and worker study pointers are now DB-first in Wave 3
+- apps/web and apps/worker no longer import @hg/local-job-store or @hg/local-course-store for live runtime after Wave 4B
 - HG_DATA_DIR files under exams/**, rubrics/**, examIndex.json, and courses/** remain compatibility outputs or debug/archive leftovers only
 - leftover jobs/, reviews/, and worker/heartbeat.json are archive-only and not part of live runtime
 - rollback export to legacy queue files exists only as offline tooling for drills/rollback windows
@@ -385,6 +373,7 @@ Current runtime shape:
 Current branch context:
 - branch: feat/postgres-runtime-slice-1
 - recent commits:
+  - 5ffa1f9 feat(postgres): finalize wave 4b legacy runtime retirement
   - 13fe16b feat(postgres): finalize wave 2 with db-only jobs reviews and health runtime
   - 245e428 feat(postgres): harden review read side and import flow
   - 4b16945 feat(postgres): finalize first prisma review seam and local db bring-up
@@ -412,7 +401,7 @@ Important code to read:
 - apps/worker/src/scripts/runLoop.ts
 
 Key architecture boundary:
-- runtime is no longer review-only on the Postgres path: Waves 1, 2, and 3 are active in the workspace
+- runtime is no longer review-only on the Postgres path: Waves 1-4 are active in the workspace and live application state is Postgres-first
 - implemented review seams on this branch:
   - GET /api/reviews/[jobId]
   - PUT/PATCH /api/reviews/[jobId]
@@ -432,6 +421,9 @@ Key architecture boundary:
   - POST /api/courses/[courseId]/rag/query
   - POST /api/courses/[courseId]/rag/suggest
   - worker loadExamIndex/listExamQuestionIds/attachStudyPointers DB-backed
+- implemented Wave 4 cleanup:
+  - live compatibility writes removed
+  - archived local-store packages no longer imported by apps/web or apps/worker
 - publication state is visible in both review detail and review list for imported reviews
 - Submission.legacyJobId is the bridge from current jobId route params to DB-backed review records
 ```

@@ -12,7 +12,8 @@ Homework Grader is a pnpm monorepo for a grading system that is now DB-first for
 - a completed Wave 1 migration that makes exam metadata, rubric storage, exam-index metadata, course metadata, and lecture metadata DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers,
 - a completed Wave 2 migration that makes jobs, reviews, and worker health DB-first in live runtime while leaving rollback export and archive-only legacy files outside the live request path,
 - a completed Wave 3 migration that makes live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers,
-- a completed Wave 4A cleanup that removes live compatibility writes and narrows `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling.
+- a completed Wave 4A cleanup that removes live compatibility writes and narrows `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling,
+- a completed Wave 4B cleanup that removes live app/runtime imports of the archived local-store packages and declares final Postgres cutover for live application state.
 
 Today the repo contains:
 
@@ -20,11 +21,11 @@ Today the repo contains:
 - `apps/worker` as the background worker for grading jobs and exam-index generation.
 - `packages/shared-schemas` as the current wire/runtime schema package.
 - `packages/domain-workflow` as the storage-agnostic domain foundation package.
-- `packages/local-job-store` as the legacy file-backed job, review, and exam-index store still retained for rollback/export tooling, archive reads, and debug parity checks.
-- `packages/local-course-store` as the legacy file-backed course, lecture, and RAG store retained for archive/debug parity and compatibility-oriented tooling.
-- `packages/postgres-store` as the shared PostgreSQL + Prisma persistence package for the review/publication slice, completed Wave 1 authoring/content slice, completed Wave 2 job/worker slice, completed Wave 3 derived-runtime slice, and completed Wave 4A cleanup work.
+- `packages/local-job-store` as the archived file-backed job, review, and exam-index store retained for rollback/export tooling, archive reads, and debug parity checks.
+- `packages/local-course-store` as the archived file-backed course, lecture, and RAG store retained for archive/debug parity and compatibility-oriented tooling.
+- `packages/postgres-store` as the shared PostgreSQL + Prisma persistence package for the review/publication slice, completed Wave 1 authoring/content slice, completed Wave 2 job/worker slice, completed Wave 3 derived-runtime slice, completed Wave 4A cleanup work, and completed Wave 4B legacy runtime retirement.
 
-The repo is no longer review-only or hybrid-only on the Postgres path: Wave 1, Wave 2, and Wave 3 now make exams, rubrics, exam-index state, courses, lectures, course RAG, jobs, reviews, and worker heartbeat DB-first in live runtime, and completed Wave 4A removes the last live compatibility writes from those DB-backed surfaces. The domain foundation milestone is complete, but broad runtime adoption of that foundation is still intentionally incomplete.
+The repo is no longer review-only or hybrid-only on the Postgres path: Waves 1-4 now make exams, rubrics, exam-index state, courses, lectures, course RAG, jobs, reviews, and worker heartbeat DB-first in live runtime, and completed Wave 4B removes the last live app/runtime imports of archived local-store code. The domain foundation milestone is complete, but broad runtime adoption of that foundation is still intentionally incomplete.
 
 ## 2. Package and app map
 
@@ -100,23 +101,23 @@ This package is implemented and tested, but it is still a foundation layer. In t
 
 ### `packages/local-job-store`
 
-Owns the legacy file-backed store for:
+Owns the archived file-backed store for:
 
 - job queue records,
 - review JSON records,
 - exam index JSON artifacts.
 
-It also contains thin domain adapters and rollback-compatible file shapes used by offline rollback tooling, archive reads, and debug parity checks.
+It also contains thin domain adapters and rollback-compatible file shapes used by offline rollback tooling, archive reads, and debug parity checks. It is no longer a live runtime dependency of `apps/web` or `apps/worker`.
 
 ### `packages/local-course-store`
 
-Owns the remaining file-backed store for:
+Owns the archived file-backed store for:
 
 - compatibility-exported course and lecture records,
 - lecture assets,
 - legacy lexical RAG manifests and chunk files retained only for archive/debug parity.
 
-It also contains thin domain adapters that expose current course/lecture data in `@hg/domain-workflow` shapes without changing runtime behavior.
+It also contains thin domain adapters that expose current course/lecture data in `@hg/domain-workflow` shapes without changing runtime behavior. It is no longer a live runtime dependency of `apps/web` or `apps/worker`.
 
 ### `packages/postgres-store`
 
@@ -130,7 +131,8 @@ Owns:
 - runtime stores and compatibility materializers for the current Wave 1 exams/rubrics/index and courses/lectures slices,
 - runtime stores for `GradingJob` and `WorkerHeartbeat`,
 - DB-backed review/runtime query helpers used by the completed Wave 2 cutover,
-- DB-backed lexical RAG storage and query helpers used by the completed Wave 3 cutover.
+- DB-backed lexical RAG storage and query helpers used by the completed Wave 3 cutover,
+- offline compatibility materializers and rollback helpers retained after the completed Wave 4B cutover.
 
 ## 3. What is implemented today
 
@@ -181,7 +183,7 @@ Current Wave 2 addition:
 - `GET /api/reviews/[jobId]` returns DB-backed empty review context for pending runtime jobs with no saved version yet,
 - `PUT` / `PATCH /api/reviews/[jobId]` and `POST /api/reviews/[jobId]/publish` now operate on new DB-authored jobs as well as imported legacy reviews through the `Submission.legacyJobId` bridge,
 - `apps/worker/src/scripts/runLoop.ts` and `runOnce.ts` now claim from Postgres and renew explicit leases,
-- `apps/worker/src/scripts/createJob.ts` is no longer allowed to write legacy file queue jobs,
+- the legacy `apps/worker/src/scripts/createJob.ts` entrypoint was removed after the Wave 2 cutover,
 - live runtime no longer writes or reads `jobs/*.json`, `reviews/*.json`, or `worker/heartbeat.json`,
 - `@hg/postgres-store` now includes offline rollback export tooling that can materialize `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
@@ -208,6 +210,14 @@ Current Wave 4A addition:
 - `POST /api/courses` no longer requires `HG_DATA_DIR`,
 - `import-file-backed` emits compatibility files only when `--emit-compat-files` is passed.
 
+Current Wave 4B addition:
+
+- `apps/worker` no longer imports `@hg/local-job-store` and now uses a worker-local `WorkerJobRecord` type,
+- the disabled legacy `apps/worker/src/scripts/createJob.ts` entrypoint has been removed,
+- `apps/web` no longer carries the unused file-backed `src/lib/exams.ts` or `src/lib/rubrics.ts` helpers,
+- `apps/web` and `apps/worker` no longer import `@hg/local-course-store`,
+- live runtime application state can now be described as fully Postgres-first, with archived local-store packages retained only for offline/archive workflows.
+
 ### 3.2 Current persistence model
 
 The primary persistence model is now DB-first for live application state. Filesystem usage remains for asset bytes, archive-only legacy files, rollback tooling, and explicit offline compatibility/debug materialization under `HG_DATA_DIR`.
@@ -222,14 +232,15 @@ Key persisted areas:
 - `uploads/` for copied submissions and derived PDFs,
 - `worker/heartbeat.json` as an archive-only legacy artifact.
 
-There is now a committed Prisma schema, Postgres persistence package, and active PostgreSQL runtime use for reviews/publication, Wave 1 authoring surfaces, completed Wave 2 job/worker runtime, completed Wave 3 derived-runtime systems, and completed Wave 4A compatibility-write cleanup. The remaining file-backed areas are archive-only legacy artifacts, explicit offline compatibility/debug tooling, rollback tooling, and asset bytes.
+There is now a committed Prisma schema, Postgres persistence package, and active PostgreSQL runtime use for reviews/publication, Wave 1 authoring surfaces, completed Wave 2 job/worker runtime, completed Wave 3 derived-runtime systems, and completed Waves 4A-4B cleanup. The remaining file-backed areas are archive-only legacy artifacts, explicit offline compatibility/debug tooling, rollback tooling, and asset bytes.
 
 ### 3.3 Current runtime boundaries
 
-Committed runtime boundaries are still direct:
+Committed runtime boundaries are now:
 
-- `apps/web` now uses Postgres runtime stores for reviews, Wave 1 authoring/content surfaces, Wave 2 jobs/health, and Wave 3 exam-index/RAG reads,
-- `apps/worker` now uses Postgres runtime stores for queue claims, leases, heartbeat, exam-index reads, and study-pointer retrieval,
+- `apps/web` uses Postgres runtime stores for reviews, authoring/content surfaces, jobs/health, exam-index reads, and course RAG reads,
+- `apps/worker` uses Postgres runtime stores for queue claims, leases, heartbeat, exam-index reads, and study-pointer retrieval,
+- archived local-store packages remain in-repo but are no longer part of live app/runtime imports,
 - `packages/domain-workflow` is not yet the main runtime dependency of route handlers or worker flows,
 - file path semantics still exist in runtime code for asset bytes and debug/archive tooling, even though the domain package now defines storage-neutral contracts.
 
@@ -345,23 +356,24 @@ The following runtime surfaces still rely on file-backed details:
 
 The following code paths may still touch filesystem state, but not as authoritative JSON runtime sources:
 
-- `apps/web/src/lib/exams*` for asset-oriented exam handling and compatibility writes
-- `apps/web/src/lib/rubrics*` for compatibility-oriented rubric file materialization
+- asset-streaming web routes such as submission/raw asset handlers
 - `apps/worker/src/core/*` paths that read submission or exam asset bytes from stored local files
 
 ## 7. Persistence boundaries today
 
 ### Current committed boundary
 
-Current persistence is split across:
+Current authoritative live persistence is centered on:
 
 - `packages/postgres-store`
-- `packages/local-course-store`
-- `packages/local-job-store`
-- `apps/web/src/lib/exams*`
-- `apps/web/src/lib/rubrics*`
 
-This means the committed repo still mixes DB-first runtime persistence with file-backed compatibility, rollback, and asset-storage details inside application and worker flows.
+Supporting non-authoritative filesystem concerns still exist in:
+
+- archived `packages/local-course-store`
+- archived `packages/local-job-store`
+- asset-byte handling inside selected web and worker code paths
+
+This means the committed repo still contains file-backed compatibility, rollback, archive, and asset-storage details, but no longer uses them as authoritative live runtime persistence.
 
 ### Domain boundary that now exists
 
@@ -379,6 +391,8 @@ The approved persistence direction is PostgreSQL + Prisma.
 
 This is now the active persistence design direction for the repo. Older Firebase / Firestore notes are historical context only and should not be treated as the current approved path for the next milestone.
 
+Persistence cutover for live application state is now complete through Wave 4B. The next milestone, if any, should be post-cutover work such as auth foundation or product-facing capabilities, not another persistence migration wave.
+
 Current design source of truth:
 
 - `plans/postgres-prisma-identity-design.md`
@@ -390,7 +404,7 @@ That direction introduced:
 - groundwork for identity and course membership tables,
 - repository implementations for the domain foundation,
 - import tooling from file-backed data,
-- a narrow first runtime adoption seam, later extended on this branch to the review/publication slice, completed Wave 1 authoring/content cutover, completed Wave 2 job/review/health cutover, and completed Wave 3 derived-runtime cutover.
+- a narrow first runtime adoption seam, later extended on this branch to the review/publication slice, completed Wave 1 authoring/content cutover, completed Wave 2 job/review/health cutover, completed Wave 3 derived-runtime cutover, and completed Wave 4 cleanup/final cutover declaration.
 
 ## 9. Current DB-backed review and runtime seams on this branch
 
@@ -418,6 +432,7 @@ The first approved DB-backed adoption seam was the review API route. The current
 - `apps/worker/src/core/listExamQuestionIds.ts`
 - `apps/worker/src/core/attachStudyPointers.ts`
 - `apps/worker/src/scripts/generateExamIndex.ts`
+- no live `apps/web` or `apps/worker` imports of `@hg/local-job-store` or `@hg/local-course-store`
 
 Approved bridge strategy:
 
@@ -450,7 +465,7 @@ The following are intentionally not implemented yet:
 - analytics snapshots,
 - notifications,
 - export pipelines,
-- Wave 4B legacy runtime/package retirement after the completed Wave 4A compatibility-write cleanup.
+- post-cutover auth and product work.
 
 ## 11. Open architectural questions
 
@@ -484,9 +499,12 @@ For the current committed foundation and runtime baseline:
 - `pnpm --filter @hg/postgres-store prisma:generate`
 - `pnpm --filter @hg/domain-workflow build`
 - `pnpm --filter @hg/domain-workflow test`
-- `pnpm --filter @hg/local-job-store build`
-- `pnpm --filter @hg/local-course-store build`
 - `pnpm --filter web build`
 - `pnpm --filter worker build`
+
+Archive-only package checks matter only when explicitly editing those packages:
+
+- `pnpm --filter @hg/local-job-store build`
+- `pnpm --filter @hg/local-course-store build`
 
 On Windows PowerShell setups that block `pnpm.ps1`, use `pnpm.cmd`.
