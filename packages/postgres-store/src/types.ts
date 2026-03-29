@@ -1,6 +1,8 @@
 export type LegacyJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
 export type RuntimeGradingMode = 'RUBRIC' | 'GENERAL';
 export type RuntimeGradingScope = 'QUESTION' | 'DOCUMENT';
+export type UserGlobalRoleValue = 'USER' | 'SUPER_ADMIN';
+export type UserStatusValue = 'ACTIVE' | 'DISABLED';
 
 export interface LegacyJobRecord {
   id: string;
@@ -70,6 +72,15 @@ export interface RuntimeWorkerHeartbeatRecord {
   hostname: string;
   startedAt: string;
   lastSeenAt: string;
+}
+
+export interface UserAuthAccessRecord {
+  userId: string;
+  normalizedEmail: string | null;
+  displayName: string | null;
+  globalRole: UserGlobalRoleValue;
+  status: UserStatusValue;
+  hasStaffAccess: boolean;
 }
 
 export interface RollbackJobExportSummary {

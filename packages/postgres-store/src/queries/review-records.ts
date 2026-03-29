@@ -15,7 +15,6 @@ import type {
   LegacySubmissionAssetRecord,
 } from '../types';
 import {
-  actorKindFromReviewRecord,
   createStoredReviewRecordPayload,
   createLegacyReviewResultEnvelope,
   reviewRecordFromStoredPayload,
@@ -120,6 +119,37 @@ const createPublishedReviewVersionDomainId = (jobId: string): string =>
 
 const createPublishedResultDomainId = (jobId: string): string =>
   `legacy-published-result:${jobId}:${randomUUID()}`;
+
+const toStoredActorFields = (
+  actorRef: string | undefined,
+  fallbackLegacyRef: string
+): {
+  actorUserId: string | null;
+  actorKind: 'USER' | 'AI' | 'LEGACY';
+  actorRefRaw: string | null;
+} => {
+  if (actorRef?.startsWith('user:')) {
+    return {
+      actorUserId: actorRef.slice('user:'.length),
+      actorKind: 'USER',
+      actorRefRaw: null,
+    };
+  }
+
+  if (actorRef === 'ai') {
+    return {
+      actorUserId: null,
+      actorKind: 'AI',
+      actorRefRaw: null,
+    };
+  }
+
+  return {
+    actorUserId: null,
+    actorKind: 'LEGACY',
+    actorRefRaw: actorRef?.replace(/^legacy:/, '') ?? fallbackLegacyRef,
+  };
+};
 
 const noOpAuditRepository = {
   async appendAuditEvents() {
@@ -487,7 +517,7 @@ export class PrismaLegacyReviewRecordStore {
   async saveReviewRecordByLegacyJobId(
     jobId: string,
     reviewRecord: ReviewRecord,
-    options?: { context?: LegacyReviewDetailRecord['context'] }
+    options?: { context?: LegacyReviewDetailRecord['context']; actorRef?: string }
   ): Promise<ReviewRecord> {
     const submission = await this.prisma.submission.findUnique({
       where: { legacyJobId: jobId },
@@ -531,13 +561,18 @@ export class PrismaLegacyReviewRecordStore {
         }));
 
       const kind = reviewVersionKindFromReviewRecord(reviewRecord);
+      const storedActor = toStoredActorFields(
+        options?.actorRef,
+        kind === 'lecturer_edit' ? 'review-route' : 'ai'
+      );
       const version = await tx.reviewVersion.create({
         data: {
           domainId: getSavedReviewVersionDomainId(jobId, randomUUID()),
           reviewId: review.id,
           kind: toPrismaReviewVersionKind(kind),
-          actorKind: actorKindFromReviewRecord(reviewRecord),
-          actorRefRaw: kind === 'lecturer_edit' ? 'review-route' : 'ai',
+          actorUserId: storedActor.actorUserId,
+          actorKind: storedActor.actorKind,
+          actorRefRaw: storedActor.actorRefRaw,
           score:
             typeof resultEnvelope.score === 'number'
               ? resultEnvelope.score
@@ -571,7 +606,7 @@ export class PrismaLegacyReviewRecordStore {
   async patchReviewDisplayNameByLegacyJobId(
     jobId: string,
     displayName: string | null,
-    options?: { context?: LegacyReviewDetailRecord['context'] }
+    options?: { context?: LegacyReviewDetailRecord['context']; actorRef?: string }
   ): Promise<ReviewRecord> {
     const currentReview = await this.getReviewRecordByLegacyJobId(jobId);
     const now = new Date().toISOString();

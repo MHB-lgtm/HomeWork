@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { LegacyReviewPublicationRecord, LegacyReviewSummaryRecord } from '@hg/postgres-store';
 import { getServerPersistence } from '@/lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,9 @@ const toImportedDbSummary = (dbSummary: LegacyReviewSummaryRecord): ReviewSummar
 });
 
 export async function GET() {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const persistence = getServerPersistence();
     if (!persistence) {

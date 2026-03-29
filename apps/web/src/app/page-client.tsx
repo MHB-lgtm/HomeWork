@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Inter } from 'next/font/google';
 import { EvaluationResult, RubricEvaluationResult } from '@hg/shared-schemas';
 import { RubricCriterionRow } from '../components/RubricCriterionRow';
+import { AccountMenu } from '../components/auth/AccountMenu';
 import { listExams, ExamSummary } from '../lib/examsClient';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -295,6 +296,8 @@ export default function Home() {
                 Courses
               </Link>
             </nav>
+
+            <AccountMenu compact />
           </div>
         </header>
 

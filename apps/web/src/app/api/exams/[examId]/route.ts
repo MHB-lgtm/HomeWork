@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerPersistence } from '../../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +12,9 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const persistence = getServerPersistence();
     if (!persistence) {

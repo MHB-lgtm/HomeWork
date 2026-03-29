@@ -7,6 +7,7 @@ import {
   PrismaLectureStore,
   PrismaLegacyReviewRecordStore,
   PrismaRubricStore,
+  PrismaUserAuthStore,
   PrismaWorkerHeartbeatStore,
   getPrismaClient,
 } from '@hg/postgres-store';
@@ -15,6 +16,7 @@ type ServerPersistence = {
   reviewRecords: PrismaLegacyReviewRecordStore;
   jobs: PrismaJobStore;
   workerHeartbeats: PrismaWorkerHeartbeatStore;
+  userAuth: PrismaUserAuthStore;
   courses: PrismaCourseStore;
   exams: PrismaExamStore;
   lectures: PrismaLectureStore;
@@ -36,6 +38,7 @@ export const getServerPersistence = (): ServerPersistence | null => {
       reviewRecords: new PrismaLegacyReviewRecordStore(prisma),
       jobs: new PrismaJobStore(prisma),
       workerHeartbeats: new PrismaWorkerHeartbeatStore(prisma),
+      userAuth: new PrismaUserAuthStore(prisma),
       courses: new PrismaCourseStore(prisma),
       exams: new PrismaExamStore(prisma),
       lectures: new PrismaLectureStore(prisma),

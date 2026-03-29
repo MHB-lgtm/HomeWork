@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
+import { AccountMenu } from '../auth/AccountMenu';
 import { cn } from '../../lib/utils';
 
 type NavItem = {
@@ -162,7 +163,9 @@ export function AppShell({ children }: AppShellProps) {
               <h1 className="font-heading text-lg font-semibold tracking-tight text-slate-900 md:text-xl">
                 {title}
               </h1>
-              <div className="w-16 shrink-0" aria-hidden />
+              <div className="shrink-0">
+                <AccountMenu compact />
+              </div>
             </div>
           </header>
 

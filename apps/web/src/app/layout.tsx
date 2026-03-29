@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Manrope, Space_Grotesk } from 'next/font/google';
-import { AppShell } from '../components/layout/AppShell';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/auth';
+import { AuthSessionProvider } from '../components/auth/AuthSessionProvider';
 import './globals.css';
 
 const bodyFont = Manrope({
@@ -20,15 +22,17 @@ export const metadata: Metadata = {
   description: 'MVP homework grader application',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en" className={`${bodyFont.variable} ${headingFont.variable}`}>
       <body className="antialiased bg-body text-body">
-        <AppShell>{children}</AppShell>
+        <AuthSessionProvider session={session}>{children}</AuthSessionProvider>
       </body>
     </html>
   );

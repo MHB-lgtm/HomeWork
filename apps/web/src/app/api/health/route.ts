@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import * as path from 'path';
 import { getServerPersistence } from '@/lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const access = await requireStaffApiAccess({ requireSuperAdmin: true });
+  if (access instanceof NextResponse) return access;
+
   try {
     const dataDir = process.env.HG_DATA_DIR;
     const persistence = getServerPersistence();

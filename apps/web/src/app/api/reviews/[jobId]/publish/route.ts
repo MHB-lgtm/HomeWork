@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerPersistence } from '@/lib/server/persistence';
 import { getResolvedReviewDetail } from '@/lib/server/reviewDetail';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,9 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const { jobId } = await params;
 
@@ -43,7 +47,7 @@ export async function POST(
     }
 
     const publication = await persistence.reviewRecords.publishReviewByLegacyJobId(jobId, {
-      actorRef: 'legacy:review-route',
+      actorRef: `user:${access.userId}`,
       reviewRecord: resolved.review,
       context: resolved.context,
     });

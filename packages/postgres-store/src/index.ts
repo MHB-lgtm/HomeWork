@@ -15,6 +15,7 @@ export type {
   RuntimeReviewSummaryRecord,
   RuntimeWorkerHeartbeatRecord,
   RollbackJobExportSummary,
+  UserAuthAccessRecord,
   LegacySubmissionAssetRecord,
   LegacyReviewSummaryRecord,
 } from './types';
@@ -26,6 +27,7 @@ export { PrismaPublicationRepository } from './repos/publication-repository';
 export { PrismaLegacyReviewRecordStore } from './queries/review-records';
 export { PrismaJobStore } from './queries/job-store';
 export { PrismaWorkerHeartbeatStore } from './queries/worker-heartbeat-store';
+export { PrismaUserAuthStore } from './queries/user-auth-store';
 export { PrismaCourseStore } from './queries/course-store';
 export { PrismaExamStore } from './queries/exam-store';
 export { PrismaRubricStore } from './queries/rubric-store';

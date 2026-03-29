@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ExamIndexSchema, ExamIndex } from '@hg/shared-schemas';
 import { getServerPersistence } from '../../../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -12,6 +13,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const persistence = getServerPersistence();
     if (!persistence) {
@@ -51,6 +55,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const persistence = getServerPersistence();
     if (!persistence) {

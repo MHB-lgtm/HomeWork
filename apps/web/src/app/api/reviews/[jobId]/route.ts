@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ReviewRecordSchema, ReviewRecord } from '@hg/shared-schemas';
 import { getServerPersistence } from '@/lib/server/persistence';
 import { getResolvedReviewDetail } from '@/lib/server/reviewDetail';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const { jobId } = await params;
 
@@ -60,6 +64,9 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const { jobId } = await params;
 
@@ -121,6 +128,7 @@ export async function PUT(
       }
 
       await persistence.reviewRecords.saveReviewRecordByLegacyJobId(jobId, review, {
+        actorRef: `user:${access.userId}`,
         context: resolved.context,
       });
     } catch (error) {
@@ -177,6 +185,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const { jobId } = await params;
     if (!jobId) {
@@ -228,6 +239,7 @@ export async function PATCH(
         jobId,
         parsedPayload.data.displayName ?? null,
         {
+          actorRef: `user:${access.userId}`,
           context: resolved.context,
         }
       );

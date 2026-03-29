@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { getServerPersistence } from '../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -97,6 +98,9 @@ async function runExamIndexGeneration(examId: string): Promise<ExamIndexingResul
  * Create a new exam package
  */
 export async function POST(request: NextRequest) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const persistence = getServerPersistence();
     if (!persistence) {
@@ -163,6 +167,9 @@ export async function POST(request: NextRequest) {
  * List all exams
  */
 export async function GET(_request: NextRequest) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
     const persistence = getServerPersistence();
     if (!persistence) {

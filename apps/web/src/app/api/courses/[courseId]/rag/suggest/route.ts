@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   SuggestRequestV1Schema,
-  SuggestResponseV1,
 } from '@hg/shared-schemas';
 import {
   PostgresCourseRagCourseNotFoundError,
   PostgresCourseRagIndexNotBuiltError,
 } from '@hg/postgres-store';
 import { getServerPersistence } from '../../../../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -25,7 +25,10 @@ const ensurePersistence = () => {
 export async function POST(
   request: NextRequest,
   { params }: { params: { courseId: string } }
-): Promise<NextResponse<SuggestResponseV1 | { ok: false; error: string; code?: string }>> {
+) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   const persistence = ensurePersistence();
   if (persistence instanceof NextResponse) return persistence;
 

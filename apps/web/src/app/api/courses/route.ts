@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerPersistence } from '../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,9 @@ const ensurePersistence = () => {
 };
 
 export async function GET() {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   const persistence = ensurePersistence();
   if (persistence instanceof NextResponse) return persistence;
 
@@ -32,6 +36,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   const persistence = ensurePersistence();
   if (persistence instanceof NextResponse) return persistence;
 
