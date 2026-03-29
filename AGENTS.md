@@ -21,13 +21,13 @@
 - `packages/domain-workflow`
   - canonical domain entities, rules, and repository interfaces
 - `packages/local-job-store`
-  - legacy file-backed job/review/exam-index persistence retained for rollback tooling and unchanged exam-index consumers
+  - legacy file-backed job/review/exam-index persistence retained for rollback tooling, archive reads, and debug parity checks
 - `packages/local-course-store`
-  - file-backed course/lecture/RAG persistence still used for RAG and other unchanged consumers
+  - legacy file-backed course/lecture/RAG persistence retained for archive/debug parity and compatibility-oriented tooling
 
 ## Current architectural boundaries
 
-- The runtime is now hybrid: Wave 1 authoring/content surfaces and Wave 2 jobs/reviews/health runtime are DB-first, while RAG, exam-index helpers, compatibility exports, and asset bytes still rely on `HG_DATA_DIR`.
+- The live runtime is now DB-first across Wave 1, Wave 2, and Wave 3 surfaces. Remaining filesystem usage under `HG_DATA_DIR` is limited to asset bytes, compatibility exports, archive-only leftovers, rollback tooling, and debug parity checks.
 - On `feat/postgres-runtime-slice-1`, the reviews surface now has a Postgres-backed slice when `DATABASE_URL` is configured:
   - `GET /api/reviews/[jobId]`
   - `PUT` / `PATCH /api/reviews/[jobId]`
@@ -54,12 +54,22 @@
   - `apps/worker/src/scripts/runOnce.ts`
   - `apps/web/src/app/api/reviews/**`
   - runtime review writes for new DB-authored jobs
-- Exams, rubrics, exam-index metadata, course metadata, lecture metadata, jobs, worker heartbeat, and review runtime are now DB-authoritative.
-- Filesystem artifacts under `HG_DATA_DIR` remain compatibility exports or archive-only leftovers for unchanged consumers such as `apps/web/src/app/api/courses/[courseId]/rag/**`, exam-index/rubric readers in the worker, and offline rollback drills.
+- The current workspace also makes these derived-runtime surfaces DB-first in Wave 3:
+  - `GET` / `PUT /api/exams/[examId]/index`
+  - `GET /api/courses/[courseId]/rag/manifest`
+  - `POST /api/courses/[courseId]/rag/rebuild`
+  - `POST /api/courses/[courseId]/rag/query`
+  - `POST /api/courses/[courseId]/rag/suggest`
+  - `apps/worker/src/scripts/generateExamIndex.ts`
+  - `apps/worker/src/core/loadExamIndex.ts`
+  - `apps/worker/src/core/listExamQuestionIds.ts`
+  - `apps/worker/src/core/attachStudyPointers.ts`
+- Exams, rubrics, exam-index state, course metadata, lecture metadata, course RAG state, jobs, worker heartbeat, and review runtime are now DB-authoritative.
+- Filesystem artifacts under `HG_DATA_DIR` remain compatibility exports or archive-only leftovers for offline rollback drills, debug parity checks, and asset storage only.
 - Wave 2 also includes offline rollback tooling via `pnpm --filter @hg/postgres-store rollback:export-jobs`, which exports `PENDING` / `RUNNING` DB jobs back into the legacy queue shape only for rollback drills.
 - `@hg/domain-workflow` exists and is tested, but broad runtime adoption is still deferred.
 - Keep auth/session concerns separate from grading domain logic.
-- PostgreSQL + Prisma is still not the full runtime, but it is no longer review-only: the current workspace contains the full Wave 1 authoring/content migration work plus completed Wave 2 job/worker cutover work.
+- PostgreSQL + Prisma is now the live runtime source of truth for application state. Remaining filesystem usage is asset bytes plus compatibility/archive/debug artifacts, not authoritative JSON runtime state.
 
 ## Validation guidance
 

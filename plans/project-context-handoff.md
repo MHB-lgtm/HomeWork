@@ -14,6 +14,7 @@ The repo now has:
 - a committed Postgres + Prisma review and publication slice on the current branch,
 - completed Wave 1 changes that make exams, rubrics, exam-index metadata, courses, and lectures DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers,
 - completed Wave 2 changes that make live jobs, reviews, and worker health DB-first while keeping rollback export and leftover file artifacts outside the live runtime path.
+- completed Wave 3 changes that make live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers.
 - implemented offline rollback tooling that can export `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
 ## 2. Repo structure and responsibilities
@@ -33,11 +34,11 @@ The repo now has:
 - `packages/domain-workflow`
   - canonical domain entities, states, repository interfaces, services, and projections
 - `packages/local-job-store`
-  - legacy file-backed job/review/exam-index persistence retained for rollback/export tooling and unchanged exam-index helpers
+  - legacy file-backed job/review/exam-index persistence retained for rollback/export tooling, archive reads, and debug parity checks
 - `packages/local-course-store`
-  - file-backed course/lecture/RAG persistence still used for RAG and study-pointer consumers
+  - legacy file-backed course/lecture/RAG persistence retained for archive/debug parity and compatibility-oriented tooling
 - `packages/postgres-store`
-  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, and completed Wave 2 job/worker runtime stores
+  - Prisma schema, migrations, import tooling, Postgres review/publication persistence, Wave 1 content stores, completed Wave 2 job/worker runtime stores, and completed Wave 3 derived-runtime stores
 
 ### Plans and docs
 
@@ -51,6 +52,8 @@ The repo now has:
   - approved persistence and identity design direction beyond the original review slice
 - `plans/postgres-wave-2-execution-plan.md`
   - current execution record for completed Wave 2
+- `plans/postgres-wave-3-execution-plan.md`
+  - current execution record for completed Wave 3
 
 ## 3. Current milestone status
 
@@ -62,6 +65,8 @@ Completed:
 - `Postgres Publication Slice 1`
 - `Postgres Publication Slice 2`
 - `Wave 1`
+- `Wave 2`
+- `Wave 3`
 
 Current branch context:
 
@@ -69,6 +74,7 @@ Current branch context:
 - the Postgres runtime review and publication slices are already committed on this branch
 - the current workspace also contains completed Wave 1 exam/rubric/exam-index/course/lecture migration work
 - the current workspace also contains completed Wave 2 job/worker/runtime cutover work
+- the current workspace also contains completed Wave 3 exam-index/RAG/study-pointer cutover work
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -107,7 +113,7 @@ Current branch context:
   - `GET` / `POST /api/courses`
   - `GET /api/courses/[courseId]`
   - `GET` / `POST /api/courses/[courseId]/lectures`
-  - `apps/worker/src/scripts/generateExamIndex.ts` saving exam-index metadata to Postgres first, then exporting `examIndex.json`
+  - `apps/worker/src/scripts/generateExamIndex.ts` saving exam-index metadata only to Postgres in normal runtime
 - completed Wave 2 runtime adoption:
   - `POST /api/jobs`
   - `GET /api/jobs/[id]`
@@ -120,6 +126,17 @@ Current branch context:
   - `apps/worker/src/scripts/runLoop.ts` and `runOnce.ts` claiming jobs from Postgres with explicit lease renewal
   - live runtime no longer writing or reading `jobs/*.json`, `reviews/*.json`, or `worker/heartbeat.json`
   - `pnpm --filter @hg/postgres-store rollback:export-jobs` exporting `PENDING` / `RUNNING` DB jobs into legacy queue files only as offline rollback tooling
+- completed Wave 3 runtime adoption:
+  - `GET` / `PUT /api/exams/[examId]/index`
+  - `GET /api/courses/[courseId]/rag/manifest`
+  - `POST /api/courses/[courseId]/rag/rebuild`
+  - `POST /api/courses/[courseId]/rag/query`
+  - `POST /api/courses/[courseId]/rag/suggest`
+  - `apps/worker/src/core/loadExamIndex.ts`
+  - `apps/worker/src/core/listExamQuestionIds.ts`
+  - `apps/worker/src/core/attachStudyPointers.ts`
+  - `apps/worker/src/scripts/generateExamIndex.ts` writing only to Postgres in normal runtime
+  - `CourseRagIndex` / `CourseRagChunk` lexical RAG runtime state in Postgres
 
 ## 5. What is intentionally not implemented yet
 
@@ -134,7 +151,7 @@ Current branch context:
 - notifications
 - analytics snapshots
 - export pipelines
-- Wave 3 migration of course RAG and remaining exam-index read-side runtime
+- Wave 4 cleanup of compatibility writes and legacy runtime retirement
 
 ## 6. Current persistence model
 
@@ -160,7 +177,8 @@ Current DB-first exceptions in the workspace:
 - exams, rubrics, and exam-index metadata are DB-first in `apps/web`
 - courses and lectures are DB-first in `apps/web`
 - jobs, reviews, and worker health are DB-first in completed Wave 2
-- legacy files under `exams/**`, `rubrics/**`, `examIndex.json`, and `courses/**` remain compatibility outputs for unchanged job, RAG, and worker flows
+- exam-index reads, RAG routes, and study pointers are DB-first in completed Wave 3
+- legacy files under `exams/**`, `rubrics/**`, `examIndex.json`, and `courses/**` remain compatibility outputs or debug/archive leftovers only
 - leftover `jobs/`, `reviews/`, and `worker/heartbeat.json` files are archive-only and are no longer part of live runtime
 - rollback export back into legacy queue files exists only as explicit offline tooling, not as a runtime dual-write path
 
@@ -168,8 +186,8 @@ Runtime code still depends directly on:
 
 - `@hg/postgres-store`
 - `@hg/local-course-store`
-- `@hg/local-job-store` for rollback-compatible file tooling and unchanged exam-index helpers
-- app-local file helpers for exams and rubrics plus unchanged RAG/exam-index readers
+- `@hg/local-job-store` for rollback-compatible file tooling, archive reads, and debug parity checks
+- app-local file helpers for exams and rubrics plus asset-oriented local file reads
 
 ## 7. Current domain and publication model
 
@@ -216,9 +234,9 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move to Wave 3 for RAG and remaining exam-index runtime migration
+- move to Wave 4 cleanup and legacy runtime retirement
 - keep rollback export offline-only and do not reintroduce live fallback reads
-- do not jump to auth before the derived-runtime migration work lands
+- do not jump to auth before compatibility-write retirement and legacy cleanup land
 
 ## 9. Main constraints and do-not-change-yet boundaries
 
@@ -257,6 +275,7 @@ Read these first for current branch understanding:
 - `plans/auth-foundation.md`
 - `plans/postgres-prisma-identity-design.md`
 - `plans/postgres-wave-2-execution-plan.md`
+- `plans/postgres-wave-3-execution-plan.md`
 - `packages/domain-workflow/src/**`
 - `packages/domain-workflow/test/**`
 - `packages/shared-schemas/src/**`
@@ -337,9 +356,9 @@ Canonical docs to read first:
 - plans/postgres-wave-2-execution-plan.md
 
 Current runtime shape:
-- now hybrid DB-first plus file-backed compatibility/archive artifacts under HG_DATA_DIR
-- apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, and Wave 2 jobs/health
-- apps/worker now claims new jobs from Postgres and writes new review state to Postgres
+- live runtime is DB-first plus file-backed compatibility/archive artifacts under HG_DATA_DIR
+- apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, Wave 2 jobs/health, and Wave 3 exam-index/RAG routes
+- apps/worker now claims new jobs from Postgres, writes new review state to Postgres, and reads exam-index/study-pointer derived state from Postgres
 - @hg/domain-workflow exists and is tested, but broad runtime adoption is still deferred
 - current branch has committed Postgres-backed review and publication slices
 - imported reviews can publish through POST /api/reviews/[jobId]/publish
@@ -348,7 +367,8 @@ Current runtime shape:
 - /reviews is the current lecturer-facing published lens for imported reviews
 - exams, rubrics, exam-index metadata, courses, and lectures are now DB-first in apps/web
 - POST /api/jobs, worker queue/lease lifecycle, worker heartbeat, and review runtime are now DB-first in Wave 2
-- HG_DATA_DIR files under exams/**, rubrics/**, examIndex.json, and courses/** remain compatibility outputs for unchanged consumers
+- GET/PUT /api/exams/[examId]/index, course RAG routes, and worker study pointers are now DB-first in Wave 3
+- HG_DATA_DIR files under exams/**, rubrics/**, examIndex.json, and courses/** remain compatibility outputs or debug/archive leftovers only
 - leftover jobs/, reviews/, and worker/heartbeat.json are archive-only and not part of live runtime
 - rollback export to legacy queue files exists only as offline tooling for drills/rollback windows
 
@@ -382,7 +402,7 @@ Important code to read:
 - apps/worker/src/scripts/runLoop.ts
 
 Key architecture boundary:
-- runtime is no longer review-only on the Postgres path: Wave 1 plus Wave 2 are active in the workspace
+- runtime is no longer review-only on the Postgres path: Waves 1, 2, and 3 are active in the workspace
 - implemented review seams on this branch:
   - GET /api/reviews/[jobId]
   - PUT/PATCH /api/reviews/[jobId]
@@ -395,6 +415,13 @@ Key architecture boundary:
   - GET /api/jobs/[id]/submission*
   - GET /api/health
   - worker runLoop/runOnce DB queue claim plus lease renewal
+- implemented Wave 3 seams in the workspace:
+  - GET/PUT /api/exams/[examId]/index
+  - GET /api/courses/[courseId]/rag/manifest
+  - POST /api/courses/[courseId]/rag/rebuild
+  - POST /api/courses/[courseId]/rag/query
+  - POST /api/courses/[courseId]/rag/suggest
+  - worker loadExamIndex/listExamQuestionIds/attachStudyPointers DB-backed
 - publication state is visible in both review detail and review list for imported reviews
 - Submission.legacyJobId is the bridge from current jobId route params to DB-backed review records
 ```
