@@ -6,6 +6,10 @@ export type UserGlobalRoleValue = 'USER' | 'SUPER_ADMIN';
 export type UserStatusValue = 'ACTIVE' | 'DISABLED';
 export type CourseMembershipRoleValue = 'COURSE_ADMIN' | 'LECTURER' | 'STUDENT';
 export type CourseMembershipStatusValue = 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REMOVED';
+export type StudentAssignmentSubmissionStateValue =
+  | 'NOT_SUBMITTED'
+  | 'SUBMITTED'
+  | 'PUBLISHED';
 
 export interface LegacyJobRecord {
   id: string;
@@ -113,6 +117,29 @@ export interface CourseMembershipRecord {
   invitedByUserId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StudentAssignmentStatusRecord {
+  version: '1.0.0';
+  assignmentId: string;
+  courseId: string;
+  courseTitle: string;
+  assignmentTitle: string;
+  openAt: string;
+  deadlineAt: string;
+  assignmentState: import('@hg/shared-schemas').Assignment['state'];
+  submissionState: StudentAssignmentSubmissionStateValue;
+  submittedAt?: string | null;
+  hasPublishedResult: boolean;
+  publishedAt?: string | null;
+  score?: number | null;
+  maxScore?: number | null;
+}
+
+export interface StudentAssignmentResultRecord extends StudentAssignmentStatusRecord {
+  publishedResultId?: string | null;
+  summary?: string | null;
+  breakdownSnapshot?: unknown | null;
 }
 
 export interface RollbackJobExportSummary {

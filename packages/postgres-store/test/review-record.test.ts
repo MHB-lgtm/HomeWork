@@ -86,6 +86,44 @@ describe('legacy review record mappers', () => {
     });
   });
 
+  it('derives a general summary from question summaries when no top-level summary exists', () => {
+    const envelope = normalizeLegacyJobResultEnvelope({
+      mode: 'GENERAL',
+      generalEvaluation: {
+        questions: [
+          {
+            questionId: 'q1',
+            overallSummary: 'Question 1 is mostly correct.',
+            findings: [{ findingId: 'q1-f1', kind: 'strength' }],
+          },
+          {
+            questionId: 'q2',
+            overallSummary: 'Question 2 has one notable mistake.',
+            findings: [{ findingId: 'q2-f1', kind: 'issue', severity: 'major' }],
+          },
+        ],
+      },
+    });
+
+    expect(envelope).toEqual({
+      score: 75,
+      maxScore: 100,
+      summary: 'Question 1 is mostly correct.\nQuestion 2 has one notable mistake.',
+      questionBreakdown: [
+        {
+          questionId: 'q1',
+          overallSummary: 'Question 1 is mostly correct.',
+          findings: [{ findingId: 'q1-f1', kind: 'strength' }],
+        },
+        {
+          questionId: 'q2',
+          overallSummary: 'Question 2 has one notable mistake.',
+          findings: [{ findingId: 'q2-f1', kind: 'issue', severity: 'major' }],
+        },
+      ],
+    });
+  });
+
   it('stores exact review payload while borrowing score fields from job result', () => {
     const envelope = createLegacyReviewResultEnvelope(baseReviewRecord, {
       mode: 'RUBRIC',

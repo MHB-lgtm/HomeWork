@@ -36,6 +36,7 @@ type StoredReviewRecordPayload = {
 
 type QuestionLikeRecord = {
   findings: unknown[];
+  overallSummary?: unknown;
 };
 
 const isSeverityValue = (
@@ -82,6 +83,20 @@ const derivePerQuestionGeneralScore = (
     score: clamp(Math.round(totalScore), 0, 100),
     maxScore: 100,
   };
+};
+
+const derivePerQuestionGeneralSummary = (questions: unknown[]): string | null => {
+  const summaries = questions
+    .filter(isObject)
+    .map((question) => getString(question, 'overallSummary'))
+    .filter((summary): summary is string => Boolean(summary))
+    .slice(0, 3);
+
+  if (summaries.length === 0) {
+    return null;
+  }
+
+  return summaries.join('\n');
 };
 
 const parseStoredReviewContext = (value: unknown): LegacyReviewContextRecord | null => {
@@ -197,11 +212,14 @@ export const normalizeLegacyJobResultEnvelope = (
       ? generalEvaluation.questions
       : null;
     const derivedScore = questions ? derivePerQuestionGeneralScore(questions) : null;
+    const derivedSummary = questions ? derivePerQuestionGeneralSummary(questions) : null;
 
     return {
       ...(derivedScore ?? {}),
       summary:
-        getString(generalEvaluation, 'overallSummary') ?? 'Imported general evaluation',
+        getString(generalEvaluation, 'overallSummary') ??
+        derivedSummary ??
+        'Imported general evaluation',
       questionBreakdown: questions ?? generalEvaluation.findings ?? null,
     };
   }

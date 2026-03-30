@@ -172,7 +172,7 @@ export default function AssignmentDetailsPageClient({
                 </form>
 
                 <div className="rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-sm text-slate-600">
-                  Results stay on the staff review side in M3A. This page only handles submission through the existing exam-style grading flow.
+                  After staff publish your result, it will appear in the student Results workspace. This page handles submission through the existing exam-style grading flow.
                 </div>
               </>
             ) : (

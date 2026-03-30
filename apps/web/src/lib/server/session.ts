@@ -316,6 +316,25 @@ export const requireStaffApiAccess = async (
   }
 };
 
+export const requireStudentApiAccess = async (
+  options?: { allowSuperAdmin?: boolean }
+): Promise<UserAuthAccessRecord | NextResponse> => {
+  try {
+    const access = await requireAuthenticatedUser();
+    if (options?.allowSuperAdmin && access.globalRole === 'SUPER_ADMIN') {
+      return access;
+    }
+
+    if (access.hasStaffAccess || !access.hasStudentAccess) {
+      throw new ForbiddenError();
+    }
+
+    return access;
+  } catch (error) {
+    return toApiAuthErrorResponse(error);
+  }
+};
+
 export const requireActiveCourseRoleApiAccess = async (
   courseId: string,
   allowedRoles: readonly CourseMembershipRoleValue[]
