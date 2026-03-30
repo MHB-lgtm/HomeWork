@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { getReviewDir, loadReview, getJob } from '@hg/local-job-store';
+import type { LegacyReviewPublicationRecord, LegacyReviewSummaryRecord } from '@hg/postgres-store';
+import { getServerPersistence } from '@/lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 type ReviewSummary = {
   jobId: string;
@@ -17,6 +18,7 @@ type ReviewSummary = {
   updatedAt?: string | null;
   annotationCount: number;
   hasResult: boolean;
+  publication?: LegacyReviewPublicationRecord;
 };
 
 const toTimestamp = (value?: string | null): number => {
@@ -25,68 +27,51 @@ const toTimestamp = (value?: string | null): number => {
   return Number.isNaN(ts) ? 0 : ts;
 };
 
+const toImportedDbSummary = (dbSummary: LegacyReviewSummaryRecord): ReviewSummary => ({
+  jobId: dbSummary.jobId,
+  displayName: dbSummary.displayName,
+  status: dbSummary.status ?? 'UNKNOWN',
+  createdAt: dbSummary.createdAt,
+  updatedAt: dbSummary.updatedAt,
+  annotationCount: dbSummary.annotationCount,
+  hasResult: dbSummary.hasResult,
+  publication: dbSummary.publication,
+});
+
 export async function GET() {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
-    // Ensure HG_DATA_DIR is set (getReviewDir will also validate)
-    if (!process.env.HG_DATA_DIR) {
+    const persistence = getServerPersistence();
+    if (!persistence) {
       return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
+        { ok: false, error: 'DATABASE_URL is not set in environment' },
         { status: 500 }
       );
     }
 
-    const reviewDir = getReviewDir();
-
-    let files: string[] = [];
-    try {
-      files = await fs.readdir(reviewDir);
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT') {
-        // No reviews directory yet -> return empty list
-        return NextResponse.json({ ok: true, data: [] as ReviewSummary[] });
-      }
-      throw error;
-    }
-
-    const summaries: ReviewSummary[] = [];
-
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue;
-      const jobId = path.basename(file, '.json');
-
-      let review = null;
-      try {
-        review = await loadReview(jobId);
-      } catch (error) {
-        // Skip invalid review files but continue listing others
-        console.warn(`[api/reviews] Failed to load review ${jobId}:`, error);
-        continue;
-      }
-
-      let job = null;
-      try {
-        job = await getJob(jobId);
-      } catch (error) {
-        console.warn(`[api/reviews] Failed to load job ${jobId}:`, error);
-      }
-
-      summaries.push({
-        jobId,
-        displayName: review?.displayName ?? null,
-        status: job?.status || 'UNKNOWN',
-        examId: job?.inputs?.examId,
-        questionId: job?.inputs?.questionId,
-        gradingMode: job?.inputs?.gradingMode,
-        gradingScope: job?.inputs?.gradingScope,
-        createdAt: review?.createdAt || job?.createdAt || null,
-        updatedAt: review?.updatedAt || job?.updatedAt || review?.createdAt || job?.createdAt || null,
-        annotationCount: Array.isArray(review?.annotations) ? review!.annotations.length : 0,
-        hasResult: !!job?.resultJson,
+    const summariesByJobId = new Map<string, ReviewSummary>();
+    const runtimeSummaries = await persistence.jobs.listRuntimeReviewSummaries();
+    for (const runtimeSummary of runtimeSummaries) {
+      summariesByJobId.set(runtimeSummary.jobId, {
+        ...runtimeSummary,
+        questionId: runtimeSummary.questionId ?? undefined,
+        gradingMode: runtimeSummary.gradingMode ?? undefined,
+        gradingScope: runtimeSummary.gradingScope ?? undefined,
       });
     }
 
-    summaries.sort((a, b) => toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt));
+    const dbSummaries = await persistence.reviewRecords.listReviewSummariesByLegacyJobId();
+    for (const dbSummary of dbSummaries) {
+      if (!summariesByJobId.has(dbSummary.jobId)) {
+        summariesByJobId.set(dbSummary.jobId, toImportedDbSummary(dbSummary));
+      }
+    }
+
+    const summaries = [...summariesByJobId.values()].sort(
+      (a, b) => toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt)
+    );
 
     return NextResponse.json({ ok: true, data: summaries });
   } catch (error) {

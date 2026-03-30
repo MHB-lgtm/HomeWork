@@ -5,7 +5,9 @@ import Link from 'next/link';
 import type { Course, Lecture, RagManifest } from '@hg/shared-schemas';
 import { CoursesClientError, getCourse, listLectures, getRagManifest, rebuildRagIndex } from '../../../../lib/coursesClient';
 import { LectureUploadForm } from '../../../../components/courses/LectureUploadForm';
+import { CourseAssignmentsPanel } from '../../../../components/courses/CourseAssignmentsPanel';
 import { LecturesTable } from '../../../../components/courses/LecturesTable';
+import { CourseMembershipPanel } from '../../../../components/courses/CourseMembershipPanel';
 import { RagIndexPanel } from '../../../../components/courses/RagIndexPanel';
 import { RagTestPanel } from '../../../../components/courses/RagTestPanel';
 import { ImmersiveShell } from '../../../../components/layout/ImmersiveShell';
@@ -16,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../../components
 
 type CourseDetailsPageProps = {
   params: { courseId: string };
+  canManageMemberships?: boolean;
 };
 
 const formatDate = (value: string) => {
@@ -34,7 +37,10 @@ const getErrorMessage = (error: unknown) => {
   return 'Failed to load course details.';
 };
 
-export default function CourseDetailsPage({ params }: CourseDetailsPageProps) {
+export default function CourseDetailsPage({
+  params,
+  canManageMemberships = false,
+}: CourseDetailsPageProps) {
   const [course, setCourse] = useState<Course | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +202,8 @@ export default function CourseDetailsPage({ params }: CourseDetailsPageProps) {
           <LecturesTable lectures={lectures} loading={isLoadingLectures} error={lecturesError} />
         </div>
 
+        <CourseAssignmentsPanel courseId={courseId} />
+
         <div id="rag-index-panel">
           <RagIndexPanel
             courseId={courseId}
@@ -207,6 +215,8 @@ export default function CourseDetailsPage({ params }: CourseDetailsPageProps) {
             onRefresh={refreshManifest}
           />
         </div>
+
+        {canManageMemberships ? <CourseMembershipPanel courseId={courseId} /> : null}
 
         <RagTestPanel courseId={courseId} hasIndexHint={!manifest && !loadingManifest && !indexError} />
 

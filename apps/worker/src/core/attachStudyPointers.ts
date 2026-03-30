@@ -1,6 +1,10 @@
-import { CourseNotFoundError, IndexNotBuiltError, suggestStudyPointers } from '@hg/local-course-store';
 import { StudyPointerV1 } from '@hg/shared-schemas';
-import { JobRecord } from '@hg/local-job-store';
+import {
+  PostgresCourseRagCourseNotFoundError,
+  PostgresCourseRagIndexNotBuiltError,
+} from '@hg/postgres-store';
+import { getWorkerRuntimePersistence } from '../lib/runtimePersistence';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 const MAX_TARGETS = 10;
 const MAX_POINTERS_PER_TARGET = 3;
@@ -142,7 +146,7 @@ const extractTargets = (resultJson: any): StudyPointerTarget[] => {
 };
 
 export async function attachStudyPointers(args: {
-  job: JobRecord;
+  job: WorkerJobRecord;
   resultJson: any;
 }): Promise<StudyPointersPayload | null> {
   const { job, resultJson } = args;
@@ -165,10 +169,11 @@ export async function attachStudyPointers(args: {
   }
 
   const pointersByTarget: StudyPointersPayload['pointersByTarget'] = [];
+  const persistence = getWorkerRuntimePersistence();
 
   for (const target of targets) {
     try {
-      const result = await suggestStudyPointers(courseId, {
+      const result = await persistence.courseRag.suggestStudyPointers(courseId, {
         issueText: target.issueText,
         k: MAX_POINTERS_PER_TARGET,
       });
@@ -179,7 +184,7 @@ export async function attachStudyPointers(args: {
         pointers: result.pointers,
       });
     } catch (error) {
-      if (error instanceof IndexNotBuiltError) {
+      if (error instanceof PostgresCourseRagIndexNotBuiltError) {
         console.log(`[job:${job.id}] studyPointers disabled: INDEX_NOT_BUILT courseId=${courseId}`);
         return {
           version: '1.0.0',
@@ -188,7 +193,7 @@ export async function attachStudyPointers(args: {
           pointersByTarget: [],
         };
       }
-      if (error instanceof CourseNotFoundError) {
+      if (error instanceof PostgresCourseRagCourseNotFoundError) {
         console.log(`[job:${job.id}] studyPointers disabled: COURSE_NOT_FOUND courseId=${courseId}`);
         return {
           version: '1.0.0',

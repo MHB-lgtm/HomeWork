@@ -1,6 +1,5 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import {
   GeneralEvaluationSchema,
@@ -13,6 +12,7 @@ import { mapQuestionPages } from './mapQuestionPages';
 import { extractMiniPdf } from './extractMiniPdf';
 import { loadExamIndexForWorker, resolveExamId } from './loadExamIndex';
 import { ExamIndex, QuestionEntry } from '@hg/shared-schemas';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -108,7 +108,7 @@ function buildFallbackSummary(questionId: string, findings: Array<{ title: strin
  * Evaluate submission per-question in General mode
  * For each questionId: maps pages, extracts mini-PDF if needed, and evaluates with >=1 finding
  */
-export async function generalEvaluatePerQuestion(job: JobRecord): Promise<GeneralEvaluatePerQuestionResult> {
+export async function generalEvaluatePerQuestion(job: WorkerJobRecord): Promise<GeneralEvaluatePerQuestionResult> {
   const gradingMode = job.inputs.gradingMode || 'RUBRIC';
   const gradingScope = job.inputs.gradingScope || 'QUESTION';
 
@@ -116,7 +116,7 @@ export async function generalEvaluatePerQuestion(job: JobRecord): Promise<Genera
     throw new Error('generalEvaluatePerQuestion can only be used for GENERAL grading mode');
   }
 
-  // Resolve examId (primary: from job.inputs.examId, fallback: infer from examFilePath)
+  // Resolve examId from the DB-authored runtime job payload.
   const examId = await resolveExamId(job);
   if (!examId) {
     console.warn(`[worker] Cannot resolve examId for job ${job.id}, falling back to DOCUMENT scope`);
@@ -224,7 +224,7 @@ Return the JSON now:`;
     }
     questionEntries = [{ questionId }];
   } else {
-    // DOCUMENT scope: try ExamIndex first, then fallback to rubrics
+    // DOCUMENT scope: try the DB-backed exam index first, then fall back to a single DOCUMENT scope.
     const examIndex = await loadExamIndexForWorker(examId);
     if (examIndex && examIndex.questions && examIndex.questions.length > 0) {
       // Use ExamIndex: sort by order and extract metadata
@@ -239,15 +239,15 @@ Return the JSON now:`;
         }));
       console.log(`[worker] Using ExamIndex for examId=${examId}: ${questionEntries.length} questions`);
     } else {
-      // Fallback: list questionIds from rubrics
+      // Fallback: derive ordered question ids from the stored exam index payload.
       const questionIds = await listExamQuestionIds(examId);
       if (questionIds.length > 0) {
         questionEntries = questionIds.map((id) => ({ questionId: id }));
-        console.log(`[worker] No examIndex for examId=${examId}, fallback to rubrics: ${questionIds.length} questions`);
+        console.log(`[worker] Loaded ordered question ids for examId=${examId}: ${questionIds.length} questions`);
       } else {
         // Final fallback: use single "DOCUMENT" questionId
         questionEntries = [{ questionId: 'DOCUMENT' }];
-        console.log(`[worker] No examIndex or rubrics for examId=${examId}, using DOCUMENT scope`);
+        console.log(`[worker] No stored exam index for examId=${examId}, using DOCUMENT scope`);
       }
     }
   }
@@ -273,7 +273,7 @@ Return the JSON now:`;
     // Step 1: Map pages (if not DOCUMENT)
     if (questionId !== 'DOCUMENT') {
       // Create a temporary job-like object for mapping with question metadata
-      const mappingJob: JobRecord = {
+      const mappingJob: WorkerJobRecord = {
         ...job,
         inputs: {
           ...job.inputs,

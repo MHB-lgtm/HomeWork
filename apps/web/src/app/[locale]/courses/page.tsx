@@ -6,10 +6,13 @@ import type { Course } from '@hg/shared-schemas';
 import { CoursesClientError, listCourses } from '../../../lib/coursesClient';
 import { CreateCourseCard } from '../../../components/courses/CreateCourseCard';
 import { CoursesTable } from '../../../components/courses/CoursesTable';
-import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
+import { PageHeader } from '../../../components/ui/page-header';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
+import { StatCard } from '../../../components/ui/stat-card';
+import { PageTransition, FadeIn, StaggerGroup, StaggerItem } from '../../../components/ui/motion';
+import { BookOpen, Plus } from 'lucide-react';
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof CoursesClientError) {
@@ -21,7 +24,11 @@ const getErrorMessage = (error: unknown) => {
   return 'Failed to load courses.';
 };
 
-export default function CoursesPage() {
+type CoursesPageProps = {
+  canCreateCourses?: boolean;
+};
+
+export default function CoursesPage({ canCreateCourses = false }: CoursesPageProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -44,40 +51,43 @@ export default function CoursesPage() {
   }, []);
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-        <section className="flex w-full flex-col items-center gap-4 text-center">
-          <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Courses</h1>
-          <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-            Create a course and collect lecture content for study pointers.
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Badge variant="secondary">{courses.length} courses</Badge>
-            <Badge variant="outline">API ready</Badge>
-          </div>
-          <div>
-            <Link href="/">
-              <Button variant="outline" size="sm">
-                Back to Home
-              </Button>
-            </Link>
-          </div>
-        </section>
+    <PageTransition>
+      <div className="space-y-6">
+        <PageHeader
+          title="Courses"
+          description="Create and manage course content for lecture-based grading."
+          actions={
+            <Badge variant="brand">{courses.length} courses</Badge>
+          }
+        />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6">
-          <CreateCourseCard onCreated={loadCourses} />
+        {error && (
+          <Alert variant="error">
+            <AlertTitle>Could not load courses</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-          <div className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertTitle>Could not load courses</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+        {!canCreateCourses && (
+          <Alert variant="info">
+            <AlertTitle>Course creation is restricted</AlertTitle>
+            <AlertDescription>Only super admins can create new courses.</AlertDescription>
+          </Alert>
+        )}
+
+        <FadeIn delay={0.1}>
+          <div
+            className={
+              canCreateCourses
+                ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6'
+                : 'space-y-4'
+            }
+          >
+            {canCreateCourses && <CreateCourseCard onCreated={loadCourses} />}
             <CoursesTable courses={courses} isLoading={isLoading} onRefresh={loadCourses} />
           </div>
-        </div>
+        </FadeIn>
       </div>
-    </ImmersiveShell>
+    </PageTransition>
   );
 }

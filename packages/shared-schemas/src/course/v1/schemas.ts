@@ -24,6 +24,72 @@ export const LectureSchema = z.object({
 
 export type Lecture = z.infer<typeof LectureSchema>;
 
+export const AssignmentStateSchema = z.enum([
+  'draft',
+  'open',
+  'closed',
+  'processing',
+  'reviewed',
+  'published',
+]);
+
+export type AssignmentState = z.infer<typeof AssignmentStateSchema>;
+
+export const AssignmentSchema = z.object({
+  version: z.literal('1.0.0'),
+  assignmentId: z.string(),
+  courseId: z.string(),
+  weekId: z.string(),
+  examId: z.string(),
+  title: z.string(),
+  openAt: z.string(),
+  deadlineAt: z.string(),
+  state: AssignmentStateSchema,
+  promptMaterialId: z.string(),
+  solutionMaterialId: z.string().optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type Assignment = z.infer<typeof AssignmentSchema>;
+
+export const StudentAssignmentSubmissionStateSchema = z.enum([
+  'NOT_SUBMITTED',
+  'SUBMITTED',
+  'PUBLISHED',
+]);
+
+export type StudentAssignmentSubmissionState = z.infer<
+  typeof StudentAssignmentSubmissionStateSchema
+>;
+
+export const StudentAssignmentStatusSchema = z.object({
+  version: z.literal('1.0.0'),
+  assignmentId: z.string(),
+  courseId: z.string(),
+  courseTitle: z.string(),
+  assignmentTitle: z.string(),
+  openAt: z.string(),
+  deadlineAt: z.string(),
+  assignmentState: AssignmentStateSchema,
+  submissionState: StudentAssignmentSubmissionStateSchema,
+  submittedAt: z.string().nullable().optional(),
+  hasPublishedResult: z.boolean(),
+  publishedAt: z.string().nullable().optional(),
+  score: z.number().nullable().optional(),
+  maxScore: z.number().nullable().optional(),
+});
+
+export type StudentAssignmentStatus = z.infer<typeof StudentAssignmentStatusSchema>;
+
+export const StudentAssignmentResultSchema = StudentAssignmentStatusSchema.extend({
+  publishedResultId: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
+  breakdownSnapshot: z.unknown().nullable().optional(),
+});
+
+export type StudentAssignmentResult = z.infer<typeof StudentAssignmentResultSchema>;
+
 export const ChunkAnchorsSchema = z.object({
   pageIndex: z.number().int().nonnegative().optional(),
   slideIndex: z.number().int().nonnegative().optional(),

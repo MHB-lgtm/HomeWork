@@ -22,3 +22,10 @@ export {
   saveExamIndex,
 } from './fileExamIndexStore';
 
+export {
+  toLegacyJobReviewEnvelope,
+  loadLegacyDomainReviewSnapshot,
+  createLocalJobAssetStorageAdapter,
+  loadLegacyJobSubmissionAsset,
+} from './domainAdapters';
+

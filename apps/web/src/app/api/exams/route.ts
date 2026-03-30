@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
-import { createExam, listExams, ExamLoadError } from '../../../lib/exams';
+import { getServerPersistence } from '../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -33,10 +34,11 @@ function findWorkspaceRoot(startDir: string): string {
 
 async function runExamIndexGeneration(examId: string): Promise<ExamIndexingResult> {
   const workspaceRoot = findWorkspaceRoot(process.cwd());
+  const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
   return new Promise((resolve) => {
     const args = ['--filter', 'worker', 'exam:index', '--examId', examId];
-    const child = spawn('pnpm', args, {
+    const child = spawn(pnpmCommand, args, {
       cwd: workspaceRoot,
       env: process.env,
       shell: true,
@@ -96,7 +98,18 @@ async function runExamIndexGeneration(examId: string): Promise<ExamIndexingResul
  * Create a new exam package
  */
 export async function POST(request: NextRequest) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
+        { status: 500 }
+      );
+    }
+
     const dataDir = process.env.HG_DATA_DIR;
     if (!dataDir) {
       return NextResponse.json(
@@ -126,17 +139,18 @@ export async function POST(request: NextRequest) {
     const DATA_DIR = path.resolve(dataDir);
     const examFileBuffer = Buffer.from(await examFile.arrayBuffer());
 
-    const { examId } = await createExam(
-      DATA_DIR,
-      title.trim(),
-      examFile.name,
-      examFileBuffer
-    );
+    const createdExam = await persistence.exams.createExam({
+      dataDir: DATA_DIR,
+      title: title.trim(),
+      originalName: examFile.name,
+      buffer: examFileBuffer,
+      mimeType: examFile.type || undefined,
+    });
 
-    const indexing = await runExamIndexGeneration(examId);
+    const indexing = await runExamIndexGeneration(createdExam.exam.examId);
 
     return NextResponse.json({
-      examId,
+      examId: createdExam.exam.examId,
       indexing,
     });
   } catch (error) {
@@ -152,18 +166,20 @@ export async function POST(request: NextRequest) {
  * GET /api/exams
  * List all exams
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
+    const persistence = getServerPersistence();
+    if (!persistence) {
       return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+        { error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
         { status: 500 }
       );
     }
 
-    const DATA_DIR = path.resolve(dataDir);
-    const exams = await listExams(DATA_DIR);
+    const exams = await persistence.exams.listExams();
 
     return NextResponse.json(exams);
   } catch (error) {

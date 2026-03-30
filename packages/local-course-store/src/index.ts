@@ -44,3 +44,10 @@ export {
   queryCourseIndex,
   suggestStudyPointers,
 } from './fileCourseRagIndex';
+
+export {
+  toDomainCourse,
+  listCourseMaterialsFromLectures,
+  getCourseMaterialFromLecture,
+  createLocalCourseAssetStorageAdapter,
+} from './domainAdapters';

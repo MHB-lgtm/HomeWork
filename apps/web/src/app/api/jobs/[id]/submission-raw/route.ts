@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { getJob } from '@hg/local-job-store';
+import { getServerPersistence } from '@/lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -34,15 +35,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
 
+  try {
     const { id: jobId } = await params;
 
     if (!jobId) {
@@ -52,20 +48,20 @@ export async function GET(
       );
     }
 
-    // Load job record
-    const job = await getJob(jobId);
-
-    if (!job) {
+    const persistence = getServerPersistence();
+    if (!persistence) {
       return NextResponse.json(
-        { error: 'Job not found' },
-        { status: 404 }
+        { error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
       );
     }
 
-    // Check if submission file path exists
-    if (!job.inputs.submissionFilePath) {
+    const runtimeSubmission = await persistence.jobs.getJobSubmissionAsset(jobId);
+    const submissionPath = runtimeSubmission?.path ?? null;
+    const submissionMimeType = runtimeSubmission?.mimeType ?? null;
+    if (!submissionPath) {
       return NextResponse.json(
-        { error: 'Submission file path not found in job' },
+        { error: 'Job not found' },
         { status: 404 }
       );
     }
@@ -73,7 +69,7 @@ export async function GET(
     // Determine MIME type: prefer job.inputs.submissionMimeType, else infer from extension
     let mimeType: string;
     try {
-      mimeType = job.inputs.submissionMimeType || inferMimeType(job.inputs.submissionFilePath);
+      mimeType = submissionMimeType || inferMimeType(submissionPath);
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : 'Unsupported file type' },
@@ -84,7 +80,7 @@ export async function GET(
     // Read file
     let fileBuffer: Buffer;
     try {
-      fileBuffer = await fs.readFile(job.inputs.submissionFilePath);
+      fileBuffer = await fs.readFile(submissionPath);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return NextResponse.json(

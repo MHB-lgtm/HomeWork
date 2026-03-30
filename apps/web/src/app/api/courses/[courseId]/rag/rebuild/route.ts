@@ -1,27 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CourseNotFoundError, rebuildCourseRagIndex } from '@hg/local-course-store';
+import { PostgresCourseRagCourseNotFoundError } from '@hg/postgres-store';
+import { getServerPersistence } from '../../../../../../lib/server/persistence';
+import { requireActiveCourseRoleApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
-const ensureDataDir = () => {
-  if (!process.env.HG_DATA_DIR) {
+const ensurePersistence = () => {
+  const persistence = getServerPersistence();
+  if (!persistence) {
     return NextResponse.json(
-      { ok: false, error: 'HG_DATA_DIR is not set in environment' },
+      { ok: false, error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
       { status: 500 }
     );
   }
-  return null;
+  return persistence;
 };
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: { courseId: string } }
 ) {
-  const dataDirError = ensureDataDir();
-  if (dataDirError) return dataDirError;
+  const access = await requireActiveCourseRoleApiAccess(params.courseId, [
+    'COURSE_ADMIN',
+    'LECTURER',
+  ]);
+  if (access instanceof NextResponse) return access;
+
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
 
   try {
-    const result = await rebuildCourseRagIndex(params.courseId);
+    const result = await persistence.courseRag.rebuildCourseRagIndex(params.courseId);
 
     console.log(
       `[courses] rag.rebuild courseId=${params.courseId} lectureCount=${result.lectureCount} chunkCount=${result.chunkCount}`
@@ -36,7 +45,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    if (error instanceof CourseNotFoundError) {
+    if (error instanceof PostgresCourseRagCourseNotFoundError) {
       return NextResponse.json(
         { ok: false, error: 'COURSE_NOT_FOUND', code: 'COURSE_NOT_FOUND' },
         { status: 404 }

@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ReviewRecordSchema, ReviewRecord } from '@hg/shared-schemas';
-import { getOrCreateReview, saveReview } from '@hg/local-job-store';
+import { getServerPersistence } from '@/lib/server/persistence';
+import { getResolvedReviewDetail } from '@/lib/server/reviewDetail';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
 /**
  * GET /api/reviews/[jobId]
- * Get a review record (returns empty record if none exists)
+ * Get a DB-backed review record
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
-  try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
 
+  try {
     const { jobId } = await params;
 
     if (!jobId) {
@@ -30,10 +27,26 @@ export async function GET(
       );
     }
 
-    // Get or create review (returns empty if not found)
-    const review = await getOrCreateReview(jobId);
+    if (!getServerPersistence()) {
+      return NextResponse.json(
+        { ok: false, error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
+      );
+    }
 
-    return NextResponse.json({ ok: true, data: review });
+    const resolved = await getResolvedReviewDetail(jobId);
+    if (!resolved) {
+      return NextResponse.json(
+        { ok: false, error: 'Review not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      data: resolved.review,
+      context: resolved.context,
+    });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
@@ -51,15 +64,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
-  try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
 
+  try {
     const { jobId } = await params;
 
     if (!jobId) {
@@ -91,8 +99,45 @@ export async function PUT(
       );
     }
 
-    // Save review atomically
-    await saveReview(review);
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { ok: false, error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
+      );
+    }
+
+    try {
+      const [hasRuntimeJob, hasLegacySubmission] = await Promise.all([
+        persistence.jobs.hasRuntimeJob(jobId),
+        persistence.reviewRecords.hasLegacySubmission(jobId),
+      ]);
+      if (!hasRuntimeJob && !hasLegacySubmission) {
+        return NextResponse.json(
+          { ok: false, error: 'Review not found' },
+          { status: 404 }
+        );
+      }
+
+      const resolved = await getResolvedReviewDetail(jobId);
+      if (!resolved) {
+        return NextResponse.json(
+          { ok: false, error: 'Review not found' },
+          { status: 404 }
+        );
+      }
+
+      await persistence.reviewRecords.saveReviewRecordByLegacyJobId(jobId, review, {
+        actorRef: `user:${access.userId}`,
+        context: resolved.context,
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return NextResponse.json(
+        { ok: false, error: `Failed to save review: ${errorMessage}` },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {
@@ -140,15 +185,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ jobId: string }> }
 ) {
-  try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
 
+  try {
     const { jobId } = await params;
     if (!jobId) {
       return NextResponse.json(
@@ -167,19 +207,51 @@ export async function PATCH(
       );
     }
 
-    const review = await getOrCreateReview(jobId);
-    const nextDisplayName = parsedPayload.data.displayName?.trim() || undefined;
-
-    if (nextDisplayName) {
-      review.displayName = nextDisplayName;
-    } else {
-      delete review.displayName;
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { ok: false, error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
+      );
     }
-    review.updatedAt = new Date().toISOString();
 
-    await saveReview(review);
+    try {
+      const [hasRuntimeJob, hasLegacySubmission] = await Promise.all([
+        persistence.jobs.hasRuntimeJob(jobId),
+        persistence.reviewRecords.hasLegacySubmission(jobId),
+      ]);
+      if (!hasRuntimeJob && !hasLegacySubmission) {
+        return NextResponse.json(
+          { ok: false, error: 'Review not found' },
+          { status: 404 }
+        );
+      }
 
-    return NextResponse.json({ ok: true, data: review });
+      const resolved = await getResolvedReviewDetail(jobId);
+      if (!resolved) {
+        return NextResponse.json(
+          { ok: false, error: 'Review not found' },
+          { status: 404 }
+        );
+      }
+
+      const review = await persistence.reviewRecords.patchReviewDisplayNameByLegacyJobId(
+        jobId,
+        parsedPayload.data.displayName ?? null,
+        {
+          actorRef: `user:${access.userId}`,
+          context: resolved.context,
+        }
+      );
+
+      return NextResponse.json({ ok: true, data: review });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return NextResponse.json(
+        { ok: false, error: `Failed to update review: ${errorMessage}` },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(

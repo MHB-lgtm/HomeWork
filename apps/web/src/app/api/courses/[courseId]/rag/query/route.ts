@@ -1,28 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   RagQueryRequestV1Schema,
-  RagQueryResponseV1,
 } from '@hg/shared-schemas';
-import { CourseNotFoundError, IndexNotBuiltError, queryCourseIndex } from '@hg/local-course-store';
+import {
+  PostgresCourseRagCourseNotFoundError,
+  PostgresCourseRagIndexNotBuiltError,
+} from '@hg/postgres-store';
+import { getServerPersistence } from '../../../../../../lib/server/persistence';
+import { requireActiveCourseRoleApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
-const ensureDataDir = () => {
-  if (!process.env.HG_DATA_DIR) {
-    return NextResponse.json<{ ok: false; error: string; code: 'HG_DATA_DIR_MISSING' }>(
-      { ok: false, error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+const ensurePersistence = () => {
+  const persistence = getServerPersistence();
+  if (!persistence) {
+    return NextResponse.json<{ ok: false; error: string; code: 'DATABASE_URL_MISSING' }>(
+      { ok: false, error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
       { status: 500 }
     );
   }
-  return null;
+  return persistence;
 };
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { courseId: string } }
-): Promise<NextResponse<RagQueryResponseV1 | { ok: false; error: string; code?: string }>> {
-  const dataDirError = ensureDataDir();
-  if (dataDirError) return dataDirError;
+) {
+  const access = await requireActiveCourseRoleApiAccess(params.courseId, [
+    'COURSE_ADMIN',
+    'LECTURER',
+  ]);
+  if (access instanceof NextResponse) return access;
+
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
 
   try {
     const body = await request.json();
@@ -44,7 +55,7 @@ export async function POST(
       );
     }
 
-    const result = await queryCourseIndex(params.courseId, {
+    const result = await persistence.courseRag.queryCourseIndex(params.courseId, {
       query: queryText,
       k,
       method: parsed.data.method ?? 'lexical_v1',
@@ -69,21 +80,14 @@ export async function POST(
       );
     }
 
-    if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid JSON body' },
-        { status: 400 }
-      );
-    }
-
-    if (error instanceof IndexNotBuiltError) {
+    if (error instanceof PostgresCourseRagIndexNotBuiltError) {
       return NextResponse.json(
         { ok: false, error: 'INDEX_NOT_BUILT', code: 'INDEX_NOT_BUILT' },
         { status: 409 }
       );
     }
 
-    if (error instanceof CourseNotFoundError) {
+    if (error instanceof PostgresCourseRagCourseNotFoundError) {
       return NextResponse.json(
         { ok: false, error: 'COURSE_NOT_FOUND', code: 'COURSE_NOT_FOUND' },
         { status: 404 }

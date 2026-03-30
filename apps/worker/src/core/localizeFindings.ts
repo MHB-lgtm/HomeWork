@@ -1,12 +1,12 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import {
   GeneralEvaluation,
   GeneralFindingsLocalizationSchema,
   Annotation,
 } from '@hg/shared-schemas';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -42,7 +42,7 @@ function extractJsonFromText(text: string): string {
 }
 
 export type LocalizeFindingsInput = {
-  job: JobRecord;
+  job: WorkerJobRecord;
   generalEvaluation: GeneralEvaluation;
 };
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as path from 'path';
-import { getExam, ExamNotFoundError } from '../../../../lib/exams';
+import { getServerPersistence } from '../../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -9,14 +9,17 @@ export const runtime = 'nodejs';
  * Get a single exam by ID
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ examId: string }> }
 ) {
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
   try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
+    const persistence = getServerPersistence();
+    if (!persistence) {
       return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+        { error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
         { status: 500 }
       );
     }
@@ -30,20 +33,15 @@ export async function GET(
       );
     }
 
-    const DATA_DIR = path.resolve(dataDir);
-
-    try {
-      const exam = await getExam(DATA_DIR, examId);
-      return NextResponse.json(exam);
-    } catch (error) {
-      if (error instanceof ExamNotFoundError) {
-        return NextResponse.json(
-          { error: error.message, code: 'EXAM_NOT_FOUND' },
-          { status: 404 }
-        );
-      }
-      throw error;
+    const exam = await persistence.exams.getExam(examId);
+    if (!exam) {
+      return NextResponse.json(
+        { error: `Exam not found: ${examId}`, code: 'EXAM_NOT_FOUND' },
+        { status: 404 }
+      );
     }
+
+    return NextResponse.json(exam);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(

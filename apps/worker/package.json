@@ -8,7 +8,6 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "job:create": "ts-node src/scripts/createJob.ts",
     "job:run-once": "ts-node src/scripts/runOnce.ts",
     "job:run-loop": "ts-node src/scripts/runLoop.ts",
     "gemini:smoke": "ts-node src/scripts/geminiSmokeTest.ts",
@@ -16,8 +15,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@hg/local-course-store": "workspace:*",
-    "@hg/local-job-store": "workspace:*",
+    "@hg/postgres-store": "workspace:*",
     "@hg/shared-schemas": "workspace:*",
     "dotenv": "^17.2.3",
     "pdf-lib": "^1.17.1",

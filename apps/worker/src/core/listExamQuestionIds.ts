@@ -1,43 +1,20 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { getWorkerRuntimePersistence } from '../lib/runtimePersistence';
 
 /**
- * Get data directory from environment variable
- */
-function getDataDir(): string {
-  const dataDir = process.env.HG_DATA_DIR;
-  if (!dataDir) {
-    throw new Error('HG_DATA_DIR is not set in environment variables');
-  }
-  return path.resolve(dataDir);
-}
-
-/**
- * List question IDs for an exam by reading rubric files from HG_DATA_DIR/rubrics/<examId>/
- * Returns sorted array of questionIds (filenames without .json extension)
- * Returns empty array if rubrics directory doesn't exist or is empty
+ * List question IDs for an exam from the DB-backed exam index payload.
+ * Returns question ids ordered by the stored question order.
  */
 export async function listExamQuestionIds(examId: string): Promise<string[]> {
   try {
-    const dataDir = getDataDir();
-    const rubricsDir = path.join(dataDir, 'rubrics', examId);
-
-    // Check if directory exists
-    try {
-      await fs.access(rubricsDir);
-    } catch {
-      // Directory doesn't exist - return empty array
+    const persistence = getWorkerRuntimePersistence();
+    const examIndex = await persistence.examIndexes.getExamIndex(examId);
+    if (!examIndex) {
       return [];
     }
 
-    // Read directory contents
-    const files = await fs.readdir(rubricsDir);
-
-    // Filter for .json files and extract questionIds (filename without extension)
-    const questionIds = files
-      .filter((file) => file.endsWith('.json'))
-      .map((file) => path.basename(file, '.json'))
-      .sort(); // Sort alphabetically
+    const questionIds = [...examIndex.questions]
+      .sort((a, b) => a.order - b.order)
+      .map((question) => question.id);
 
     console.log(`[worker] Found ${questionIds.length} question IDs for exam ${examId}: ${questionIds.join(', ')}`);
     return questionIds;

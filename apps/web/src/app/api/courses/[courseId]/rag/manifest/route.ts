@@ -1,28 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { CourseNotFoundError, getCourse, getCourseRagManifest } from '@hg/local-course-store';
+import { PostgresCourseRagCourseNotFoundError } from '@hg/postgres-store';
+import { getServerPersistence } from '../../../../../../lib/server/persistence';
+import { requireActiveCourseRoleApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
-const ensureDataDir = () => {
-  if (!process.env.HG_DATA_DIR) {
+const ensurePersistence = () => {
+  const persistence = getServerPersistence();
+  if (!persistence) {
     return NextResponse.json(
-      { ok: false, error: 'HG_DATA_DIR is not set in environment' },
+      { ok: false, error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
       { status: 500 }
     );
   }
-  return null;
+  return persistence;
 };
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: { courseId: string } }
 ) {
-  const dataDirError = ensureDataDir();
-  if (dataDirError) return dataDirError;
+  const access = await requireActiveCourseRoleApiAccess(params.courseId, [
+    'COURSE_ADMIN',
+    'LECTURER',
+  ]);
+  if (access instanceof NextResponse) return access;
+
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
 
   try {
-    await getCourse(params.courseId);
-    const manifest = await getCourseRagManifest(params.courseId);
+    const manifest = await persistence.courseRag.getCourseRagManifest(params.courseId);
 
     if (!manifest) {
       return NextResponse.json(
@@ -35,7 +43,7 @@ export async function GET(
 
     return NextResponse.json({ ok: true, data: manifest });
   } catch (error) {
-    if (error instanceof CourseNotFoundError) {
+    if (error instanceof PostgresCourseRagCourseNotFoundError) {
       return NextResponse.json(
         { ok: false, error: 'COURSE_NOT_FOUND', code: 'COURSE_NOT_FOUND' },
         { status: 404 }

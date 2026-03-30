@@ -6,12 +6,13 @@ import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/aler
 import { Button } from '../../../components/ui/button';
 import { EmptyState } from '../../../components/ui/empty-state';
 import { Input } from '../../../components/ui/input';
-import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
 import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../../components/ui/panel';
 import { StatusBadge } from '../../../components/ui/status-badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../components/ui/table';
-import { CardSkeleton, TableRowSkeleton } from '../../../components/ui/skeleton';
-import { cn } from '../../../lib/utils';
+import { DataTable, type Column } from '../../../components/ui/data-table';
+import { PageHeader } from '../../../components/ui/page-header';
+import { FormSection } from '../../../components/ui/form-section';
+import { PageTransition, FadeIn } from '../../../components/ui/motion';
+import { Upload, FileText, Copy, Check } from 'lucide-react';
 
 type ExamMessage = {
   type: 'success' | 'error' | 'warning';
@@ -22,17 +23,12 @@ type IndexStatus = 'loading' | 'confirmed' | 'proposed' | 'missing' | 'error';
 
 function toIndexStatusBadge(status: IndexStatus | undefined) {
   switch (status) {
-    case 'confirmed':
-      return <StatusBadge status="DONE" label="Confirmed" />;
-    case 'proposed':
-      return <StatusBadge status="PROPOSED" label="Proposed" />;
-    case 'missing':
-      return <StatusBadge status="NOT_INDEXED" label="Not indexed" />;
-    case 'error':
-      return <StatusBadge status="FAILED" label="Index error" />;
+    case 'confirmed': return <StatusBadge status="DONE" label="Confirmed" />;
+    case 'proposed': return <StatusBadge status="PROPOSED" label="Proposed" />;
+    case 'missing': return <StatusBadge status="NOT_INDEXED" label="Not indexed" />;
+    case 'error': return <StatusBadge status="FAILED" label="Index error" />;
     case 'loading':
-    default:
-      return <StatusBadge status="LOADING" label="Loading" />;
+    default: return <StatusBadge status="LOADING" label="Loading" />;
   }
 }
 
@@ -47,46 +43,27 @@ export default function ExamsPage() {
   const [lastCreatedExamId, setLastCreatedExamId] = useState<string | null>(null);
   const [copiedExamId, setCopiedExamId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadExams();
-  }, []);
+  useEffect(() => { loadExams(); }, []);
 
   const loadExamIndexStatuses = async (items: ExamSummary[]) => {
-    if (items.length === 0) {
-      setIndexStatuses({});
-      return;
-    }
-
+    if (items.length === 0) { setIndexStatuses({}); return; }
     const loadingStatuses: Record<string, IndexStatus> = {};
-    for (const exam of items) {
-      loadingStatuses[exam.examId] = 'loading';
-    }
+    for (const exam of items) loadingStatuses[exam.examId] = 'loading';
     setIndexStatuses(loadingStatuses);
 
     const results = await Promise.all(
       items.map(async (exam) => {
         try {
           const response = await fetch(`/api/exams/${encodeURIComponent(exam.examId)}/index`);
-          if (!response.ok) {
-            return [exam.examId, 'error'] as const;
-          }
-
+          if (!response.ok) return [exam.examId, 'error'] as const;
           const payload = (await response.json()) as { ok?: boolean; data?: { status?: string } | null };
           const status = payload?.data?.status;
-
-          if (status === 'confirmed') {
-            return [exam.examId, 'confirmed'] as const;
-          }
-          if (status === 'proposed') {
-            return [exam.examId, 'proposed'] as const;
-          }
+          if (status === 'confirmed') return [exam.examId, 'confirmed'] as const;
+          if (status === 'proposed') return [exam.examId, 'proposed'] as const;
           return [exam.examId, 'missing'] as const;
-        } catch {
-          return [exam.examId, 'error'] as const;
-        }
+        } catch { return [exam.examId, 'error'] as const; }
       })
     );
-
     setIndexStatuses(Object.fromEntries(results));
   };
 
@@ -94,57 +71,31 @@ export default function ExamsPage() {
     setIsLoading(true);
     const result = await listExams();
     setIsLoading(false);
-
-    if (result.ok) {
-      setExams(result.data);
-      await loadExamIndexStatuses(result.data);
-    } else {
-      setMessage({ type: 'error', text: result.error });
-    }
+    if (result.ok) { setExams(result.data); await loadExamIndexStatuses(result.data); }
+    else setMessage({ type: 'error', text: result.error });
   };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
-
-    if (!title.trim()) {
-      setMessage({ type: 'error', text: 'Title is required' });
-      return;
-    }
-
-    if (!examFile) {
-      setMessage({ type: 'error', text: 'Exam file is required' });
-      return;
-    }
+    if (!title.trim()) { setMessage({ type: 'error', text: 'Title is required' }); return; }
+    if (!examFile) { setMessage({ type: 'error', text: 'Exam file is required' }); return; }
 
     setIsCreating(true);
-
     const formData = new FormData();
     formData.append('title', title.trim());
     formData.append('examFile', examFile);
-
     const result = await createExam(formData);
     setIsCreating(false);
 
     if (result.ok) {
       setLastCreatedExamId(result.examId);
-      if (result.indexing?.ok === false) {
-        setMessage({
-          type: 'warning',
-          text: 'Exam created. Auto-indexing did not complete automatically.',
-        });
-      } else if (result.indexing?.ok === true) {
-        setMessage({ type: 'success', text: 'Exam created and indexed successfully.' });
-      } else {
-        setMessage({ type: 'success', text: 'Exam created successfully.' });
-      }
-
-      setTitle('');
-      setExamFile(null);
+      if (result.indexing?.ok === false) setMessage({ type: 'warning', text: 'Exam created. Auto-indexing did not complete automatically.' });
+      else if (result.indexing?.ok === true) setMessage({ type: 'success', text: 'Exam created and indexed successfully.' });
+      else setMessage({ type: 'success', text: 'Exam created successfully.' });
+      setTitle(''); setExamFile(null);
       const fileInput = document.getElementById('examFile') as HTMLInputElement | null;
-      if (fileInput) {
-        fileInput.value = '';
-      }
+      if (fileInput) fileInput.value = '';
       await loadExams();
     } else {
       setMessage({ type: 'error', text: result.error });
@@ -152,213 +103,122 @@ export default function ExamsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleString();
-    } catch {
-      return dateString;
-    }
+    try { return new Date(dateString).toLocaleString(); } catch { return dateString; }
   };
-
-  const alertTone =
-    message?.type === 'success'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-      : message?.type === 'warning'
-        ? 'border-amber-200 bg-amber-50 text-amber-900'
-        : undefined;
 
   const copyExamId = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value);
       setCopiedExamId(value);
-      window.setTimeout(() => {
-        setCopiedExamId((prev) => (prev === value ? null : prev));
-      }, 1200);
-    } catch {
-      setCopiedExamId(null);
-    }
+      window.setTimeout(() => setCopiedExamId((prev) => (prev === value ? null : prev)), 1200);
+    } catch { setCopiedExamId(null); }
   };
 
-  return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-      <section className="flex w-full flex-col items-center gap-4 text-center">
-        <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Exams</h1>
-        <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-          Upload and manage exam templates for grading.
-        </p>
-      </section>
-
-      {message ? (
-        <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={cn('rounded-xl', alertTone)}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <AlertTitle>
-                {message.type === 'success'
-                  ? 'Exam created'
-                  : message.type === 'warning'
-                    ? 'Exam created with indexing warning'
-                    : 'Operation failed'}
-              </AlertTitle>
-              <AlertDescription className="break-words whitespace-pre-wrap">{message.text}</AlertDescription>
-              {message.type === 'warning' && lastCreatedExamId ? (
-                <details className="mt-2 rounded-lg border border-amber-200 bg-white/70 px-3 py-2 text-xs text-amber-900">
-                  <summary className="cursor-pointer font-medium">Technical details</summary>
-                  <div className="mt-2 space-y-1 font-mono">
-                    <p>Exam ID: {lastCreatedExamId}</p>
-                    <p>Manual command: pnpm --filter worker exam:index -- --examId {lastCreatedExamId}</p>
-                  </div>
-                </details>
-              ) : null}
-            </div>
-            <StatusBadge
-              status={message.type === 'error' ? 'FAILED' : message.type === 'warning' ? 'PENDING' : 'DONE'}
-              label={message.type === 'error' ? 'Failed' : message.type === 'warning' ? 'Warning' : 'Success'}
-            />
+  const columns: Column<ExamSummary>[] = [
+    {
+      key: 'title',
+      label: 'Title',
+      render: (exam) => (
+        <div className="space-y-1">
+          <p className="font-medium text-(--text-primary)">{exam.title}</p>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-(--text-tertiary)">{exam.examId}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); copyExamId(exam.examId); }}
+              className="rounded p-0.5 text-(--text-quaternary) hover:text-(--text-secondary) transition-colors"
+            >
+              {copiedExamId === exam.examId ? <Check size={12} /> : <Copy size={12} />}
+            </button>
           </div>
-        </Alert>
-      ) : null}
+        </div>
+      ),
+    },
+    {
+      key: 'index',
+      label: 'Index',
+      render: (exam) => toIndexStatusBadge(indexStatuses[exam.examId]),
+    },
+    {
+      key: 'createdAt',
+      label: 'Created',
+      render: (exam) => <span className="text-sm text-(--text-secondary)">{formatDate(exam.createdAt)}</span>,
+    },
+  ];
 
-      <div className="mx-auto w-full max-w-3xl">
-      <Panel id="upload-exam" className="rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
-        <PanelHeader>
-          <PanelTitle>Upload exam</PanelTitle>
-        </PanelHeader>
-        <PanelContent>
-          <form id="create-exam-form" onSubmit={handleCreate} className="space-y-5">
-            <div className="space-y-2">
-              <label htmlFor="title" className="text-sm font-medium text-slate-800">
-                Exam title
-              </label>
-              <Input
-                id="title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                placeholder="Example: Midterm 2026"
-              />
-            </div>
+  return (
+    <PageTransition>
+      <div className="space-y-6">
+        <PageHeader
+          title="Exams"
+          description="Upload and manage exam templates for AI-powered grading."
+        />
 
-            <div className="space-y-2">
-              <input
-                id="examFile"
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg"
-                onChange={(e) => setExamFile(e.target.files?.[0] || null)}
-                required
-                className="sr-only"
-              />
-              <label
-                htmlFor="examFile"
-                className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-10 text-center transition-colors hover:bg-gray-50"
-              >
-                <p className="text-sm font-medium text-slate-900">Click to upload or drag and drop</p>
-              </label>
-              {examFile ? (
-                <p className="text-xs font-medium text-slate-700">
-                  Selected: <span className="font-semibold">{examFile.name}</span>
-                </p>
-              ) : null}
-            </div>
+        {message && (
+          <Alert variant={message.type === 'error' ? 'error' : message.type === 'warning' ? 'warning' : 'success'}>
+            <AlertTitle>
+              {message.type === 'success' ? 'Exam created' : message.type === 'warning' ? 'Created with warning' : 'Operation failed'}
+            </AlertTitle>
+            <AlertDescription>{message.text}</AlertDescription>
+          </Alert>
+        )}
 
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                disabled={isCreating}
-                className="h-12 w-full rounded-xl bg-slate-900 text-lg font-semibold text-white shadow-sm transition-colors hover:bg-slate-800"
-              >
-                {isCreating ? 'Creating...' : 'Create Exam'}
-              </Button>
-            </div>
-          </form>
-        </PanelContent>
-      </Panel>
-      </div>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+          {/* Upload Form */}
+          <FadeIn>
+            <FormSection title="Upload exam" description="Add a new exam template for grading.">
+              <form onSubmit={handleCreate} className="space-y-4">
+                <Input
+                  label="Exam title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Midterm 2026"
+                  required
+                />
 
-      <Panel>
-        <PanelHeader>
-          <PanelTitle>Existing exams</PanelTitle>
-        </PanelHeader>
-        <PanelContent>
-          {isLoading ? (
-            <div className="space-y-4">
-              <CardSkeleton lines={2} />
-              <Table className="w-full text-left text-sm">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Title</TableHead>
-                    <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Created</TableHead>
-                    <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Updated</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRowSkeleton columns={3} />
-                  <TableRowSkeleton columns={3} />
-                  <TableRowSkeleton columns={3} />
-                </TableBody>
-              </Table>
-            </div>
-          ) : exams.length === 0 ? (
-            <EmptyState
-              title="No exams yet"
-              action={
-                <Button
-                  size="sm"
-                  onClick={() => document.getElementById('title')?.focus()}
-                  className="h-auto w-auto rounded-md px-4 py-2 text-sm font-medium transition-colors"
-                >
-                  Upload first exam
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-(--text-primary)">Exam file</label>
+                  <input
+                    id="examFile"
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => setExamFile(e.target.files?.[0] || null)}
+                    required
+                    className="sr-only"
+                  />
+                  <label
+                    htmlFor="examFile"
+                    className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-(--border) p-8 text-center transition-colors hover:border-(--border-hover) hover:bg-(--surface-hover)"
+                  >
+                    <Upload size={20} className="text-(--text-tertiary)" />
+                    <span className="text-sm font-medium text-(--text-secondary)">Click to upload</span>
+                    <span className="text-xs text-(--text-tertiary)">PDF, PNG, or JPG</span>
+                  </label>
+                  {examFile && (
+                    <p className="text-xs text-(--text-secondary)">
+                      Selected: <span className="font-medium">{examFile.name}</span>
+                    </p>
+                  )}
+                </div>
+
+                <Button type="submit" loading={isCreating} className="w-full">
+                  Create Exam
                 </Button>
-              }
+              </form>
+            </FormSection>
+          </FadeIn>
+
+          {/* Exams Table */}
+          <FadeIn delay={0.1}>
+            <DataTable
+              columns={columns}
+              data={exams as unknown as Record<string, unknown>[]}
+              loading={isLoading}
+              emptyMessage="No exams yet"
+              emptyIcon={<FileText />}
             />
-          ) : (
-            <Table className="w-full text-left text-sm">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Title</TableHead>
-                  <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Created</TableHead>
-                  <TableHead className="h-auto border-b border-gray-100 px-4 py-3 text-gray-500 font-medium">Updated</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {exams.map((exam) => (
-                  <TableRow key={exam.examId}>
-                    <TableCell className="border-b border-gray-100 px-4 py-3 text-slate-900">
-                      <div className="space-y-1">
-                        <p className="font-medium">{exam.title}</p>
-                        <details className="text-xs text-slate-500">
-                          <summary className="cursor-pointer">Technical details</summary>
-                          <div className="mt-1 space-y-2">
-                            <div className="flex items-center gap-2 font-mono">
-                              <span>{exam.examId}</span>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 px-2 text-xs"
-                                onClick={() => copyExamId(exam.examId)}
-                              >
-                                {copiedExamId === exam.examId ? 'Copied' : 'Copy'}
-                              </Button>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-slate-500">Index:</span>
-                              {toIndexStatusBadge(indexStatuses[exam.examId])}
-                            </div>
-                          </div>
-                        </details>
-                      </div>
-                    </TableCell>
-                    <TableCell className="border-b border-gray-100 px-4 py-3 text-slate-700">{formatDate(exam.createdAt)}</TableCell>
-                    <TableCell className="border-b border-gray-100 px-4 py-3 text-slate-700">{exam.updatedAt ? formatDate(exam.updatedAt) : '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </PanelContent>
-      </Panel>
+          </FadeIn>
+        </div>
       </div>
-    </ImmersiveShell>
+    </PageTransition>
   );
 }

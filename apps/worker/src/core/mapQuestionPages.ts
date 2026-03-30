@@ -1,8 +1,8 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JobRecord } from '@hg/local-job-store';
 import { GeminiService } from '../services/geminiService';
 import { QuestionMappingSchema, QuestionMapping } from '@hg/shared-schemas';
+import type { WorkerJobRecord } from '../types/workerJobRecord';
 
 function inferMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
@@ -50,7 +50,7 @@ export type QuestionMetadata = {
  * Best-effort: failures don't fail the job
  */
 export async function mapQuestionPages(
-  job: JobRecord,
+  job: WorkerJobRecord,
   questionMetadata?: QuestionMetadata
 ): Promise<MapQuestionPagesResult> {
   try {

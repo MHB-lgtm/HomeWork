@@ -24,6 +24,24 @@ export class CoursesClientError extends Error {
   }
 }
 
+export type CourseMembershipRole = 'COURSE_ADMIN' | 'LECTURER' | 'STUDENT';
+export type CourseMembershipStatus = 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REMOVED';
+
+export type CourseMembershipRecord = {
+  membershipId: string;
+  courseId: string;
+  courseTitle: string;
+  userId: string;
+  normalizedEmail: string | null;
+  displayName: string | null;
+  role: CourseMembershipRole;
+  status: CourseMembershipStatus;
+  joinedAt: string | null;
+  invitedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const parseErrorPayload = async (response: Response, fallback: string) => {
   const payload = (await response.json().catch(() => null)) as ApiErrorPayload | null;
   const message = payload?.error && typeof payload.error === 'string' ? payload.error : fallback;
@@ -68,6 +86,53 @@ const parseLectureList = (data: unknown): Lecture[] => {
       return bTime - aTime;
     }
     return a.lectureId.localeCompare(b.lectureId);
+  });
+};
+
+const parseCourseMembershipList = (data: unknown): CourseMembershipRecord[] => {
+  if (!Array.isArray(data)) {
+    throw new CoursesClientError('Invalid membership data');
+  }
+
+  return data.map((entry) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new CoursesClientError('Invalid membership data');
+    }
+
+    const record = entry as Record<string, unknown>;
+    const role = record.role;
+    const status = record.status;
+    if (
+      typeof record.membershipId !== 'string' ||
+      typeof record.courseId !== 'string' ||
+      typeof record.courseTitle !== 'string' ||
+      typeof record.userId !== 'string' ||
+      (record.normalizedEmail !== null && typeof record.normalizedEmail !== 'string') ||
+      (record.displayName !== null && typeof record.displayName !== 'string') ||
+      (record.joinedAt !== null && typeof record.joinedAt !== 'string') ||
+      (record.invitedByUserId !== null && typeof record.invitedByUserId !== 'string') ||
+      typeof record.createdAt !== 'string' ||
+      typeof record.updatedAt !== 'string' ||
+      !['COURSE_ADMIN', 'LECTURER', 'STUDENT'].includes(String(role)) ||
+      !['INVITED', 'ACTIVE', 'SUSPENDED', 'REMOVED'].includes(String(status))
+    ) {
+      throw new CoursesClientError('Invalid membership data');
+    }
+
+    return {
+      membershipId: record.membershipId,
+      courseId: record.courseId,
+      courseTitle: record.courseTitle,
+      userId: record.userId,
+      normalizedEmail: (record.normalizedEmail as string | null) ?? null,
+      displayName: (record.displayName as string | null) ?? null,
+      role: role as CourseMembershipRole,
+      status: status as CourseMembershipStatus,
+      joinedAt: (record.joinedAt as string | null) ?? null,
+      invitedByUserId: (record.invitedByUserId as string | null) ?? null,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    } satisfies CourseMembershipRecord;
   });
 };
 
@@ -343,5 +408,64 @@ export async function ragSuggest(
       throw error;
     }
     throw new CoursesClientError(error instanceof Error ? error.message : 'Failed to run suggest');
+  }
+}
+
+export async function listCourseMemberships(courseId: string): Promise<CourseMembershipRecord[]> {
+  try {
+    const response = await fetch(`/api/courses/${courseId}/memberships`);
+
+    if (!response.ok) {
+      const { message, code } = await parseErrorPayload(response, 'Failed to load memberships');
+      throw new CoursesClientError(message, { code, status: response.status });
+    }
+
+    const payload = await response.json().catch(() => null);
+    if (!payload || payload.ok !== true) {
+      throw new CoursesClientError('Failed to load memberships');
+    }
+
+    return parseCourseMembershipList(payload.data);
+  } catch (error) {
+    if (error instanceof CoursesClientError) {
+      throw error;
+    }
+    throw new CoursesClientError(error instanceof Error ? error.message : 'Failed to load memberships');
+  }
+}
+
+export async function upsertCourseMembership(
+  courseId: string,
+  args: {
+    email: string;
+    displayName?: string | null;
+    role: CourseMembershipRole;
+    status: CourseMembershipStatus;
+  }
+): Promise<CourseMembershipRecord> {
+  try {
+    const response = await fetch(`/api/courses/${courseId}/memberships`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(args),
+    });
+
+    if (!response.ok) {
+      const { message, code } = await parseErrorPayload(response, 'Failed to save membership');
+      throw new CoursesClientError(message, { code, status: response.status });
+    }
+
+    const payload = await response.json().catch(() => null);
+    if (!payload || payload.ok !== true) {
+      throw new CoursesClientError('Failed to save membership');
+    }
+
+    const memberships = parseCourseMembershipList([payload.data]);
+    return memberships[0];
+  } catch (error) {
+    if (error instanceof CoursesClientError) {
+      throw error;
+    }
+    throw new CoursesClientError(error instanceof Error ? error.message : 'Failed to save membership');
   }
 }

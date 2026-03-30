@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import * as React from 'react';
+import { AccountMenu } from '../auth/AccountMenu';
 import { cn } from '../../lib/utils';
 
 type ImmersiveShellProps = {
@@ -50,6 +51,8 @@ export function ImmersiveShell({
                 Courses
               </Link>
             </nav>
+
+            <AccountMenu compact />
           </div>
         </header>
       ) : null}

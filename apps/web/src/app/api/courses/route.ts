@@ -1,37 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createCourse, listCourses } from '@hg/local-course-store';
+import { getServerPersistence } from '../../../lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
-const ensureDataDir = () => {
-  if (!process.env.HG_DATA_DIR) {
+const ensurePersistence = () => {
+  const persistence = getServerPersistence();
+  if (!persistence) {
     return NextResponse.json(
-      { ok: false, error: 'HG_DATA_DIR is not set in environment' },
+      { ok: false, error: 'DATABASE_URL is not set in environment', code: 'DATABASE_URL_MISSING' },
       { status: 500 }
     );
   }
-  return null;
+
+  return persistence;
 };
 
 export async function GET() {
-  const dataDirError = ensureDataDir();
-  if (dataDirError) return dataDirError;
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
+
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
 
   try {
-    const courses = await listCourses();
+    const courses =
+      access.globalRole === 'SUPER_ADMIN'
+        ? await persistence.courses.listCourses()
+        : await persistence.courseMemberships.listStaffCoursesForUser(access.userId);
     return NextResponse.json({ ok: true, data: courses });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { ok: false, error: `Failed to list courses: ${message}` },
+      { ok: false, error: `Failed to list courses: ${message}`, code: 'INTERNAL_ERROR' },
       { status: 500 }
     );
   }
 }
 
 export async function POST(request: NextRequest) {
-  const dataDirError = ensureDataDir();
-  if (dataDirError) return dataDirError;
+  const access = await requireStaffApiAccess({ requireSuperAdmin: true });
+  if (access instanceof NextResponse) return access;
+
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
 
   try {
     const body = await request.json();
@@ -39,17 +51,18 @@ export async function POST(request: NextRequest) {
 
     if (!title) {
       return NextResponse.json(
-        { ok: false, error: 'title is required' },
+        { ok: false, error: 'title is required', code: 'BAD_REQUEST' },
         { status: 400 }
       );
     }
 
-    const { courseId } = await createCourse({ title });
-    return NextResponse.json({ ok: true, data: { courseId } });
+    const course = await persistence.courses.createCourse({ title });
+
+    return NextResponse.json({ ok: true, data: { courseId: course.courseId } });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { ok: false, error: `Failed to create course: ${message}` },
+      { ok: false, error: `Failed to create course: ${message}`, code: 'INTERNAL_ERROR' },
       { status: 500 }
     );
   }

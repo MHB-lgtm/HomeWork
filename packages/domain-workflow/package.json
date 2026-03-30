@@ -1,0 +1,18 @@
+{
+  "name": "@hg/domain-workflow",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Canonical domain entities and workflow rules for homework grader",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc --watch -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
+  }
+}

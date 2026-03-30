@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getJob } from '@hg/local-job-store';
+import { getServerPersistence } from '@/lib/server/persistence';
+import { requireStaffApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -7,15 +8,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
-      return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
-        { status: 500 }
-      );
-    }
+  const access = await requireStaffApiAccess();
+  if (access instanceof NextResponse) return access;
 
+  try {
     const { id: jobId } = await params;
 
     if (!jobId) {
@@ -25,9 +21,16 @@ export async function GET(
       );
     }
 
-    const job = await getJob(jobId);
+    const persistence = getServerPersistence();
+    if (!persistence) {
+      return NextResponse.json(
+        { error: 'DATABASE_URL is not set in environment' },
+        { status: 500 }
+      );
+    }
 
-    if (!job) {
+    const runtimeJob = await persistence.jobs.getJobStatus(jobId);
+    if (!runtimeJob) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
@@ -35,12 +38,12 @@ export async function GET(
     }
 
     return NextResponse.json({
-      status: job.status,
-      resultJson: job.resultJson,
-      errorMessage: job.errorMessage,
-      submissionMimeType: job.inputs.submissionMimeType,
-      gradingMode: job.inputs.gradingMode,
-      gradingScope: job.inputs.gradingScope,
+      status: runtimeJob.status,
+      resultJson: runtimeJob.resultJson,
+      errorMessage: runtimeJob.errorMessage,
+      submissionMimeType: runtimeJob.submissionMimeType,
+      gradingMode: runtimeJob.gradingMode,
+      gradingScope: runtimeJob.gradingScope,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
