@@ -19,13 +19,13 @@ export function CardSkeleton({ className, lines = 3, ...props }: CardSkeletonPro
   return (
     <div
       className={cn(
-        'rounded-xl border border-(--border) bg-(--surface) p-5 shadow-(--shadow-xs)',
+        'rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) p-5 shadow-(--shadow-xs)',
         className
       )}
       {...props}
     >
       <Skeleton className="mb-4 h-5 w-40" />
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {Array.from({ length: lines }).map((_, i) => (
           <Skeleton key={i} className={cn('h-4', i === lines - 1 ? 'w-2/3' : 'w-full')} />
         ))}
@@ -46,7 +46,7 @@ export function TableRowSkeleton({ columns = 4, className, ...props }: TableRowS
   return (
     <tr className={cn('border-b border-(--border-light)', className)} {...props}>
       {Array.from({ length: columns }).map((_, i) => (
-        <td key={i} className="p-3">
+        <td key={i} className="p-3.5">
           <Skeleton className={cn('h-4', i === columns - 1 ? 'w-20' : 'w-full max-w-60')} />
         </td>
       ))}
@@ -63,7 +63,7 @@ export function SkeletonTable({ columns = 4, rows = 5, className, ...props }: Sk
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-xl border border-(--border) bg-(--surface)',
+        'overflow-hidden rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) shadow-(--shadow-xs)',
         className
       )}
       {...props}
@@ -72,7 +72,7 @@ export function SkeletonTable({ columns = 4, rows = 5, className, ...props }: Sk
         <thead>
           <tr className="border-b border-(--border) bg-(--surface-secondary)">
             {Array.from({ length: columns }).map((_, i) => (
-              <th key={i} className="p-3">
+              <th key={i} className="p-3.5">
                 <Skeleton className="h-3 w-20" />
               </th>
             ))}

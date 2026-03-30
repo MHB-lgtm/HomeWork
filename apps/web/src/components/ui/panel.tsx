@@ -7,7 +7,8 @@ const Panel = React.forwardRef<HTMLDivElement, PanelProps>(({ className, ...prop
   <section
     ref={ref}
     className={cn(
-      'rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-xs)',
+      'rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) shadow-(--shadow-xs)',
+      'overflow-hidden',
       className
     )}
     {...props}
@@ -18,14 +19,14 @@ Panel.displayName = 'Panel';
 export interface PanelHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const PanelHeader = React.forwardRef<HTMLDivElement, PanelHeaderProps>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('border-b border-(--border) px-5 py-4', className)} {...props} />
+  <div ref={ref} className={cn('border-b border-(--border-light) bg-linear-to-b from-(--surface) to-(--surface-secondary)/30 px-5 py-4', className)} {...props} />
 ));
 PanelHeader.displayName = 'PanelHeader';
 
 export interface PanelTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {}
 
 const PanelTitle = React.forwardRef<HTMLHeadingElement, PanelTitleProps>(({ className, ...props }, ref) => (
-  <h2 ref={ref} className={cn('text-base font-semibold tracking-tight text-(--text-primary)', className)} {...props} />
+  <h2 ref={ref} className={cn('text-[15px] font-semibold tracking-tight text-(--text-primary)', className)} {...props} />
 ));
 PanelTitle.displayName = 'PanelTitle';
 
@@ -39,7 +40,7 @@ PanelDescription.displayName = 'PanelDescription';
 export interface PanelContentProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const PanelContent = React.forwardRef<HTMLDivElement, PanelContentProps>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('px-5 py-4', className)} {...props} />
+  <div ref={ref} className={cn('px-5 py-5', className)} {...props} />
 ));
 PanelContent.displayName = 'PanelContent';
 

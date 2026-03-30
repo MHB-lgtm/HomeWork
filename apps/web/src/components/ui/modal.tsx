@@ -24,14 +24,9 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
 
   React.useEffect(() => {
     if (!open) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', handleKeyDown);
     document.body.style.overflow = 'hidden';
-
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = '';
@@ -43,39 +38,27 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
   return (
     <div
       ref={overlayRef}
-      className={cn(
-        'fixed inset-0 z-50 flex items-center justify-center p-4',
-        'animate-in'
-      )}
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in"
+      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
+      <div className="fixed inset-0 bg-black/30 backdrop-blur-[2px]" aria-hidden="true" />
 
-      {/* Dialog */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className={cn(
-          'relative w-full rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-lg)',
+          'relative w-full rounded-[var(--radius-xl)] border border-(--border) bg-(--surface) shadow-(--shadow-xl)',
           'origin-center animate-in',
           sizeMap[size]
         )}
       >
-        {/* Header */}
         {title && (
-          <div className="flex items-center justify-between border-b border-(--border) px-5 py-4">
-            <h2 className="text-base font-semibold text-(--text-primary)">{title}</h2>
+          <div className="flex items-center justify-between border-b border-(--border-light) px-5 py-4">
+            <h2 className="text-[15px] font-semibold text-(--text-primary)">{title}</h2>
             <button
               onClick={onClose}
-              className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-md text-(--text-tertiary)',
-                'transition-colors duration-(--duration) ease-(--ease)',
-                'hover:bg-(--surface-hover) hover:text-(--text-primary)'
-              )}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-(--text-tertiary) transition-all duration-200 hover:bg-(--surface-hover) hover:text-(--text-primary)"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -83,12 +66,10 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }: M
           </div>
         )}
 
-        {/* Body */}
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-5 py-5">{children}</div>
 
-        {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-(--border) px-5 py-3">
+          <div className="flex items-center justify-end gap-2 border-t border-(--border-light) px-5 py-3.5">
             {footer}
           </div>
         )}

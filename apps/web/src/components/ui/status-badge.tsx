@@ -69,7 +69,6 @@ const statusMap: Record<StatusKey, StatusConfig> = {
   },
 };
 
-// Legacy uppercase status mapping
 const legacyMap: Record<string, StatusKey> = {
   PENDING: 'pending',
   PROPOSED: 'pending',
@@ -104,10 +103,11 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full font-medium',
+        'inline-flex items-center gap-1.5 rounded-full font-semibold status-transition',
+        'border',
         config.bg,
         config.text,
-        size === 'sm' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs',
+        size === 'sm' ? 'px-2 py-0.5 text-[10px] leading-4 border-transparent' : 'px-2.5 py-1 text-[11px] leading-4 border-transparent',
         className
       )}
       aria-label={`Status ${displayLabel}`}
@@ -115,10 +115,11 @@ export function StatusBadge({
     >
       <span
         className={cn(
-          'shrink-0 rounded-full',
+          'shrink-0 rounded-full animate-pulse',
           config.dot,
-          size === 'sm' ? 'h-1.5 w-1.5' : 'h-1.5 w-1.5'
+          'h-1.5 w-1.5'
         )}
+        style={{ animationDuration: normalizedKey === 'active' || normalizedKey === 'pending' ? '2s' : '0s' }}
       />
       {displayLabel}
     </span>

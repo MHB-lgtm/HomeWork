@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils';
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   padding?: 'none' | 'sm' | 'md' | 'lg';
   hover?: boolean;
+  elevated?: boolean;
 }
 
 const paddingMap: Record<string, string> = {
@@ -14,12 +15,13 @@ const paddingMap: Record<string, string> = {
 };
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, padding, hover, ...props }, ref) => (
+  ({ className, padding, hover, elevated, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        'rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-xs)',
-        hover && 'transition-all duration-(--duration) ease-(--ease) hover:shadow-(--shadow-sm) hover:border-(--border-hover)',
+        'rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) shadow-(--shadow-xs)',
+        elevated && 'shadow-(--shadow-sm) bg-gradient-to-b from-white to-[#FAFBFC]',
+        hover && 'transition-all duration-(--duration-slow) ease-(--ease) hover:shadow-(--shadow-card-hover) hover:border-(--border-hover) hover:-translate-y-0.5',
         padding && paddingMap[padding],
         className
       )}
@@ -35,7 +37,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('flex flex-col space-y-1.5 p-6', className)}
+      className={cn('flex flex-col space-y-1.5 p-6 pb-4', className)}
       {...props}
     />
   )
@@ -49,7 +51,7 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
     <h3
       ref={ref}
       className={cn(
-        'text-base font-semibold leading-none tracking-tight text-(--text-primary)',
+        'text-[15px] font-semibold leading-tight tracking-tight text-(--text-primary)',
         className
       )}
       {...props}

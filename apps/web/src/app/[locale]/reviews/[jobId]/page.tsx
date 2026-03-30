@@ -20,9 +20,19 @@ import {
 import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../../../../components/ui/alert';
+import { StatusBadge } from '../../../../components/ui/status-badge';
+import { Input } from '../../../../components/ui/input';
+import { Textarea } from '../../../../components/ui/textarea';
 import { cn } from '../../../../lib/utils';
 import { PDFViewer } from '../../../../components/review/pdf/PDFViewer';
 import { StudyPointersPanel } from '../../../../components/review/StudyPointersPanel';
+import { ReviewScoreSummary } from '../../../../components/review/ReviewScoreSummary';
+import { QuestionReviewCard } from '../../../../components/review/QuestionReviewCard';
+import { FlagManager, type ReviewFlag } from '../../../../components/review/FlagManager';
+import { AuditTimeline, type AuditEntry } from '../../../../components/review/AuditTimeline';
+import { PublishConfirmationModal } from '../../../../components/review/PublishConfirmationModal';
+import { saveReview } from '../../../../lib/reviewsClient';
+import { ChevronLeft, Check, Eye, Save, Send, Bot, User, Clock, Edit3, Flag, FileText } from 'lucide-react';
 
 const MAX_RIGHT_PANEL_TITLE_CHARS = 90;
 const MAX_RIGHT_PANEL_TEXT_CHARS = 180;
@@ -54,6 +64,21 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [error, setError] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+
+  // ── Workspace editing state ──
+  const [lecturerScores, setLecturerScores] = useState<Record<string, number>>({});
+  const [lecturerFeedbacks, setLecturerFeedbacks] = useState<Record<string, string>>({});
+  const [overallFeedback, setOverallFeedback] = useState('');
+  const [overallFeedbackInitialized, setOverallFeedbackInitialized] = useState(false);
+  const [flags, setFlags] = useState<ReviewFlag[]>([]);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [activeTab, setActiveTab] = useState<'findings' | 'workspace' | 'audit'>('findings');
+
+  // ── Audit trail ──
+  const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([]);
+
   const programmaticScrollRef = useRef<{ lockUntilMs: number; targetPageIndex: number | null }>({
     lockUntilMs: 0,
     targetPageIndex: null,
@@ -112,6 +137,164 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Initialize workspace state from loaded data ──
+  useEffect(() => {
+    if (!resultJson || overallFeedbackInitialized) return;
+
+    const mode = resultJson.mode;
+
+    // Initialize scores and feedback from rubric evaluation
+    if (mode === 'RUBRIC' && resultJson.rubricEvaluation) {
+      const rubric = resultJson.rubricEvaluation;
+      const scores: Record<string, number> = {};
+      const feedbacks: Record<string, string> = {};
+      rubric.criteria.forEach((c: any) => {
+        scores[c.criterionId] = c.score;
+        feedbacks[c.criterionId] = c.feedback || '';
+      });
+      setLecturerScores(scores);
+      setLecturerFeedbacks(feedbacks);
+      setOverallFeedback(rubric.overallFeedback || '');
+    }
+
+    // Initialize from general evaluation
+    if (mode === 'GENERAL' && resultJson.generalEvaluation) {
+      setOverallFeedback(resultJson.generalEvaluation.overallSummary || '');
+    }
+
+    // Build initial audit trail
+    const entries: AuditEntry[] = [];
+    if (review?.createdAt) {
+      entries.push({
+        id: 'ai-created',
+        timestamp: review.createdAt,
+        actor: 'ai',
+        action: 'AI generated initial review',
+        detail: `${review.annotations.length} annotations created`,
+      });
+    }
+    if (publication?.isPublished && publication.publishedAt) {
+      entries.push({
+        id: 'published',
+        timestamp: publication.publishedAt,
+        actor: 'system',
+        action: 'Review published',
+        detail: publication.score != null ? `Score: ${publication.score}/${publication.maxScore}` : undefined,
+      });
+    }
+    setAuditEntries(entries);
+    setOverallFeedbackInitialized(true);
+  }, [resultJson, review, publication, overallFeedbackInitialized]);
+
+  // ── Track unsaved changes ──
+  const markChanged = () => {
+    setHasUnsavedChanges(true);
+    setSaveStatus('idle');
+  };
+
+  const handleScoreChange = (questionId: string, score: number) => {
+    setLecturerScores((prev) => ({ ...prev, [questionId]: score }));
+    markChanged();
+  };
+
+  const handleFeedbackChange = (questionId: string, feedback: string) => {
+    setLecturerFeedbacks((prev) => ({ ...prev, [questionId]: feedback }));
+    markChanged();
+  };
+
+  const handleOverallFeedbackChange = (feedback: string) => {
+    setOverallFeedback(feedback);
+    markChanged();
+  };
+
+  const handleAddFlag = (flag: Omit<ReviewFlag, 'id'>) => {
+    const id = `flag-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setFlags((prev) => [...prev, { ...flag, id }]);
+    setAuditEntries((prev) => [{
+      id: `audit-flag-${id}`,
+      timestamp: new Date().toISOString(),
+      actor: 'lecturer',
+      action: `Added flag: ${flag.summary}`,
+      detail: `Severity: ${flag.severity}`,
+    }, ...prev]);
+    markChanged();
+  };
+
+  const handleRemoveFlag = (flagId: string) => {
+    setFlags((prev) => prev.filter((f) => f.id !== flagId));
+    markChanged();
+  };
+
+  const handleResolveFlag = (flagId: string) => {
+    setFlags((prev) => prev.map((f) => f.id === flagId ? { ...f, status: 'resolved' as const } : f));
+    markChanged();
+  };
+
+  // ── Save draft ──
+  const handleSaveDraft = async () => {
+    if (!jobId || !review) return;
+    setSaveStatus('saving');
+
+    const result = await saveReview(jobId, review);
+    if (result.ok) {
+      setSaveStatus('saved');
+      setHasUnsavedChanges(false);
+      setAuditEntries((prev) => [{
+        id: `audit-save-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        actor: 'lecturer',
+        action: 'Saved draft',
+      }, ...prev]);
+    } else {
+      setSaveStatus('error');
+    }
+  };
+
+  // ── Publish ──
+  const handlePublishConfirm = async () => {
+    if (!jobId || reviewSource !== 'postgres' || isPublishing) return;
+    setIsPublishing(true);
+    setPublishError(null);
+
+    const result = await publishReview(jobId);
+    if (!result.ok) {
+      setPublishError(result.error);
+      setIsPublishing(false);
+      setShowPublishModal(false);
+      return;
+    }
+
+    setPublication(result.data);
+    setAuditEntries((prev) => [{
+      id: `audit-publish-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      actor: 'lecturer',
+      action: 'Published review',
+      detail: result.data.score != null ? `Score: ${result.data.score}/${result.data.maxScore}` : undefined,
+    }, ...prev]);
+    await loadReviewData(jobId, { keepLoading: false });
+    setIsPublishing(false);
+    setShowPublishModal(false);
+    setHasUnsavedChanges(false);
+  };
+
+  // ── Warn before leaving with unsaved changes ──
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedChanges]);
+
+  // ── Computed workspace values ──
+  const isProcessing = jobStatus === 'PENDING' || jobStatus === 'RUNNING';
+  const isReadyForReview = jobStatus === 'DONE' && !publication?.isPublished;
+  const isPublished = publication?.isPublished === true;
+  const canEdit = isReadyForReview;
 
   // Get evaluation based on mode
   const resultMode = resultJson?.mode;
@@ -260,25 +443,20 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     }
   };
 
-  const handlePublish = async () => {
-    if (!jobId || reviewSource !== 'postgres' || isPublishing) {
-      return;
-    }
-
-    setIsPublishing(true);
-    setPublishError(null);
-
-    const result = await publishReview(jobId);
-    if (!result.ok) {
-      setPublishError(result.error);
-      setIsPublishing(false);
-      return;
-    }
-
-    setPublication(result.data);
-    await loadReviewData(jobId, { keepLoading: false });
-    setIsPublishing(false);
-  };
+  // Compute workspace score totals
+  const aiTotalScore = rubricEvaluation
+    ? rubricEvaluation.sectionScore
+    : (publication?.score ?? null);
+  const aiMaxScore = rubricEvaluation
+    ? rubricEvaluation.sectionMaxPoints
+    : (publication?.maxScore ?? null);
+  const lecturerTotalScore = rubricEvaluation
+    ? Object.values(lecturerScores).reduce((sum, s) => sum + s, 0)
+    : aiTotalScore;
+  const editedQuestionCount = rubricEvaluation
+    ? rubricEvaluation.criteria.filter((c: any) => lecturerScores[c.criterionId] !== c.score || lecturerFeedbacks[c.criterionId] !== (c.feedback || '')).length
+    : 0;
+  const openFlagCount = flags.filter((f) => f.status === 'open').length;
 
   // Get all annotations, sorted by confidence desc (undefined last)
   // For images, filter to pageIndex === 0; for PDFs, include all pageIndex values
@@ -494,122 +672,183 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   }, [selectedAnnotationId, resultMode, questionEvaluations, findingsToAnnotations]);
 
   const reviewTitle = review?.displayName?.trim() || 'Review details';
+  const totalFindings = questionEvaluations.reduce((sum, q) => sum + q.findings.length, 0);
+  const strengthCount = questionEvaluations.reduce((sum, q) => sum + q.findings.filter(f => f.kind === 'strength').length, 0);
+  const issueCount = totalFindings - strengthCount;
+
   if (loading) {
     return (
-      <main className="min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
-        <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
-          <p className="text-slate-600">Loading...</p>
+      <div className="-mx-4 -my-6 md:-mx-6 lg:-mx-8 lg:-my-8 flex flex-col h-[calc(100vh-var(--topbar-height))]">
+        <div className="shrink-0 border-b border-(--border) bg-(--surface) px-6 py-4">
+          <div className="flex items-center gap-3">
+            <div className="skeleton-line h-9 w-9 rounded-lg" />
+            <div className="space-y-2">
+              <div className="skeleton-line h-5 w-48" />
+              <div className="skeleton-line h-3 w-32" />
+            </div>
+          </div>
         </div>
-      </main>
+        <div className="flex-1 overflow-hidden p-4 md:p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+            <div className="lg:col-span-2 rounded-lg border border-(--border) bg-(--surface) p-6">
+              <div className="skeleton-line h-full w-full rounded-lg" />
+            </div>
+            <div className="rounded-lg border border-(--border) bg-(--surface) p-4 space-y-4">
+              <div className="skeleton-line h-5 w-24" />
+              <div className="skeleton-line h-24 w-full rounded-lg" />
+              <div className="skeleton-line h-24 w-full rounded-lg" />
+              <div className="skeleton-line h-24 w-full rounded-lg" />
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
-        <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
-          <Alert variant="destructive" className="mb-4">
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-          <Link href="/reviews" className="text-blue-600 hover:text-blue-800 font-medium">
-            Back to Reviews
-          </Link>
-        </div>
-      </main>
+      <div className="space-y-4 py-8">
+        <Alert variant="error">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Link href="/reviews" className="inline-flex items-center gap-1.5 text-sm font-medium text-(--brand) hover:text-(--brand-hover) transition-colors">
+          <ChevronLeft size={16} /> Back to Reviews
+        </Link>
+      </div>
     );
   }
 
   return (
-    <main className="h-screen flex flex-col overflow-hidden text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
-      {/* Header - Fixed height */}
-      <div className="shrink-0 border-b border-slate-200/80 bg-white/90 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-white/80 md:p-8">
-        <div className="max-w-[1600px] mx-auto">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
+    <div className="-mx-4 -my-6 md:-mx-6 lg:-mx-8 lg:-my-8 flex flex-col h-[calc(100vh-var(--topbar-height))]">
+      {/* ─── Sticky Toolbar ─── */}
+      <div className="shrink-0 border-b border-(--border) bg-(--surface)/90 backdrop-blur-md">
+        <div className="px-4 py-3 md:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Back + Title */}
+            <div className="flex items-center gap-3 min-w-0">
               <Link
                 href="/reviews"
-                className="inline-flex items-center text-sm text-slate-600 hover:text-blue-700 transition-colors"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-(--border) text-(--text-tertiary) transition-all duration-200 hover:bg-(--surface-hover) hover:text-(--text-primary) hover:border-(--border-hover)"
               >
-                Back to Reviews
+                <ChevronLeft size={15} />
               </Link>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{reviewTitle}</h1>
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-bold tracking-tight text-(--text-primary)">{reviewTitle}</h1>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {jobStatus && <Badge variant={getJobStatusBadgeVariant(jobStatus)}>{jobStatus}</Badge>}
-              {publication?.isPublished ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
-                    Published
-                  </p>
-                  <p className="text-sm font-medium text-emerald-900">
-                    {publication.score != null && publication.maxScore != null
-                      ? `${publication.score}/${publication.maxScore}`
-                      : 'Published'}
-                  </p>
-                  {publication.summary ? (
-                    <p className="mt-1 max-w-[240px] text-xs text-emerald-800">
-                      {toShortText(publication.summary, 120)}
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
-              {reviewSource === 'postgres' ? (
-                <Button
-                  onClick={handlePublish}
-                  disabled={isPublishing}
-                  className="min-w-[110px]"
-                >
-                  {isPublishing ? 'Publishing...' : publication?.isPublished ? 'Republish' : 'Publish'}
-                </Button>
-              ) : null}
-              <details className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                <summary className="cursor-pointer font-medium text-slate-700">Technical details</summary>
-                <div className="mt-2 space-y-1 min-w-[240px]">
-                  {jobId && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono">Job ID: {jobId}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => copyTechnicalValue(jobId)}
-                      >
-                        {copiedTechnicalValue === jobId ? 'Copied' : 'Copy'}
-                      </Button>
+
+            {/* Center: Quick stats */}
+            <div className="hidden md:flex items-center gap-3">
+              {resultMode === 'GENERAL' && totalFindings > 0 && (
+                <>
+                  <div className="flex items-center gap-1.5 rounded-full bg-(--surface-secondary) px-3 py-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-(--error)" />
+                    <span className="text-[11px] font-semibold text-(--text-secondary)">{issueCount} issue{issueCount !== 1 ? 's' : ''}</span>
+                  </div>
+                  {strengthCount > 0 && (
+                    <div className="flex items-center gap-1.5 rounded-full bg-(--success-subtle) px-3 py-1">
+                      <span className="h-1.5 w-1.5 rounded-full bg-(--success)" />
+                      <span className="text-[11px] font-semibold text-(--success)">{strengthCount} strength{strengthCount !== 1 ? 's' : ''}</span>
                     </div>
                   )}
-                  {submissionMimeType ? <p className="font-mono">Submission: {submissionMimeType}</p> : null}
-                  {resultMode ? <p className="font-mono">Mode: {resultMode}</p> : null}
+                </>
+              )}
+              {pageAnnotations.length > 0 && resultMode !== 'GENERAL' && (
+                <div className="flex items-center gap-1.5 rounded-full bg-(--surface-secondary) px-3 py-1">
+                  <span className="text-[11px] font-semibold text-(--text-secondary)">{pageAnnotations.length} annotation{pageAnnotations.length !== 1 ? 's' : ''}</span>
                 </div>
-              </details>
+              )}
+            </div>
+
+            {/* Right: Status + Actions */}
+            <div className="flex flex-wrap items-center gap-2">
+              {jobStatus && <StatusBadge status={jobStatus} />}
+              {isPublished && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-(--success)/20 bg-(--success-subtle) px-3 py-1.5">
+                  <Check size={12} className="text-(--success)" />
+                  <span className="text-xs font-semibold text-(--success)">
+                    Published
+                    {publication!.score != null && publication!.maxScore != null && ` ${publication!.score}/${publication!.maxScore}`}
+                  </span>
+                </div>
+              )}
+              {hasUnsavedChanges && (
+                <span className="text-[10px] font-semibold text-(--warning)">Unsaved</span>
+              )}
+              {canEdit && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Save size={13} />}
+                  onClick={handleSaveDraft}
+                  loading={saveStatus === 'saving'}
+                  disabled={!hasUnsavedChanges}
+                >
+                  {saveStatus === 'saved' ? 'Saved' : saveStatus === 'error' ? 'Retry' : 'Save'}
+                </Button>
+              )}
+              {reviewSource === 'postgres' && (
+                <Button
+                  onClick={() => setShowPublishModal(true)}
+                  size="sm"
+                  icon={<Send size={13} />}
+                  className="shadow-(--shadow-brand)"
+                  disabled={isProcessing}
+                >
+                  {isPublished ? 'Republish' : 'Publish'}
+                </Button>
+              )}
             </div>
           </div>
-          {publishError ? (
-            <Alert variant="destructive" className="mt-4">
-              <AlertTitle>Publish failed</AlertTitle>
-              <AlertDescription>{publishError}</AlertDescription>
-            </Alert>
-          ) : null}
         </div>
+        {publishError && (
+          <div className="border-t border-(--error)/10 bg-(--error-subtle) px-6 py-2">
+            <p className="text-xs font-medium text-(--error)">{publishError}</p>
+          </div>
+        )}
       </div>
 
-      {/* Main Content - Takes remaining height */}
-      <div className="flex-1 overflow-hidden p-4 md:p-8">
-        <div className="max-w-[1600px] mx-auto h-full">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-          {/* PDF/Image Area - Left Column with own scrollbar */}
-          <div className="lg:col-span-2 h-full flex flex-col overflow-hidden">
-            {/* Panel Chrome: PDF Viewer */}
-            <div className="h-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
-              {/* Panel Header */}
-              <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
-                <h2 className="text-sm font-semibold text-slate-900">
+      {/* ─── Score Summary ─── */}
+      {(rubricEvaluation || publication) && (
+        <div className="shrink-0 px-3 pt-3 md:px-4 md:pt-4">
+          <ReviewScoreSummary
+            aiScore={aiTotalScore}
+            lecturerScore={lecturerTotalScore}
+            maxScore={aiMaxScore}
+            editedQuestionCount={editedQuestionCount}
+            totalQuestionCount={rubricEvaluation ? rubricEvaluation.criteria.length : questionEvaluations.length}
+            flagCount={openFlagCount}
+            isPublished={isPublished}
+          />
+        </div>
+      )}
+
+      {/* ─── Processing Banner ─── */}
+      {isProcessing && (
+        <div className="shrink-0 mx-3 mt-3 md:mx-4 md:mt-4 rounded-lg border border-(--info)/20 bg-(--info-subtle) px-4 py-3 flex items-center gap-3">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-(--info) border-t-transparent" />
+          <div>
+            <p className="text-sm font-medium text-(--text-primary)">Review is being processed</p>
+            <p className="text-xs text-(--text-tertiary)">AI grading is in progress. The workspace will become editable once complete.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Split Content ─── */}
+      <div className="flex-1 overflow-hidden p-3 md:p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 h-full">
+          {/* ─── Left: Submission Viewer ─── */}
+          <div className="lg:col-span-2 h-full flex flex-col overflow-hidden rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-sm)">
+            <div className="shrink-0 border-b border-(--border-light) px-4 py-2.5 bg-linear-to-r from-(--surface-secondary)/60 to-(--surface)">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[11px] font-bold uppercase tracking-[0.1em] text-(--text-tertiary)">
                   Submission {submissionMimeType === 'application/pdf' ? 'PDF' : 'Image'}
                 </h2>
+                <Badge variant="outline" size="sm">{submissionMimeType === 'application/pdf' ? 'PDF' : 'IMG'}</Badge>
               </div>
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto p-4 review-scrollbar review-scroll-padding">
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 bg-(--surface-secondary)/20">
                 {submissionMimeType === 'application/pdf' ? (
                   <div className="space-y-4">
                     <PDFViewer
@@ -643,7 +882,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                     <img
                       src={`/api/reviews/${jobId}/submission`}
                       alt="Student submission"
-                      className="w-full h-auto block border border-slate-200 rounded-lg"
+                      className="w-full h-auto block border border-(--border) rounded-lg"
                     />
                     {/* Overlay bounding boxes */}
                     {pageAnnotations.map((ann) => {
@@ -668,14 +907,10 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                           onMouseEnter={() => setHoveredAnnotationId(ann.id)}
                           onMouseLeave={() => setHoveredAnnotationId(null)}
                           className={cn(
-                            'absolute cursor-pointer rounded transition-all',
-                            'box-border',
-                            // Default state
-                            !isSelected && !isHovered && 'border border-blue-400 bg-blue-400/10',
-                            // Hover state (not selected)
-                            !isSelected && isHovered && 'border-2 border-blue-600 bg-blue-400/20',
-                            // Selected state
-                            isSelected && 'border-[3px] border-red-600 bg-red-400/20 shadow-lg shadow-red-500/30'
+                            'absolute cursor-pointer rounded transition-all duration-200 box-border',
+                            !isSelected && !isHovered && 'border border-(--brand)/40 bg-(--brand)/5',
+                            !isSelected && isHovered && 'border-2 border-(--brand)/70 bg-(--brand)/12',
+                            isSelected && 'border-2 border-(--brand) bg-(--brand)/15 shadow-lg shadow-(--brand)/20 ring-2 ring-(--brand)/10'
                           )}
                           style={{
                             left: `${bbox.x * 100}%`,
@@ -693,155 +928,136 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
             </div>
           </div>
 
-          {/* Sidebar - Right Column with own scrollbar */}
-          <div className="h-full flex flex-col items-start overflow-hidden">
-            {resultMode === 'GENERAL' ? (
-              <div className="h-[85%] w-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
-                {/* Panel Header */}
-                <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
-                  <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-sm font-semibold text-slate-900">Findings</h2>
-                    <label className="flex items-center gap-2 text-xs text-slate-700">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-blue-600"
-                        checked={showStrengths}
-                        onChange={(e) => setShowStrengths(e.target.checked)}
-                      />
-                      Show strengths
-                    </label>
-                  </div>
+          {/* ─── Right: Analysis Panel ─── */}
+          <div className="h-full flex flex-col overflow-hidden rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-sm)">
+            {/* Tab navigation */}
+            <div className="shrink-0 border-b border-(--border-light) bg-linear-to-r from-(--surface-secondary)/40 to-(--surface)">
+              <div className="flex">
+                {[
+                  { key: 'findings' as const, label: resultMode === 'GENERAL' ? 'Findings' : 'Annotations', icon: <FileText size={12} /> },
+                  { key: 'workspace' as const, label: 'Workspace', icon: <Edit3 size={12} /> },
+                  { key: 'audit' as const, label: 'Audit', icon: <Clock size={12} /> },
+                ].map((tab) => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-2.5 text-[11px] font-semibold transition-all duration-200 border-b-2',
+                      activeTab === tab.key
+                        ? 'border-(--brand) text-(--brand)'
+                        : 'border-transparent text-(--text-tertiary) hover:text-(--text-secondary)'
+                    )}
+                  >
+                    {tab.icon}
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Tab content */}
+            {activeTab === 'findings' && resultMode === 'GENERAL' ? (
+              <>
+                <div className="shrink-0 border-b border-(--border-light) px-4 py-2 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-(--text-quaternary)">{totalFindings} findings</span>
+                    <button
+                      onClick={() => setShowStrengths(!showStrengths)}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold transition-all duration-200',
+                        showStrengths
+                          ? 'bg-(--success-subtle) text-(--success) border border-(--success)/15'
+                          : 'bg-(--surface-secondary) text-(--text-tertiary) border border-(--border-light)'
+                      )}
+                    >
+                      <Eye size={10} />
+                      Strengths
+                    </button>
                 </div>
-                {/* Scrollable Content */}
                 <div
-                  ref={(el) => {
-                    sidebarContainerRef.current = el;
-                  }}
-                  className="flex-1 overflow-y-auto p-4 review-scrollbar review-scroll-padding"
+                  ref={(el) => { sidebarContainerRef.current = el; }}
+                  className="flex-1 overflow-y-auto p-3"
                 >
                   {hasVisibleFindings ? (
-                    <>
-                      {/* Overall summary (outside of gap container) */}
+                    <div className="space-y-4">
+                      {/* Overall summary */}
                       {generalEvaluation && 'overallSummary' in generalEvaluation && generalEvaluation.overallSummary && (
-                        <Alert variant="default" className="mb-6">
-                          <AlertTitle className="text-slate-900">Overall Summary</AlertTitle>
-                          <AlertDescription className="text-slate-700">{generalEvaluation.overallSummary}</AlertDescription>
-                        </Alert>
+                        <div className="rounded-lg bg-linear-to-br from-(--info-subtle) to-white border border-(--info)/10 px-3.5 py-3">
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-(--info) mb-1">Summary</p>
+                          <p className="text-[13px] leading-relaxed text-(--text-secondary)">{generalEvaluation.overallSummary}</p>
+                        </div>
                       )}
-                      
-                      {/* Question Groups Container - CRITICAL: flex-col with gap-8 ensures spacing */}
-                      <div className="flex flex-col gap-8">
-                        {filteredQuestionEvaluations
-                          .filter((qEval) => qEval.visibleFindings.length > 0)
-                          .map((qEval) => {
-                          const questionTitle = qEval.displayLabel || `Question ${qEval.questionId}`;
-                          return (
-                            <div 
-                              key={qEval.questionId} 
-                              className="bg-gradient-to-br from-white to-sky-50/40 border border-slate-200/80 rounded-xl p-5 shadow-[0_12px_35px_rgba(15,23,42,0.05)]"
-                            >
-                            {/* Question Header */}
-                            <div className="mb-4 pb-3 border-b border-slate-200/70">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1">
-                                  <h3 className="font-bold text-base text-slate-900 mb-1">
-                                    {questionTitle}
-                                  </h3>
-                                  {qEval.pageIndices && (
-                                    <p className="text-xs text-slate-500">
-                                      Pages: {qEval.pageIndices.join(', ')}
-                                    </p>
-                                  )}
-                                </div>
-                                <Badge variant="secondary" className="text-xs shrink-0">
-                                  {qEval.visibleFindings.length} finding{qEval.visibleFindings.length !== 1 ? 's' : ''}
-                                </Badge>
+
+                      {/* Question groups */}
+                      {filteredQuestionEvaluations
+                        .filter((qEval) => qEval.visibleFindings.length > 0)
+                        .map((qEval) => {
+                        const questionTitle = qEval.displayLabel || `Question ${qEval.questionId}`;
+                        return (
+                          <div key={qEval.questionId} className="rounded-lg border border-(--border) overflow-hidden">
+                            {/* Question header */}
+                            <div className="border-b border-(--border-light) bg-(--surface-secondary)/50 px-3.5 py-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <h3 className="text-[13px] font-bold text-(--text-primary)">{questionTitle}</h3>
+                                <Badge variant="default" size="sm">{qEval.visibleFindings.length}</Badge>
                               </div>
+                              {qEval.overallSummary && (
+                                <p className="mt-1 text-[11px] leading-relaxed text-(--text-tertiary)">{toShortText(qEval.overallSummary, 120)}</p>
+                              )}
                             </div>
 
-                            {/* Question Summary (if exists) */}
-                            {qEval.overallSummary && (
-                              <div className="mb-4 p-3 bg-blue-50/70 border border-blue-100 rounded-lg">
-                                <p className="text-xs font-semibold text-blue-900 mb-1">Summary</p>
-                                <p className="text-sm text-slate-700">{qEval.overallSummary}</p>
-                              </div>
-                            )}
-
-                            {/* Findings List with spacing */}
-                            <div className="flex flex-col gap-3">
+                            {/* Findings */}
+                            <div className="p-1.5 space-y-1">
                               {qEval.visibleFindings.map((finding) => {
                                 const matchingAnnotations = findingsToAnnotations.get(finding.findingId) || [];
                                 const hasBoxes = matchingAnnotations.length > 0;
-                                const isSelected =
-                                  selectedFindingId === finding.findingId ||
-                                  matchingAnnotations.some((ann) => ann.id === selectedAnnotationId);
+                                const isSelected = selectedFindingId === finding.findingId || matchingAnnotations.some((ann) => ann.id === selectedAnnotationId);
                                 const isStrength = finding.kind === 'strength';
-                                // Check if this finding is on the active page
                                 const isOnActivePage = activePageIndex !== null && matchingAnnotations.some((ann) => ann.pageIndex === activePageIndex);
-                                const hasPointers = hasPointersForTarget({
-                                  targetType: 'finding',
-                                  targetId: finding.findingId,
-                                  questionId: qEval.questionId,
-                                });
-                                
+                                const hasPointers = hasPointersForTarget({ targetType: 'finding', targetId: finding.findingId, questionId: qEval.questionId });
+
                                 return (
                                   <div
                                     key={finding.findingId}
                                     id={`sidebar-finding-${finding.findingId}`}
                                     onClick={() => handleFindingClick(finding.findingId)}
                                     className={cn(
-                                      'p-3 rounded-lg border transition-all cursor-pointer shadow-sm',
+                                      'group/finding rounded-lg border p-3 cursor-pointer transition-all duration-200',
                                       isSelected
-                                        ? 'border-red-500 bg-red-50 shadow-md'
+                                        ? 'border-(--brand) bg-(--brand-subtle)/50 shadow-(--shadow-sm) ring-1 ring-(--brand)/20'
                                         : isOnActivePage
-                                        ? 'border-l-4 border-l-blue-500 bg-blue-50/50'
-                                        : hasBoxes
-                                        ? 'border-slate-300 bg-white/90 hover:bg-blue-50/80 hover:border-blue-400'
-                                        : 'border-slate-200 bg-white/70 hover:bg-slate-50/80'
+                                        ? 'border-l-[3px] border-l-(--brand) border-(--border-light) bg-(--brand-subtle)/20'
+                                        : 'border-(--border-light) hover:border-(--border-hover) hover:bg-(--surface-hover)'
                                     )}
                                   >
-                                    <div className="flex items-start justify-between gap-2 mb-1">
-                                      <div className="font-semibold text-sm flex-1">
+                                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                                      <p className="text-[13px] font-semibold text-(--text-primary) flex-1 leading-snug">
                                         {toShortText(finding.title, MAX_RIGHT_PANEL_TITLE_CHARS)}
-                                      </div>
+                                      </p>
                                       <div className="flex gap-1 shrink-0">
                                         {isStrength ? (
-                                          <Badge variant="default" className="text-xs bg-green-500">
-                                            Strength
+                                          <Badge variant="success" size="sm">Strength</Badge>
+                                        ) : finding.severity ? (
+                                          <Badge variant={finding.severity === 'critical' ? 'error' : finding.severity === 'major' ? 'warning' : 'default'} size="sm">
+                                            {finding.severity}
                                           </Badge>
-                        ) : (
-                          finding.severity && (
-                            <Badge variant={getSeverityVariant(finding.severity)} className="text-xs">
-                              {finding.severity}
-                            </Badge>
-                          )
-                        )}
-                                        {hasPointers && (
-                                          <Badge variant="outline" className="text-xs">
-                                            Course refs
-                                          </Badge>
-                                        )}
+                                        ) : null}
                                       </div>
                                     </div>
-                                    <div className="flex items-center gap-2 mt-2 mb-2">
-                                      <Badge variant="secondary" className="text-xs">
-                                        {(finding.confidence * 100).toFixed(0)}% confidence
-                                      </Badge>
-                                      {hasBoxes && (
-                                        <Badge variant="outline" className="text-xs">
-                                          {matchingAnnotations.length} box{matchingAnnotations.length !== 1 ? 'es' : ''}
-                                        </Badge>
-                                      )}
+
+                                    <div className="flex flex-wrap gap-1 mb-2">
+                                      <Badge variant="outline" size="sm">{(finding.confidence * 100).toFixed(0)}%</Badge>
+                                      {hasBoxes && <Badge variant="outline" size="sm">{matchingAnnotations.length} box{matchingAnnotations.length !== 1 ? 'es' : ''}</Badge>}
+                                      {hasPointers && <Badge variant="brand" size="sm">Refs</Badge>}
                                     </div>
-                                    <div className="text-sm text-slate-700 mb-2">
+
+                                    <p className="text-[12px] leading-relaxed text-(--text-secondary)">
                                       {toShortText(finding.description, MAX_RIGHT_PANEL_TEXT_CHARS)}
-                                    </div>
-                                    {finding.suggestion && (
-                                      <div className="mt-2 pt-2 border-t border-slate-200">
-                                        <div className="text-xs font-medium text-slate-700 mb-1">Suggestion:</div>
-                                        <div className="text-sm text-slate-600">
-                                          {toShortText(finding.suggestion, MAX_RIGHT_PANEL_SUGGESTION_CHARS)}
-                                        </div>
+                                    </p>
+
+                                    {finding.suggestion && isSelected && (
+                                      <div className="mt-2.5 pt-2.5 border-t border-(--border-light)">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-(--text-tertiary) mb-1">Suggestion</p>
+                                        <p className="text-[12px] text-(--text-secondary)">{toShortText(finding.suggestion, MAX_RIGHT_PANEL_SUGGESTION_CHARS)}</p>
                                       </div>
                                     )}
                                     {isSelected && <StudyPointersPanel pointers={activePointers} />}
@@ -852,139 +1068,83 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                           </div>
                         );
                       })}
-                      </div>
-                    </>
+                    </div>
                   ) : (
-                    <div className="text-center py-8 text-slate-700">
-                      <div className="text-slate-400 mb-2">
-                        <svg
-                          className="mx-auto h-12 w-12"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-(--success-subtle) shadow-inner">
+                        <Check size={20} className="text-(--success)" />
                       </div>
-                      <p className="text-slate-700 font-medium">No findings were identified.</p>
-                      <p className="text-sm text-slate-500 mt-2">
+                      <p className="text-sm font-semibold text-(--text-primary)">No findings identified</p>
+                      <p className="mt-1.5 text-xs text-(--text-tertiary) max-w-[200px] leading-relaxed">
                         {generalEvaluation?.overallSummary || 'The submission appears to be correct.'}
                       </p>
                     </div>
                   )}
                 </div>
-              </div>
-            ) : (
-              <div className="h-[85%] w-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
-                {/* Panel Header */}
-                <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
-                  <h2 className="text-sm font-semibold text-slate-900">Annotations</h2>
+              </>
+            ) : activeTab === 'findings' && resultMode !== 'GENERAL' ? (
+              <>
+                <div className="shrink-0 border-b border-(--border-light) px-4 py-2.5">
+                  <h2 className="text-[10px] font-bold uppercase tracking-widest text-(--text-quaternary)">Annotations</h2>
                 </div>
-                {/* Scrollable Content */}
                 <div
-                  ref={(el) => {
-                    sidebarContainerRef.current = el;
-                  }}
-                  className="flex-1 overflow-y-auto p-4 review-scrollbar review-scroll-padding"
+                  ref={(el) => { sidebarContainerRef.current = el; }}
+                  className="flex-1 overflow-y-auto p-3"
                 >
                   {pageAnnotations.length === 0 ? (
-                    <div className="text-center py-8 text-slate-700">
-                      <div className="text-slate-400 mb-2">
-                        <svg
-                          className="mx-auto h-12 w-12"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-(--success-subtle) shadow-inner">
+                        <Check size={20} className="text-(--success)" />
                       </div>
-                      <p className="text-slate-700 font-medium">No annotations were generated for this job.</p>
-                      <p className="text-sm text-slate-500 mt-2">
-                        The AI did not identify any mistakes in this submission.
-                      </p>
+                      <p className="text-sm font-semibold text-(--text-primary)">No annotations generated</p>
+                      <p className="mt-1.5 text-xs text-(--text-tertiary) max-w-[200px] leading-relaxed">The AI did not identify any issues.</p>
                     </div>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       {pageAnnotations.map((ann) => {
                         const isSelected = selectedAnnotationId === ann.id;
                         const isHovered = hoveredAnnotationId === ann.id;
                         const isOnActivePage = activePageIndex !== null && ann.pageIndex === activePageIndex;
-                        const hasPointers = hasPointersForTarget({
-                          targetType: 'criterion',
-                          targetId: ann.criterionId,
-                        });
-                        
+                        const hasPointers = hasPointersForTarget({ targetType: 'criterion', targetId: ann.criterionId });
+
                         return (
                           <div
                             key={ann.id}
                             id={`sidebar-annotation-${ann.id}`}
                             onClick={() => {
                               setSelectedAnnotationId(ann.id);
-                              // Set programmatic scroll lock with target page
-                              programmaticScrollRef.current = {
-                                lockUntilMs: Date.now() + LOCK_MS,
-                                targetPageIndex: ann.pageIndex,
-                              };
+                              programmaticScrollRef.current = { lockUntilMs: Date.now() + LOCK_MS, targetPageIndex: ann.pageIndex };
                             }}
                             onMouseEnter={() => setHoveredAnnotationId(ann.id)}
                             onMouseLeave={() => setHoveredAnnotationId(null)}
                             className={cn(
-                              'p-3 rounded-lg border cursor-pointer transition-all shadow-sm',
-                              // Selected state (highest priority)
-                              isSelected && 'border-red-500 bg-red-50 shadow-md',
-                              // Active page highlight (when not selected)
-                              !isSelected && isOnActivePage && 'border-l-4 border-l-blue-500 bg-blue-50/40',
-                              // Hover state (not selected, not active page)
-                              !isSelected && !isOnActivePage && isHovered && 'border-blue-400 bg-blue-50/80',
-                              // Default state
-                              !isSelected && !isOnActivePage && !isHovered && 'border-slate-200 bg-white/90 hover:border-blue-300 hover:bg-blue-50/60'
+                              'rounded-lg border p-3 cursor-pointer transition-all duration-200',
+                              isSelected
+                                ? 'border-(--brand) bg-(--brand-subtle)/50 shadow-(--shadow-sm) ring-1 ring-(--brand)/20'
+                                : isOnActivePage
+                                ? 'border-l-[3px] border-l-(--brand) border-(--border-light) bg-(--brand-subtle)/20'
+                                : isHovered
+                                ? 'border-(--border-hover) bg-(--surface-hover)'
+                                : 'border-(--border-light) hover:border-(--border-hover) hover:bg-(--surface-hover)'
                             )}
                           >
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <div className="font-semibold text-sm flex-1">
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                              <p className="text-[13px] font-semibold text-(--text-primary) flex-1 leading-snug">
                                 {toShortText(ann.label || getCriterionLabel(ann.criterionId), MAX_RIGHT_PANEL_TITLE_CHARS)}
-                              </div>
+                              </p>
                               {ann.confidence !== undefined && (
-                                <Badge variant="secondary" className="text-xs shrink-0">
-                                  {(ann.confidence * 100).toFixed(0)}%
-                                </Badge>
+                                <Badge variant="outline" size="sm">{(ann.confidence * 100).toFixed(0)}%</Badge>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge
-                                variant={ann.status === 'confirmed' ? 'default' : ann.status === 'rejected' ? 'destructive' : 'outline'}
-                                className="text-xs"
-                              >
-                                {ann.status}
-                              </Badge>
-                              {submissionMimeType === 'application/pdf' && (
-                                <Badge variant="outline" className="text-xs">
-                                  Page {ann.pageIndex + 1}
-                                </Badge>
-                              )}
-                              {hasPointers && (
-                                <Badge variant="outline" className="text-xs">
-                                  Course refs
-                                </Badge>
-                              )}
+                            <div className="flex flex-wrap gap-1">
+                              <StatusBadge status={ann.status === 'confirmed' ? 'done' : ann.status === 'rejected' ? 'error' : 'pending'} label={ann.status} size="sm" />
+                              {submissionMimeType === 'application/pdf' && <Badge variant="outline" size="sm">Page {ann.pageIndex + 1}</Badge>}
+                              {hasPointers && <Badge variant="brand" size="sm">Refs</Badge>}
                             </div>
                             {isSelected && ann.comment && (
-                              <div className="mt-3 pt-3 border-t border-slate-200">
-                                <div className="text-xs font-medium text-slate-700 mb-1">Comment:</div>
-                                <div className="text-sm text-slate-600">
-                                  {toShortText(ann.comment, MAX_RIGHT_PANEL_TEXT_CHARS)}
-                                </div>
+                              <div className="mt-2.5 pt-2.5 border-t border-(--border-light)">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-(--text-tertiary) mb-1">Comment</p>
+                                <p className="text-[12px] text-(--text-secondary)">{toShortText(ann.comment, MAX_RIGHT_PANEL_TEXT_CHARS)}</p>
                               </div>
                             )}
                             {isSelected && <StudyPointersPanel pointers={activePointers} />}
@@ -994,12 +1154,112 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                     </div>
                   )}
                 </div>
+              </>
+            ) : activeTab === 'workspace' ? (
+              <div className="flex-1 overflow-y-auto p-3 space-y-4">
+                {/* Overall Feedback */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Edit3 size={12} className="text-(--brand)" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-(--brand)">Overall Feedback</p>
+                  </div>
+                  {resultJson?.generalEvaluation?.overallSummary && (
+                    <div className="rounded-lg bg-(--surface-secondary)/70 border border-(--border-light) p-2.5">
+                      <div className="flex items-center gap-1 mb-1">
+                        <Bot size={10} className="text-(--text-tertiary)" />
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-(--text-quaternary)">AI suggestion</span>
+                      </div>
+                      <p className="text-[12px] text-(--text-tertiary) leading-relaxed">{resultJson.generalEvaluation.overallSummary}</p>
+                    </div>
+                  )}
+                  <Textarea
+                    value={overallFeedback}
+                    onChange={(e) => handleOverallFeedbackChange(e.target.value)}
+                    placeholder="Final published feedback..."
+                    rows={3}
+                    disabled={!canEdit}
+                  />
+                </div>
+
+                {/* Per-question editors (Rubric mode) */}
+                {rubricEvaluation && rubricEvaluation.criteria.map((criterion: any) => (
+                  <QuestionReviewCard
+                    key={criterion.criterionId}
+                    questionId={criterion.criterionId}
+                    questionLabel={criterion.label}
+                    maxScore={criterion.maxPoints}
+                    aiScore={criterion.score}
+                    lecturerScore={lecturerScores[criterion.criterionId] ?? criterion.score}
+                    onScoreChange={(s) => handleScoreChange(criterion.criterionId, s)}
+                    aiFeedback={criterion.feedback || ''}
+                    lecturerFeedback={lecturerFeedbacks[criterion.criterionId] ?? criterion.feedback ?? ''}
+                    onFeedbackChange={(f) => handleFeedbackChange(criterion.criterionId, f)}
+                    findings={[]}
+                    isEdited={
+                      lecturerScores[criterion.criterionId] !== criterion.score ||
+                      lecturerFeedbacks[criterion.criterionId] !== (criterion.feedback || '')
+                    }
+                  />
+                ))}
+
+                {/* Per-question editors (General mode) */}
+                {resultMode === 'GENERAL' && questionEvaluations.map((qEval) => (
+                  <QuestionReviewCard
+                    key={qEval.questionId}
+                    questionId={qEval.questionId}
+                    questionLabel={qEval.displayLabel || `Question ${qEval.questionId}`}
+                    maxScore={100}
+                    aiScore={0}
+                    lecturerScore={lecturerScores[qEval.questionId] ?? 0}
+                    onScoreChange={(s) => handleScoreChange(qEval.questionId, s)}
+                    aiFeedback={qEval.overallSummary || ''}
+                    lecturerFeedback={lecturerFeedbacks[qEval.questionId] ?? ''}
+                    onFeedbackChange={(f) => handleFeedbackChange(qEval.questionId, f)}
+                    findings={qEval.findings}
+                    isEdited={lecturerScores[qEval.questionId] !== undefined || lecturerFeedbacks[qEval.questionId] !== undefined}
+                    onFindingClick={handleFindingClick}
+                    selectedFindingId={selectedFindingId}
+                  />
+                ))}
+
+                {/* Flags */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <Flag size={12} className="text-(--warning)" />
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-(--warning)">Flags</p>
+                  </div>
+                  <FlagManager
+                    flags={flags}
+                    onAddFlag={handleAddFlag}
+                    onRemoveFlag={handleRemoveFlag}
+                    onResolveFlag={handleResolveFlag}
+                  />
+                </div>
               </div>
-            )}
-          </div>
+            ) : activeTab === 'audit' ? (
+              <div className="flex-1 overflow-y-auto p-3">
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-(--text-quaternary)">Review History</p>
+                </div>
+                <AuditTimeline entries={auditEntries} />
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
-    </main>
+
+      {/* ─── Publish Confirmation Modal ─── */}
+      <PublishConfirmationModal
+        open={showPublishModal}
+        onClose={() => setShowPublishModal(false)}
+        onConfirm={handlePublishConfirm}
+        publishing={isPublishing}
+        reviewName={reviewTitle}
+        finalScore={lecturerTotalScore}
+        maxScore={aiMaxScore}
+        editedQuestionCount={editedQuestionCount}
+        flagCount={openFlagCount}
+      />
+    </div>
   );
 }

@@ -28,7 +28,7 @@ export function PageHeader({
   return (
     <header
       className={cn(
-        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between',
+        'flex flex-col gap-4 pb-2 sm:flex-row sm:items-center sm:justify-between',
         className
       )}
       {...props}
@@ -38,10 +38,10 @@ export function PageHeader({
           <Link
             href={backHref}
             className={cn(
-              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--radius-md)]',
               'border border-(--border) text-(--text-tertiary)',
-              'transition-colors duration-(--duration) ease-(--ease)',
-              'hover:bg-(--surface-hover) hover:text-(--text-primary)'
+              'transition-all duration-(--duration) ease-(--ease)',
+              'hover:bg-(--surface-hover) hover:text-(--text-primary) hover:border-(--border-hover) hover:-translate-x-0.5'
             )}
           >
             <ChevronLeft className="h-4 w-4" />
@@ -49,15 +49,15 @@ export function PageHeader({
         )}
         <div className="space-y-1">
           {eyebrow && (
-            <p className="text-xs font-semibold uppercase tracking-[0.15em] text-(--text-quaternary)">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-(--brand)">
               {eyebrow}
             </p>
           )}
-          <h1 className="text-xl font-semibold tracking-tight text-(--text-primary)">
+          <h1 className="text-xl font-bold tracking-tight text-(--text-primary) sm:text-2xl">
             {title}
           </h1>
           {resolvedDescription && (
-            <p className="text-sm text-(--text-tertiary)">{resolvedDescription}</p>
+            <p className="text-sm text-(--text-tertiary) max-w-lg">{resolvedDescription}</p>
           )}
         </div>
       </div>

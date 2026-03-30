@@ -1,242 +1,338 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  BookOpen, Users, ClipboardCheck, CheckCircle2,
-  ChevronRight, Clock, Eye, BarChart3, TrendingDown,
-} from 'lucide-react';
-import { cn } from '../../../../lib/utils';
+  fetchLecturerDashboard,
+  type DashboardData,
+  type DashboardStats,
+  type SubmissionRow,
+  type SubmissionStatus,
+} from '../../../../lib/lecturerDashboardClient';
 import { PageHeader } from '../../../../components/ui/page-header';
 import { StatCard } from '../../../../components/ui/stat-card';
-import { Card } from '../../../../components/ui/card';
-import { StatusBadge } from '../../../../components/ui/status-badge';
 import { Badge } from '../../../../components/ui/badge';
+import { Button } from '../../../../components/ui/button';
+import { Input } from '../../../../components/ui/input';
+import { Alert, AlertDescription, AlertTitle } from '../../../../components/ui/alert';
+import { EmptyState } from '../../../../components/ui/empty-state';
+import { Skeleton, SkeletonTable } from '../../../../components/ui/skeleton';
+import { StatusBadge } from '../../../../components/ui/status-badge';
+import { PageTransition, FadeIn, StaggerGroup, StaggerItem } from '../../../../components/ui/motion';
+import { cn } from '../../../../lib/utils';
+import {
+  Inbox,
+  Clock,
+  Loader2,
+  CheckCircle2,
+  Send,
+  Search,
+  ArrowRight,
+  Eye,
+  RefreshCw,
+  Filter,
+  ClipboardCheck,
+  Sparkles,
+} from 'lucide-react';
 
-/* ── Mock data ── */
+type StatusFilter = 'ALL' | SubmissionStatus;
 
-type Submission = {
-  id: string;
-  studentName: string;
-  courseName: string;
-  assignmentTitle: string;
-  status: 'pending' | 'review' | 'error' | 'published';
-  aiScore: number;
+const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'All' },
+  { value: 'SUBMITTED', label: 'Submitted' },
+  { value: 'PROCESSING', label: 'Processing' },
+  { value: 'READY_FOR_REVIEW', label: 'Ready' },
+  { value: 'PUBLISHED', label: 'Published' },
+];
+
+const statusToKey = (status: SubmissionStatus) => {
+  switch (status) {
+    case 'SUBMITTED': return 'pending';
+    case 'PROCESSING': return 'active';
+    case 'READY_FOR_REVIEW': return 'review';
+    case 'PUBLISHED': return 'published';
+  }
 };
 
-const recentSubmissions: Submission[] = [
-  { id: 's1', studentName: 'Sarah Cohen', courseName: 'Linear Algebra', assignmentTitle: 'Matrix Operations', status: 'pending', aiScore: 85 },
-  { id: 's2', studentName: 'David Levy', courseName: 'Linear Algebra', assignmentTitle: 'Matrix Operations', status: 'error', aiScore: 42 },
-  { id: 's3', studentName: 'Maya Green', courseName: 'Calculus II', assignmentTitle: 'Integration Techniques', status: 'pending', aiScore: 91 },
-  { id: 's4', studentName: 'Tom Shapira', courseName: 'Physics I', assignmentTitle: "Newton's Laws", status: 'review', aiScore: 76 },
-  { id: 's5', studentName: 'Noa Miller', courseName: 'Calculus II', assignmentTitle: 'Integration Techniques', status: 'published', aiScore: 88 },
-];
-
-type CourseOverview = {
-  id: string;
-  name: string;
-  students: number;
-  pending: number;
-  currentWeek: number;
-  deadlineSoon: boolean;
+const statusLabel = (status: SubmissionStatus) => {
+  switch (status) {
+    case 'SUBMITTED': return 'Submitted';
+    case 'PROCESSING': return 'Processing';
+    case 'READY_FOR_REVIEW': return 'Ready for review';
+    case 'PUBLISHED': return 'Published';
+  }
 };
 
-const courses: CourseOverview[] = [
-  { id: 'c1', name: 'Linear Algebra', students: 45, pending: 12, currentWeek: 5, deadlineSoon: true },
-  { id: 'c2', name: 'Calculus II', students: 52, pending: 4, currentWeek: 5, deadlineSoon: false },
-  { id: 'c3', name: 'Physics I', students: 30, pending: 2, currentWeek: 4, deadlineSoon: false },
-];
+const formatDate = (value: string | null) => {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
 
-const gradeDistribution = [
-  { range: '90-100', count: 24, pct: 30 },
-  { range: '80-89', count: 38, pct: 47 },
-  { range: '70-79', count: 32, pct: 40 },
-  { range: '60-69', count: 21, pct: 26 },
-  { range: '<60', count: 12, pct: 15 },
-];
+export default function LecturerDashboardPage() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [refreshing, setRefreshing] = useState(false);
 
-const commonMistakes = [
-  { topic: 'Matrix Multiplication Order', count: 18, course: 'Linear Algebra' },
-  { topic: 'Integration by Parts Setup', count: 14, course: 'Calculus II' },
-  { topic: 'Free Body Diagram Missing Forces', count: 9, course: 'Physics I' },
-];
+  const loadData = async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
 
-function scoreColor(score: number): string {
-  if (score >= 80) return 'text-(--success)';
-  if (score >= 60) return 'text-(--warning)';
-  return 'text-(--error)';
-}
+    const result = await fetchLecturerDashboard();
 
-function scoreBg(score: number): string {
-  if (score >= 80) return 'bg-(--success-subtle)';
-  if (score >= 60) return 'bg-(--warning-subtle)';
-  return 'bg-(--error-subtle)';
-}
+    if (result.ok) {
+      setData(result.data);
+      setError(null);
+    } else {
+      setError(result.error);
+    }
 
-export default function LecturerDashboard() {
+    setLoading(false);
+    setRefreshing(false);
+  };
+
+  useEffect(() => { loadData(); }, []);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const q = query.trim().toLowerCase();
+    return data.submissions.filter((row) => {
+      if (statusFilter !== 'ALL' && row.status !== statusFilter) return false;
+      if (!q) return true;
+      return (
+        (row.studentName && row.studentName.toLowerCase().includes(q)) ||
+        (row.displayName && row.displayName.toLowerCase().includes(q)) ||
+        (row.courseName && row.courseName.toLowerCase().includes(q)) ||
+        (row.assignmentTitle && row.assignmentTitle.toLowerCase().includes(q)) ||
+        row.jobId.toLowerCase().includes(q)
+      );
+    });
+  }, [data, query, statusFilter]);
+
+  const stats = data?.stats ?? { total: 0, submitted: 0, processing: 0, readyForReview: 0, published: 0 };
+
   return (
-    <div className="space-y-8">
-      <PageHeader title="Dashboard" />
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Active Courses" value={3} icon={<BookOpen />} />
-        <StatCard label="Students" value={127} icon={<Users />} />
-        <StatCard
-          label="Pending Review"
-          value={18}
-          icon={<ClipboardCheck />}
-          trend={{ value: '5 new', positive: false }}
-        />
-        <StatCard label="Published" value={42} icon={<CheckCircle2 />} />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
-        {/* Left column */}
-        <div className="space-y-6">
-          {/* Recent Submissions */}
-          <Card padding="none" className="overflow-hidden">
-            <div className="flex items-center justify-between border-b border-(--border) px-5 py-4">
-              <h2 className="text-sm font-semibold text-(--text-primary)">Recent Submissions</h2>
-              <Link
-                href="/l/submissions"
-                className="text-xs font-medium text-(--brand) transition-colors hover:text-(--brand-hover)"
-              >
-                View all
-              </Link>
+    <PageTransition>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-(--brand)/10 bg-linear-to-br from-(--brand-subtle) via-white to-(--info-subtle)/30 p-6 shadow-(--shadow-sm)">
+          <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-(--brand)/5 blur-2xl" />
+          <div className="relative flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <Sparkles size={14} className="text-(--brand)" />
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--brand)">Lecturer Dashboard</p>
+              </div>
+              <h1 className="text-2xl font-bold tracking-tight text-(--text-primary)">Submission Queue</h1>
+              <p className="mt-1 text-sm text-(--text-secondary) max-w-md">
+                Monitor all student submissions, track grading progress, and manage reviews from one place.
+              </p>
             </div>
-            <div className="divide-y divide-(--border-light)">
-              {recentSubmissions.map((s) => (
-                <div
-                  key={s.id}
-                  className="flex items-center gap-3 px-5 py-3 transition-colors hover:bg-(--surface-hover)"
-                >
-                  {/* Avatar initials */}
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--surface-secondary) text-xs font-semibold text-(--text-secondary)">
-                    {s.studentName.split(' ').map((n) => n[0]).join('')}
-                  </div>
-
-                  {/* Name + course */}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-(--text-primary)">{s.studentName}</p>
-                    <p className="truncate text-xs text-(--text-tertiary)">
-                      {s.courseName} &middot; {s.assignmentTitle}
-                    </p>
-                  </div>
-
-                  {/* AI score */}
-                  <span
-                    className={cn(
-                      'flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold',
-                      scoreBg(s.aiScore),
-                      scoreColor(s.aiScore),
-                    )}
-                  >
-                    {s.aiScore}
-                  </span>
-
-                  {/* Status */}
-                  <StatusBadge status={s.status} size="sm" />
-
-                  {/* View link */}
-                  <Link
-                    href="/l/courses/c1/assignments/a1/review"
-                    className="rounded-lg p-1.5 text-(--text-quaternary) transition-colors hover:bg-(--surface-secondary) hover:text-(--text-primary)"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* Courses Overview */}
-          <Card padding="none" className="overflow-hidden">
-            <div className="border-b border-(--border) px-5 py-4">
-              <h2 className="text-sm font-semibold text-(--text-primary)">Courses Overview</h2>
-            </div>
-            <div className="divide-y divide-(--border-light)">
-              {courses.map((c) => (
-                <Link
-                  key={c.id}
-                  href={`/l/courses/${c.id}`}
-                  className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-(--surface-hover)"
-                >
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-(--brand-subtle) text-sm font-semibold text-(--brand)">
-                    {c.name.charAt(0)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-(--text-primary)">{c.name}</p>
-                    <div className="mt-0.5 flex items-center gap-3 text-xs text-(--text-tertiary)">
-                      <span className="flex items-center gap-1"><Users className="h-3 w-3" />{c.students}</span>
-                      <span className="flex items-center gap-1"><Clock className="h-3 w-3" />Week {c.currentWeek}</span>
-                    </div>
-                  </div>
-
-                  {c.pending > 0 && (
-                    <Badge variant="warning">{c.pending} pending</Badge>
-                  )}
-                  {c.deadlineSoon && (
-                    <Badge variant="error">Deadline soon</Badge>
-                  )}
-
-                  <ChevronRight className="h-4 w-4 shrink-0 text-(--text-quaternary)" />
-                </Link>
-              ))}
-            </div>
-          </Card>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />}
+              onClick={() => loadData(true)}
+              disabled={refreshing}
+            >
+              Refresh
+            </Button>
+          </div>
         </div>
 
-        {/* Right column */}
-        <div className="space-y-6">
-          {/* Grade Distribution */}
-          <Card padding="md">
-            <div className="mb-5 flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-(--brand)" />
-              <h3 className="text-sm font-semibold text-(--text-primary)">Grade Distribution</h3>
-            </div>
-            <div className="space-y-3">
-              {gradeDistribution.map((g) => (
-                <div key={g.range}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="font-medium text-(--text-secondary)">{g.range}</span>
-                    <span className="tabular-nums text-(--text-tertiary)">{g.count}</span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
-                    <div
-                      className="h-full rounded-full bg-(--brand) transition-all"
-                      style={{ width: `${g.pct}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
+        {error && (
+          <Alert variant="error">
+            <AlertTitle>Failed to load dashboard</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-          {/* Common Mistakes */}
-          <Card padding="md">
-            <div className="mb-5 flex items-center gap-2">
-              <TrendingDown className="h-4 w-4 text-(--error)" />
-              <h3 className="text-sm font-semibold text-(--text-primary)">Common Mistakes</h3>
-            </div>
-            <div className="space-y-2.5">
-              {commonMistakes.map((m, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-lg bg-(--surface-secondary) p-3"
+        {/* Stats Row */}
+        <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StaggerItem>
+            <StatCard label="Total" value={loading ? '...' : stats.total} icon={<Inbox />} />
+          </StaggerItem>
+          <StaggerItem>
+            <StatCard label="Submitted" value={loading ? '...' : stats.submitted} icon={<Send />} />
+          </StaggerItem>
+          <StaggerItem>
+            <StatCard label="Processing" value={loading ? '...' : stats.processing} icon={<Loader2 />} />
+          </StaggerItem>
+          <StaggerItem>
+            <StatCard label="Ready" value={loading ? '...' : stats.readyForReview} icon={<ClipboardCheck />} />
+          </StaggerItem>
+          <StaggerItem>
+            <StatCard label="Published" value={loading ? '...' : stats.published} icon={<CheckCircle2 />} />
+          </StaggerItem>
+        </StaggerGroup>
+
+        {/* Filters */}
+        <FadeIn delay={0.1}>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Status filter pills */}
+            <div className="flex items-center gap-1 rounded-[var(--radius-md)] border border-(--border) bg-(--surface) p-1 shadow-(--shadow-xs)">
+              {STATUS_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setStatusFilter(opt.value)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-[11px] font-semibold transition-all duration-200',
+                    statusFilter === opt.value
+                      ? 'bg-(--brand) text-white shadow-(--shadow-brand)'
+                      : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--surface-hover)'
+                  )}
                 >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-(--error-subtle) text-[11px] font-semibold text-(--error)">
-                    {m.count}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-(--text-primary)">{m.topic}</p>
-                    <p className="text-xs text-(--text-tertiary)">{m.course}</p>
-                  </div>
-                </div>
+                  {opt.label}
+                  {opt.value !== 'ALL' && data && (
+                    <span className="ml-1 opacity-70">
+                      {opt.value === 'SUBMITTED' ? stats.submitted
+                        : opt.value === 'PROCESSING' ? stats.processing
+                        : opt.value === 'READY_FOR_REVIEW' ? stats.readyForReview
+                        : stats.published}
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
-          </Card>
-        </div>
+
+            {/* Search */}
+            <div className="flex-1 min-w-50 max-w-xs">
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search submissions..."
+                icon={<Search size={14} />}
+              />
+            </div>
+          </div>
+        </FadeIn>
+
+        {/* Submission Table */}
+        <FadeIn delay={0.15}>
+          {loading ? (
+            <SkeletonTable columns={6} rows={8} />
+          ) : filtered.length === 0 ? (
+            <div className="rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) shadow-(--shadow-xs)">
+              <EmptyState
+                icon={<ClipboardCheck />}
+                title={statusFilter === 'ALL' && !query ? 'No submissions yet' : 'No matching submissions'}
+                description={
+                  statusFilter === 'ALL' && !query
+                    ? 'Student submissions will appear here once they start submitting work.'
+                    : 'Try adjusting your filters or search query.'
+                }
+              />
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) shadow-(--shadow-xs)">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-200 text-sm">
+                  <thead>
+                    <tr className="border-b border-(--border) bg-linear-to-b from-(--surface-secondary)/70 to-(--surface-secondary) sticky top-0 z-10">
+                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Submission</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Course</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Submitted</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Status</th>
+                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Score</th>
+                      <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((row) => (
+                      <SubmissionTableRow key={row.jobId} row={row} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </FadeIn>
+
+        {/* Summary footer */}
+        {!loading && filtered.length > 0 && (
+          <FadeIn delay={0.2}>
+            <div className="flex items-center justify-between px-1 text-xs text-(--text-tertiary)">
+              <span>Showing {filtered.length} of {data?.submissions.length ?? 0} submissions</span>
+              <span>{stats.readyForReview} ready for review</span>
+            </div>
+          </FadeIn>
+        )}
       </div>
-    </div>
+    </PageTransition>
+  );
+}
+
+function SubmissionTableRow({ row }: { row: SubmissionRow }) {
+  const canReview = row.status === 'READY_FOR_REVIEW' || row.status === 'PUBLISHED';
+  const isProcessing = row.status === 'PROCESSING';
+
+  return (
+    <tr className="border-b border-(--border-light) last:border-0 transition-colors duration-200 hover:bg-(--surface-hover) group">
+      {/* Submission name */}
+      <td className="px-4 py-3.5">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-(--text-primary) truncate max-w-60">
+            {row.displayName || row.assignmentTitle || 'Untitled'}
+          </p>
+          {row.annotationCount > 0 && (
+            <p className="text-[11px] text-(--text-tertiary) mt-0.5">{row.annotationCount} annotations</p>
+          )}
+        </div>
+      </td>
+
+      {/* Course */}
+      <td className="px-4 py-3.5">
+        <span className="text-sm text-(--text-secondary) truncate max-w-40 block">
+          {row.courseName || '-'}
+        </span>
+      </td>
+
+      {/* Submitted date */}
+      <td className="px-4 py-3.5">
+        <span className="text-sm text-(--text-secondary) whitespace-nowrap">
+          {formatDate(row.submittedAt)}
+        </span>
+      </td>
+
+      {/* Status */}
+      <td className="px-4 py-3.5">
+        <div className="flex items-center gap-1.5">
+          <StatusBadge status={statusToKey(row.status)} label={statusLabel(row.status)} size="sm" />
+          {isProcessing && <Loader2 size={12} className="animate-spin text-(--info)" />}
+        </div>
+      </td>
+
+      {/* Score */}
+      <td className="px-4 py-3.5">
+        {row.score !== null && row.maxScore !== null ? (
+          <Badge variant="brand" size="sm">{row.score}/{row.maxScore}</Badge>
+        ) : (
+          <span className="text-sm text-(--text-quaternary)">-</span>
+        )}
+      </td>
+
+      {/* Actions */}
+      <td className="px-4 py-3.5 text-right">
+        <div className="flex items-center justify-end gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
+          {canReview ? (
+            <Link href={`/reviews/${row.jobId}`}>
+              <Button size="sm" icon={<ArrowRight size={12} />}>
+                Review
+              </Button>
+            </Link>
+          ) : (
+            <Link href={`/reviews/${row.jobId}`}>
+              <Button size="sm" variant="secondary" icon={<Eye size={12} />} disabled={row.status === 'SUBMITTED'}>
+                View
+              </Button>
+            </Link>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }

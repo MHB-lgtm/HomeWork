@@ -75,31 +75,25 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: (id: string)
   return (
     <div
       className={cn(
-        'relative flex w-80 items-start gap-3 overflow-hidden rounded-lg',
-        'border border-(--border) bg-(--surface) p-3 shadow-(--shadow-lg)',
-        'animate-in'
+        'relative flex w-80 items-start gap-3 overflow-hidden',
+        'rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) p-3.5 shadow-(--shadow-lg)',
+        'animate-slide-left'
       )}
     >
       <span className="mt-0.5 shrink-0">{iconMap[toast.type]}</span>
-      <p className="flex-1 text-sm text-(--text-primary)">{toast.message}</p>
+      <p className="flex-1 text-[13px] text-(--text-primary) leading-snug">{toast.message}</p>
       <button
         onClick={() => onDismiss(toast.id)}
-        className={cn(
-          'shrink-0 rounded p-0.5 text-(--text-quaternary)',
-          'transition-colors hover:text-(--text-primary)'
-        )}
+        className="shrink-0 rounded-md p-0.5 text-(--text-quaternary) transition-colors duration-200 hover:text-(--text-primary)"
         aria-label="Dismiss"
       >
         <X className="h-3.5 w-3.5" />
       </button>
 
-      {/* Progress bar */}
       <div className="absolute inset-x-0 bottom-0 h-0.5 bg-(--border-light)">
         <div
           className={cn('h-full', progressColors[toast.type])}
-          style={{
-            animation: `shrinkWidth ${toast.duration}ms linear forwards`,
-          }}
+          style={{ animation: `shrinkWidth ${toast.duration}ms linear forwards` }}
         />
       </div>
 

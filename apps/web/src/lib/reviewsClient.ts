@@ -155,6 +155,45 @@ export async function updateReviewDisplayName(
   }
 }
 
+/**
+ * Save a full review record (PUT)
+ */
+export async function saveReview(
+  jobId: string,
+  review: ReviewRecordV1
+): Promise<
+  | { ok: true }
+  | { ok: false; error: string; status?: number }
+> {
+  try {
+    const response = await fetch(`/api/reviews/${jobId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(review),
+    });
+
+    const data = await response.json().catch(() => ({
+      ok: false,
+      error: 'Failed to parse response',
+    }));
+
+    if (!response.ok || !data.ok) {
+      return {
+        ok: false,
+        error: data.error || 'Failed to save review',
+        status: response.status,
+      };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Failed to save review',
+    };
+  }
+}
+
 export async function publishReview(
   jobId: string
 ): Promise<

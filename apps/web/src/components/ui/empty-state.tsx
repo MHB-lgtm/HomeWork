@@ -25,17 +25,17 @@ export function EmptyState({
       {...props}
     >
       {icon && (
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-(--surface-secondary) text-(--text-tertiary) [&>svg]:h-5 [&>svg]:w-5">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-b from-(--surface-secondary) to-(--surface-tertiary)/50 text-(--text-tertiary) shadow-inner [&>svg]:h-6 [&>svg]:w-6">
           {icon}
         </div>
       )}
-      <h3 className="text-sm font-medium text-(--text-primary)">{title}</h3>
+      <h3 className="text-sm font-semibold text-(--text-primary)">{title}</h3>
       {description && (
-        <p className="mx-auto mt-1.5 max-w-sm text-sm text-(--text-tertiary)">
+        <p className="mx-auto mt-2 max-w-xs text-sm text-(--text-tertiary) leading-relaxed">
           {description}
         </p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }

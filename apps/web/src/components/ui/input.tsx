@@ -17,7 +17,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         {label && (
           <label
             htmlFor={inputId}
-            className="mb-1.5 block text-sm font-medium text-(--text-primary)"
+            className="mb-1.5 block text-[13px] font-semibold text-(--text-primary)"
           >
             {label}
           </label>
@@ -33,15 +33,16 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type={type}
             ref={ref}
             className={cn(
-              'flex h-9 w-full rounded-lg border bg-(--surface) px-3 text-sm text-(--text-primary)',
-              'transition-colors duration-(--duration) ease-(--ease)',
+              'flex h-9 w-full rounded-[var(--radius-md)] border bg-(--surface) px-3 text-sm text-(--text-primary)',
+              'shadow-(--shadow-xs)',
+              'transition-all duration-200 ease-(--ease)',
               'placeholder:text-(--text-quaternary)',
-              'focus-visible:outline-none focus-visible:border-(--border-focus) focus-visible:ring-1 focus-visible:ring-(--border-focus)',
+              'focus-visible:outline-none focus-visible:border-(--brand) focus-visible:ring-2 focus-visible:ring-(--brand)/15',
               'disabled:cursor-not-allowed disabled:opacity-50',
               'file:border-0 file:bg-transparent file:text-sm file:font-medium',
               error
-                ? 'border-(--error) focus-visible:border-(--error) focus-visible:ring-(--error)'
-                : 'border-(--border)',
+                ? 'border-(--error) focus-visible:border-(--error) focus-visible:ring-(--error)/15'
+                : 'border-(--border) hover:border-(--border-hover)',
               icon && 'pl-9',
               className
             )}
@@ -49,7 +50,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           />
         </div>
         {error && (
-          <p className="mt-1.5 text-xs text-(--error)">{error}</p>
+          <p className="mt-1.5 text-xs font-medium text-(--error)">{error}</p>
         )}
         {hint && !error && (
           <p className="mt-1.5 text-xs text-(--text-tertiary)">{hint}</p>

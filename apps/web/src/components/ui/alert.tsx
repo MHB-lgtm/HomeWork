@@ -9,31 +9,30 @@ export interface AlertProps extends React.HTMLAttributes<HTMLDivElement> {
 const variantConfig: Record<string, { bg: string; border: string; text: string; icon: React.ReactNode }> = {
   info: {
     bg: 'bg-(--info-subtle)',
-    border: 'border-(--info)',
+    border: 'border-(--info)/20',
     text: 'text-(--info)',
     icon: <Info className="h-4 w-4" />,
   },
   success: {
     bg: 'bg-(--success-subtle)',
-    border: 'border-(--success)',
+    border: 'border-(--success)/20',
     text: 'text-(--success)',
     icon: <CheckCircle2 className="h-4 w-4" />,
   },
   warning: {
     bg: 'bg-(--warning-subtle)',
-    border: 'border-(--warning)',
+    border: 'border-(--warning)/20',
     text: 'text-(--warning)',
     icon: <AlertTriangle className="h-4 w-4" />,
   },
   error: {
     bg: 'bg-(--error-subtle)',
-    border: 'border-(--error)',
+    border: 'border-(--error)/20',
     text: 'text-(--error)',
     icon: <XCircle className="h-4 w-4" />,
   },
 };
 
-// Legacy mappings
 variantConfig.default = variantConfig.info;
 variantConfig.destructive = variantConfig.error;
 
@@ -46,9 +45,10 @@ const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
         ref={ref}
         role="alert"
         className={cn(
-          'relative flex gap-3 rounded-lg border p-4',
+          'relative flex gap-3 rounded-[var(--radius-lg)] border p-4',
           config.bg,
           config.border,
+          'animate-in',
           className
         )}
         {...props}
@@ -68,7 +68,7 @@ const AlertTitle = React.forwardRef<HTMLHeadingElement, AlertTitleProps>(
     <h5
       ref={ref}
       className={cn(
-        'mb-1 text-sm font-medium leading-none tracking-tight text-(--text-primary)',
+        'mb-1 text-[13px] font-semibold leading-tight tracking-tight text-(--text-primary)',
         className
       )}
       {...props}
@@ -83,7 +83,7 @@ const AlertDescription = React.forwardRef<HTMLParagraphElement, AlertDescription
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('text-sm text-(--text-secondary) [&_p]:leading-relaxed', className)}
+      className={cn('text-[13px] text-(--text-secondary) leading-relaxed [&_p]:leading-relaxed', className)}
       {...props}
     />
   )
