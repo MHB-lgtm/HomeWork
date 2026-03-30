@@ -23,12 +23,18 @@ Today the repo has:
   - `/assignments`
   - `/assignments/[assignmentId]`
   - `/api/me/assignments/**`
+- the first student-safe results read-side through:
+  - `/results`
+  - `/results/[assignmentId]`
+  - `/api/me/results`
+  - `/api/me/results/[assignmentId]`
 - current assignment submission now reuses the existing exam pipeline through exam-backed assignment records rather than a separate document-only grader
 - `M3A` closure smoke now confirmed assignment create, student submit, worker processing, review visibility, and publish with canonical student linkage
+- the current workspace now also exposes status-only pre-publish student reads plus published summary/score/breakdown reads sourced from effective `PublishedResult` and `GradebookEntry`
+- the current auth + membership + student-flow arc is now complete through `M3B`
 
 Still not implemented:
 
-- published student results and gradebook own-data read-side
 - broader course ownership for exams, rubrics, jobs, and reviews
 
 ## 3. Boundary that remains approved

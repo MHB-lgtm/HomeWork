@@ -23,7 +23,7 @@ Current status:
 - `M2` is now closed
 - `M3` is now split into `M3A` and `M3B`
 - `M3A` is now closed
-- `M3B` remains deferred
+- `M3B` is now closed and adds student-safe published-result and gradebook reads
 
 ## 2. Current Repo Truth
 
@@ -56,6 +56,12 @@ Current status:
   - backing exam index generation is triggered during authoring
 - Student submissions are now canonically tied to `Submission.studentUserId` and create immediate DB-backed assignment grading jobs bridged through `Submission.legacyJobId`.
 - Assignment-triggered jobs now reuse the existing exam pipeline with exam index and question decomposition rather than a separate document-only assignment grader.
+- The current workspace now also includes student result read-side surfaces:
+  - `/results`
+  - `/results/[assignmentId]`
+  - `GET /api/me/results`
+  - `GET /api/me/results/[assignmentId]`
+- Student result reads are assignment-centric, use status-only reads before publish, and expose published summary/score/breakdown only from effective `PublishedResult` and `GradebookEntry`.
 
 ## 3. Recommended Identity Model
 
@@ -167,7 +173,6 @@ Current implemented M1+M2 rules:
 
 Still deferred:
 
-- published-result and gradebook read-side for students
 - exams/rubrics/jobs/reviews course ownership and route-level course scoping
 
 ## 7. Session Boundary in apps/web
@@ -249,15 +254,23 @@ Delivered:
 
 ### M3B. Student Results and Own-Data Read Side
 
-Status: deferred
+Status: closed
 
-Objective:
+Delivered:
 
-- add published-result and gradebook read-side surfaces for authenticated students
+- student-safe result query/store reads in `@hg/postgres-store`
+- student result schemas in `@hg/shared-schemas`
+- `GET /api/me/results`
+- `GET /api/me/results/[assignmentId]`
+- `/results`
+- `/results/[assignmentId]`
+- status-only pre-publish reads with no review draft leakage
+- published result detail sourced from effective `PublishedResult` and `GradebookEntry`
+- narrower publish normalization hardening for per-question `GENERAL` assignment reviews so student-visible score/summary output is coherent
 
 ## 9. Recommended Immediate Next Milestone
 
-`M3A` is now closed. The next milestone is `M3B: Student Results and Own-Data Read Side`.
+The current auth + membership + student-flow arc is now complete through `M3B`. Follow-up work should focus on hardening and broader product ownership beyond this arc rather than a new auth milestone inside it.
 
 ## 10. Validation Strategy
 
@@ -298,11 +311,10 @@ Current risks:
 
 - exams and rubrics are still not course-owned, so the current authz model cannot be purely course-scoped everywhere yet
 - jobs can still be created without a real course, which weakens future course-based authorization on job/review flows
-- student own-data read-side still does not exist, so students can submit assignments in `M3A` but still do not have a published-results portal
 - current publish normalization for per-question `GENERAL` assignment reviews is technically publishable but still produces weak score/summary output and should be hardened in a follow-up
 - provider-backed Google sign-in still depends on local `AUTH_SECRET` / `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` configuration and was not exercised with real external OAuth credentials in this workspace
 
 Open questions after M3A:
 
 - whether `/api/exams/**`, `/api/rubrics/**`, `/api/jobs/**`, and `/api/reviews/**` should remain coarse staff-only until course ownership is tightened
-- how quickly `M3B` should expose published results, gradebook rows, and student-safe own-data read semantics on top of the new assignment submission slice
+- how broadly the current `M3B` student-safe result semantics should expand beyond the assignment slice before tighter course ownership is applied elsewhere

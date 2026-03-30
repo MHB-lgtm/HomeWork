@@ -35,7 +35,7 @@
   - non-auth API routes require authenticated users, with staff or course-role enforcement applied server-side
   - `/api/health` requires `SUPER_ADMIN`
   - `/courses` and `/api/courses/**` now enforce real course-scoped staff authorization where the repo model supports it
-  - `/assignments` and `/api/me/assignments/**` now expose the first student-facing surface for authenticated users with active `STUDENT` membership access
+  - `/assignments`, `/results`, `/api/me/assignments/**`, and `/api/me/results/**` now expose the current student-facing surfaces for authenticated users with active `STUDENT` membership access
 - On `feat/postgres-runtime-slice-1`, the reviews surface now has a Postgres-backed slice when `DATABASE_URL` is configured:
   - `GET /api/reviews/[jobId]`
   - `PUT` / `PATCH /api/reviews/[jobId]`
@@ -95,9 +95,11 @@
 - Keep auth/session concerns separate from grading domain logic.
 - Course-scoped authorization is now implemented for `/courses` and `/api/courses/**`, while non-course-owned staff surfaces such as exams, jobs, reviews, and rubrics remain coarse staff-only until ownership is tightened in a later milestone.
 - Development-only demo sign-in now exists in `apps/web` through an Auth.js credentials provider that seeds or reuses real Postgres-backed demo users, memberships, and sessions. It is disabled outside development.
-- `M3B` remains deferred:
-  - student published-result and gradebook read-side surfaces are not implemented yet
-  - students can submit assignments in the now-closed `M3A` flow but do not yet have their own published-results portal
+- The current workspace now also completed `M3B`:
+  - `/results` and `/results/[assignmentId]` now provide the first student gradebook and published-result pages
+  - `GET /api/me/results` and `GET /api/me/results/[assignmentId]` now expose student-safe own-data reads sourced from `PublishedResult` and `GradebookEntry`
+  - pre-publish student reads remain status-only, while published reads expose summary, score, and published breakdown without staff review metadata
+  - the current auth + membership + student-flow arc is now complete through `M3B`
 - PostgreSQL + Prisma is now the live runtime source of truth for application state. The archived local-store packages remain in-repo only for offline rollback, compatibility, archive, and debug workflows.
 
 ## Validation guidance

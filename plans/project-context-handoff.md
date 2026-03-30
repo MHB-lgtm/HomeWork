@@ -82,6 +82,7 @@ Completed:
 - `Auth M1`
 - `Auth M2`
 - `Auth M3A`
+- `Auth M3B`
 
 Current branch context:
 
@@ -95,6 +96,7 @@ Current branch context:
 - the current workspace now also contains completed Auth M1 identity/session foundation work in `apps/web`
 - the current workspace now also contains completed Auth M2 course-membership and course-scoped authorization work in `apps/web`
 - the current workspace now also contains closed Auth M3A assignment and student-submission foundation work
+- the current workspace now also contains closed Auth M3B student published-result and own-data read surfaces
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -192,8 +194,7 @@ Current branch context:
 
 - broader membership-management UI beyond the narrow course-detail panel
 - exam-batch runtime lifecycle
-- broader `PublishedResult` / `GradebookEntry` runtime surfaces
-- student published-result and gradebook read-side surfaces
+- broader `PublishedResult` / `GradebookEntry` runtime surfaces beyond the current student own-data read-side
 - broader publication history UI
 - notifications
 - analytics snapshots
@@ -223,6 +224,7 @@ Current DB-first exceptions in the workspace:
 - exams, rubrics, and exam-index metadata are DB-first in `apps/web`
 - courses and lectures are DB-first in `apps/web`
 - assignments, assignment materials, and assignment visibility are DB-first in `apps/web`
+- student result and gradebook own-data reads are now DB-first in `apps/web`
 - jobs, reviews, and worker health are DB-first in completed Wave 2
 - exam-index reads, RAG routes, and study pointers are DB-first in completed Wave 3
 - assignments now create or update a backing exam artifact and exam index in live runtime
@@ -262,7 +264,7 @@ Important clarification:
 - the current runtime now adopts DB-backed review/publication flows for imported reviews and DB-authored runtime jobs,
 - assignment submissions now feed the current job/review pipeline through DB-backed assignment jobs,
 - assignment-triggered jobs now reuse the existing exam pipeline rather than a separate document-only assignment evaluator,
-- broader publication, gradebook, and student-facing result surfaces are still deferred.
+- student own-data result reads now exist, while broader publication history and broader gradebook expansion are still deferred.
 
 ## 8. Next milestone
 
@@ -294,7 +296,7 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move next to `M3B` student published-result / own-data read surfaces, without reintroducing persistence fallback
+- move next to post-`M3B` hardening and broader product ownership without reintroducing persistence fallback
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - treat the archived local-store packages as offline/debug code, not as a live runtime path
 - keep auth/authz separate from grading-domain logic

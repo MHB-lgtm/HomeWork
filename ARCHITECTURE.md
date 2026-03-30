@@ -276,6 +276,18 @@ Current Auth M3A addition:
   - worker processes the resulting job through the existing exam pipeline
   - staff can review and publish the result while keeping canonical `PublishedResult.studentUserId` and `GradebookEntry.studentUserId` linkage
 
+Current Auth M3B addition:
+
+- first student result pages now exist at:
+  - `/results`
+  - `/results/[assignmentId]`
+- first student result own-data APIs now exist at:
+  - `GET /api/me/results`
+  - `GET /api/me/results/[assignmentId]`
+- student result reads are assignment-centric and derive from active `STUDENT` membership visibility plus canonical `Submission.studentUserId`
+- pre-publish student reads are status-only and do not expose review drafts or staff metadata
+- published student reads now expose score, summary, and published breakdown data sourced from effective `PublishedResult` and `GradebookEntry`
+
 ### 3.2 Current persistence model
 
 The primary persistence model is now DB-first for live application state. Filesystem usage remains for asset bytes, archive-only legacy files, rollback tooling, and explicit offline compatibility/debug materialization under `HG_DATA_DIR`.
@@ -321,7 +333,6 @@ Current committed runtime state now has a web-only auth/session and course-membe
 
 Still not implemented:
 
-- student published-result and gradebook own-data read-side,
 - broad membership-management UI beyond the current narrow course-detail panel,
 - course ownership for exams, rubrics, jobs, and reviews.
 
@@ -461,7 +472,7 @@ The approved persistence direction is PostgreSQL + Prisma.
 
 This is now the active persistence design direction for the repo. Older Firebase / Firestore notes are historical context only and should not be treated as the current approved path for the next milestone.
 
-Persistence cutover for live application state is now complete through Wave 4B. Auth M1, M2, and M3A are now closed. The next auth milestone is `M3B`, which remains focused on student published-result and own-data read surfaces.
+Persistence cutover for live application state is now complete through Wave 4B. Auth M1, M2, M3A, and M3B are now closed. The current auth + membership + student-flow arc is now complete through the student own-data read side.
 
 Current design source of truth:
 
@@ -533,9 +544,8 @@ The following are intentionally not implemented yet:
 
 - broader membership-management runtime surfaces,
 - first-class exam-batch runtime lifecycle,
-- broader published-result runtime surfaces,
-- gradebook runtime surfaces,
-- student published-result and gradebook read-side surfaces,
+- broader published-result runtime surfaces beyond the current student own-data read-side,
+- broader gradebook runtime surfaces beyond the current student own-data read-side,
 - broader publication history/timeline UI,
 - flag persistence and filtering,
 - audit-event persistence,
@@ -564,8 +574,8 @@ The main open or deferred architectural decisions are:
 5. Assignment and exam ownership rollout
    - how quickly the product should extend the current assignment submission slice into fuller canonical `Submission` / `Assignment` / `ExamBatch` ownership across the rest of the product.
 
-6. Auth milestone sequencing
-   - how quickly the repo should move from the current `M3A` student submission slice to `M3B` published student own-data read surfaces.
+6. Post-M3B student/runtime expansion
+   - how broadly the now-closed `M3B` student result read-side should expand across more product surfaces beyond the current arc.
 
 ## 12. Validation commands that matter today
 
