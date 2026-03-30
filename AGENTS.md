@@ -30,9 +30,11 @@
 - The live runtime is now DB-first across completed Waves 1-4. Remaining filesystem usage under `HG_DATA_DIR` is limited to asset bytes, archive-only leftovers, rollback tooling, and explicit offline compatibility/debug tooling.
 - `apps/web` now owns the active Auth.js session boundary for the current internal product.
 - Current web runtime is private-by-default:
-  - non-auth pages require authenticated staff access
-  - non-auth API routes require authenticated staff access
+  - non-auth pages require authenticated users
+  - current staff pages require authenticated staff access
+  - non-auth API routes require authenticated users, with staff or course-role enforcement applied server-side
   - `/api/health` requires `SUPER_ADMIN`
+  - `/courses` and `/api/courses/**` now enforce real course-scoped staff authorization where the repo model supports it
 - On `feat/postgres-runtime-slice-1`, the reviews surface now has a Postgres-backed slice when `DATABASE_URL` is configured:
   - `GET /api/reviews/[jobId]`
   - `PUT` / `PATCH /api/reviews/[jobId]`
@@ -82,7 +84,8 @@
 - Wave 2 also includes offline rollback tooling via `pnpm --filter @hg/postgres-store rollback:export-jobs`, which exports `PENDING` / `RUNNING` DB jobs back into the legacy queue shape only for rollback drills.
 - `@hg/domain-workflow` exists and is tested, but broad runtime adoption is still deferred.
 - Keep auth/session concerns separate from grading domain logic.
-- Course-scoped membership enforcement is still not complete; current auth is session + coarse staff access, not final course-scoped authorization.
+- Course-scoped authorization is now implemented for `/courses` and `/api/courses/**`, while non-course-owned staff surfaces such as exams, jobs, reviews, and rubrics remain coarse staff-only until ownership is tightened in a later milestone.
+- Development-only demo sign-in now exists in `apps/web` through an Auth.js credentials provider that seeds or reuses real Postgres-backed demo users, memberships, and sessions. It is disabled outside development.
 - PostgreSQL + Prisma is now the live runtime source of truth for application state. The archived local-store packages remain in-repo only for offline rollback, compatibility, archive, and debug workflows.
 
 ## Validation guidance

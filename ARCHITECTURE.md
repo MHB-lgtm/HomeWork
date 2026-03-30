@@ -1,6 +1,6 @@
 # Homework Grader Architecture
 
-Last updated: 2026-03-29
+Last updated: 2026-03-30
 Status: canonical current-state architecture document
 Scope: implemented repo structure, completed milestones, approved next direction, and deferred decisions
 
@@ -229,7 +229,26 @@ Current Auth M1 addition:
 - canonical session identity now resolves through Postgres `User`,
 - provider linkage now uses `AuthAccount`,
 - coarse staff access is currently derived from `SUPER_ADMIN` or any active `COURSE_ADMIN` / `LECTURER` membership,
-- full course-scoped authorization remains deferred to the next milestone.
+- the M1 foundation is now extended by the M2 course-scoped authorization work described below.
+
+Current Auth M2 addition:
+
+- `CourseMembership` is now real runtime authorization data, not schema-only groundwork,
+- `apps/web` now uses a dedicated Postgres membership store for course access lookup, staff-course listing, membership listing, and idempotent membership upsert by email,
+- Google OAuth remains intact, but sign-in now allows any provisioned `ACTIVE` user instead of only coarse staff users,
+- `STUDENT` users can now authenticate if provisioned, but they still have no staff-page or staff-API access,
+- development-only demo login now exists through a dev-only Auth.js credentials provider that seeds or reuses real Postgres-backed demo users, a demo course, and demo course memberships,
+- the dev demo flow exposes one real demo identity each for:
+  - `SUPER_ADMIN`
+  - `COURSE_ADMIN`
+  - `LECTURER`
+  - `STUDENT`
+- `/courses` and `/api/courses/**` are now course-scoped:
+  - `SUPER_ADMIN` can access all courses and create new courses,
+  - active `COURSE_ADMIN` / `LECTURER` users can access only their own course-owned staff surfaces,
+  - `STUDENT` users are blocked from current staff-only course surfaces,
+- `GET` / `PUT /api/courses/[courseId]/memberships` now exist as a narrow membership-management API for `SUPER_ADMIN` and active `COURSE_ADMIN` only,
+- non-course-owned staff surfaces such as exams, rubrics, jobs, and reviews remain coarse staff-only until ownership is tightened in a later milestone.
 
 ### 3.2 Current persistence model
 
@@ -259,23 +278,26 @@ Committed runtime boundaries are now:
 
 ### 3.4 Current auth and authorization state
 
-Current committed runtime state now has a web-only auth/session foundation:
+Current committed runtime state now has a web-only auth/session and course-membership foundation:
 
 - `apps/web` owns the Auth.js login/session boundary,
 - session identity is resolved against canonical Postgres `User` rows,
 - provider linkage is stored in `AuthAccount`,
 - `IdentityAlias` remains available for legacy and institutional identity mapping,
-- non-auth pages and non-auth API routes are private-by-default for the current internal staff product,
+- sign-in now allows any provisioned `ACTIVE` user,
+- non-auth pages and non-auth API routes are private-by-default,
 - `SUPER_ADMIN` remains the only global elevated role,
-- active `COURSE_ADMIN` / `LECTURER` memberships currently grant coarse staff access,
-- `STUDENT` remains schema-level only for now,
+- active `COURSE_ADMIN` / `LECTURER` memberships grant staff access in their own courses,
+- `/courses` and `/api/courses/**` now enforce course-scoped staff authorization,
+- `STUDENT` users can authenticate if provisioned but remain blocked from current staff surfaces,
+- development-only demo sign-in exists through Auth.js and seeds or reuses real Postgres users, auth accounts, and demo memberships,
 - worker runtime remains out of scope and does not depend on web session/auth.
 
 Still not implemented:
 
-- course-scoped route filtering and enforcement,
 - student-facing own-data authorization,
-- membership-management runtime surfaces.
+- broad membership-management UI beyond the current narrow course-detail panel,
+- course ownership for exams, rubrics, jobs, and reviews.
 
 ## 4. Domain & Workflow Foundation milestone
 
@@ -413,7 +435,7 @@ The approved persistence direction is PostgreSQL + Prisma.
 
 This is now the active persistence design direction for the repo. Older Firebase / Firestore notes are historical context only and should not be treated as the current approved path for the next milestone.
 
-Persistence cutover for live application state is now complete through Wave 4B. Auth M1 is now closed. The next milestone should be course memberships and course-scoped staff authorization, not another persistence migration wave.
+Persistence cutover for live application state is now complete through Wave 4B. Auth M1 and M2 are now closed. The next auth milestone is M3 student-safe access, and it remains deferred until student-facing surfaces are approved.
 
 Current design source of truth:
 
@@ -473,8 +495,8 @@ Important boundary:
 
 The following are intentionally not implemented yet:
 
-- course-scoped membership filtering and enforcement,
-- membership-management runtime surfaces,
+- student-facing authorization and own-data surfaces,
+- broader membership-management runtime surfaces,
 - assignment runtime lifecycle,
 - first-class exam-batch runtime lifecycle,
 - broader published-result runtime surfaces,

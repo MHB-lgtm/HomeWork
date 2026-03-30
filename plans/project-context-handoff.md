@@ -1,6 +1,6 @@
 # Project Context Handoff
 
-Last updated: 2026-03-29
+Last updated: 2026-03-30
 Purpose: high-signal handoff for a fresh engineer or fresh model
 
 ## 1. Project description
@@ -18,6 +18,7 @@ The repo now has:
 - completed Wave 4A changes that remove live compatibility writes and narrow `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling.
 - completed Wave 4B changes that retire live local-store package usage from `apps/web` and `apps/worker` and declare final Postgres cutover for live application state.
 - completed Auth M1 changes that add an Auth.js web-session boundary, canonical Postgres-backed session identity, and private-by-default staff access in `apps/web`.
+- completed Auth M2 changes that add runtime course memberships, course-scoped staff authorization on `/courses` and `/api/courses/**`, and a dev-only demo sign-in flow with real Postgres-backed users and memberships.
 - implemented offline rollback tooling that can export `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
 ## 2. Repo structure and responsibilities
@@ -52,7 +53,7 @@ The repo now has:
 - `plans/auth-foundation.md`
   - record of the now-implemented auth/session foundation boundary
 - `plans/auth-membership-authorization-execution-plan.md`
-  - active auth/membership/authorization execution record with M1 closed and M2 next
+  - active auth/membership/authorization execution record with M1 and M2 closed
 - `plans/postgres-prisma-identity-design.md`
   - approved persistence and identity design direction beyond the original review slice
 - `plans/postgres-wave-2-execution-plan.md`
@@ -79,6 +80,7 @@ Completed:
 - `Wave 4A`
 - `Wave 4B`
 - `Auth M1`
+- `Auth M2`
 
 Current branch context:
 
@@ -90,6 +92,7 @@ Current branch context:
 - the current workspace also contains completed Wave 4A cleanup of live compatibility writes and broad `HG_DATA_DIR` metadata-read requirements
 - the current workspace also contains completed Wave 4B retirement of live local-store package usage and final Postgres cutover cleanup
 - the current workspace now also contains completed Auth M1 identity/session foundation work in `apps/web`
+- the current workspace now also contains completed Auth M2 course-membership and course-scoped authorization work in `apps/web`
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -169,12 +172,16 @@ Current branch context:
   - provider linkage uses `AuthAccount`
   - non-auth pages and non-auth APIs are private-by-default for authenticated staff users
   - `/api/health` is now `SUPER_ADMIN`-only
-  - review publish and new review metadata mutations now attribute session-backed `user:<id>` actors
+- review publish and new review metadata mutations now attribute session-backed `user:<id>` actors
+- `/courses` and `/api/courses/**` now use real course membership data for authorization where the repo model supports it
+- `POST /api/courses` is now `SUPER_ADMIN` only
+- `GET` / `PUT /api/courses/[courseId]/memberships` now exist as a narrow membership-management API for `SUPER_ADMIN` and active `COURSE_ADMIN`
+- development-only Auth.js demo sign-in now exists with one real demo user each for `SUPER_ADMIN`, `COURSE_ADMIN`, `LECTURER`, and `STUDENT`
 
 ## 5. What is intentionally not implemented yet
 
-- course-scoped membership enforcement beyond coarse staff derivation
-- membership-management runtime surfaces
+- student-facing own-data authorization and portal surfaces
+- broader membership-management UI beyond the narrow course-detail panel
 - assignment runtime lifecycle
 - exam-batch runtime lifecycle
 - broader `PublishedResult` / `GradebookEntry` runtime surfaces
@@ -268,7 +275,7 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move to post-cutover auth/product work, starting with course memberships and course-scoped authorization
+- move to post-cutover product/auth work beyond M2, without reintroducing persistence fallback
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - treat the archived local-store packages as offline/debug code, not as a live runtime path
 - keep auth/authz separate from grading-domain logic
@@ -369,7 +376,7 @@ Canonical docs to read first:
 Current runtime shape:
 - live runtime is DB-first plus file-backed compatibility/archive artifacts under HG_DATA_DIR
 - apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, Wave 2 jobs/health, and Wave 3 exam-index/RAG routes
-- apps/web now also owns an Auth.js session boundary with private-by-default staff access
+- apps/web now also owns an Auth.js session boundary with private-by-default access plus course-scoped staff authorization on `/courses` and `/api/courses/**`
 - apps/worker claims new jobs from Postgres, writes new review state to Postgres, and reads exam-index/study-pointer derived state from Postgres
 - @hg/domain-workflow exists and is tested, but broad runtime adoption is still deferred
 - current branch has committed Postgres-backed review and publication slices
@@ -439,11 +446,13 @@ Key architecture boundary:
 - implemented Wave 4 cleanup:
   - live compatibility writes removed
   - archived local-store packages no longer imported by apps/web or apps/worker
-- implemented Auth M1 in the workspace:
-  - non-auth pages and APIs require authenticated staff access
+- implemented Auth M1 and M2 in the workspace:
+  - non-auth pages and APIs require authenticated users with server-side authorization
   - `/api/health` requires `SUPER_ADMIN`
   - canonical session identity resolves through Postgres `User`
   - provider linkage uses `AuthAccount`
+  - `/courses` and `/api/courses/**` enforce `SUPER_ADMIN` bypass plus active `COURSE_ADMIN` / `LECTURER` membership checks
+  - development-only demo sign-in creates or reuses real Postgres-backed demo users, auth accounts, and demo memberships
 - publication state is visible in both review detail and review list for imported reviews
 - Submission.legacyJobId is the bridge from current jobId route params to DB-backed review records
 ```

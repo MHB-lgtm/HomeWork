@@ -1,7 +1,7 @@
 # Auth Foundation
 
 Status: foundation milestone closed; superseded by `plans/auth-membership-authorization-execution-plan.md`
-Last updated: 2026-03-29
+Last updated: 2026-03-30
 
 ## 1. Purpose
 
@@ -15,14 +15,15 @@ Today the repo has:
 - canonical session identity backed by Postgres `User`
 - provider linkage via `AuthAccount`
 - centralized server-side staff/session helpers
-- private-by-default pages and APIs for the current internal staff product
+- private-by-default pages and APIs
 - `SUPER_ADMIN`-only protection on `/api/health`
+- implemented course-membership runtime authorization for `/courses` and `/api/courses/**`
+- a development-only demo Auth.js provider that creates or reuses real Postgres-backed demo users, a demo course, and demo memberships
 
 Still not implemented:
 
-- course-scoped authorization enforcement
-- course membership filtering on live routes
 - student-facing own-data access
+- broader course ownership for exams, rubrics, jobs, and reviews
 
 ## 3. Boundary that remains approved
 
