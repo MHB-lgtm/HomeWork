@@ -19,10 +19,16 @@ Today the repo has:
 - `SUPER_ADMIN`-only protection on `/api/health`
 - implemented course-membership runtime authorization for `/courses` and `/api/courses/**`
 - a development-only demo Auth.js provider that creates or reuses real Postgres-backed demo users, a demo course, and demo memberships
+- the first student-facing authenticated surface through:
+  - `/assignments`
+  - `/assignments/[assignmentId]`
+  - `/api/me/assignments/**`
+- current assignment submission now reuses the existing exam pipeline through exam-backed assignment records rather than a separate document-only grader
+- `M3A` closure smoke now confirmed assignment create, student submit, worker processing, review visibility, and publish with canonical student linkage
 
 Still not implemented:
 
-- student-facing own-data access
+- published student results and gradebook own-data read-side
 - broader course ownership for exams, rubrics, jobs, and reviews
 
 ## 3. Boundary that remains approved

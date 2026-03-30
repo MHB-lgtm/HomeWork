@@ -1,6 +1,6 @@
 # Auth, Membership, and Authorization Execution Plan
 
-Status: active execution plan with M1 and M2 closed
+Status: active execution plan with M1, M2, and M3A closed
 Last updated: 2026-03-30
 
 ## 1. Executive Summary
@@ -21,7 +21,9 @@ Current status:
 
 - `M1` is closed
 - `M2` is now closed
-- `M3` remains deferred until student-facing surfaces are approved
+- `M3` is now split into `M3A` and `M3B`
+- `M3A` is now closed
+- `M3B` remains deferred
 
 ## 2. Current Repo Truth
 
@@ -40,7 +42,20 @@ Current status:
   - or any active `COURSE_ADMIN` / `LECTURER` membership in the relevant course
 - `/courses` and `/api/courses/**` now enforce course-scoped authorization where the repo model supports it.
 - A development-only demo sign-in path now exists and seeds or reuses real Postgres-backed demo users, a demo course, and demo memberships through Auth.js.
-- Student access is still deferred beyond authentication and staff-surface blocking.
+- The current workspace now includes a first student-facing surface:
+  - `/assignments`
+  - `/assignments/[assignmentId]`
+  - `GET /api/me/assignments`
+  - `GET /api/me/assignments/[assignmentId]`
+  - `GET /api/me/assignments/[assignmentId]/prompt-raw`
+  - `POST /api/me/assignments/[assignmentId]/submit`
+- Assignment runtime now exists through `Week`, `Assignment`, and `AssignmentMaterial`.
+- Assignments are now exam-backed workflow records:
+  - staff upload an assignment source PDF
+  - each assignment links to a backing exam artifact
+  - backing exam index generation is triggered during authoring
+- Student submissions are now canonically tied to `Submission.studentUserId` and create immediate DB-backed assignment grading jobs bridged through `Submission.legacyJobId`.
+- Assignment-triggered jobs now reuse the existing exam pipeline with exam index and question decomposition rather than a separate document-only assignment grader.
 
 ## 3. Recommended Identity Model
 
@@ -60,7 +75,8 @@ Current implemented scope:
 - `User`
 - `AuthAccount`
 - `IdentityAlias`
-- coarse staff derivation from `CourseMembership`
+- `CourseMembership`
+- `hasStaffAccess` and `hasStudentAccess` derived from canonical user + membership state
 
 Still deferred:
 
@@ -142,10 +158,16 @@ Current implemented M1+M2 rules:
 - `/courses/[courseId]` and `/api/courses/[courseId]` require active `COURSE_ADMIN` / `LECTURER` membership in that course unless the user is `SUPER_ADMIN`
 - `/api/courses/[courseId]/lectures` and `/api/courses/[courseId]/rag/**` require active `COURSE_ADMIN` / `LECTURER` membership in that course unless the user is `SUPER_ADMIN`
 - `/api/courses/[courseId]/memberships` requires active `COURSE_ADMIN` membership in that course unless the user is `SUPER_ADMIN`
+- `/api/courses/[courseId]/assignments` and `/api/courses/[courseId]/assignments/[assignmentId]` require active `COURSE_ADMIN` / `LECTURER` membership in that course unless the user is `SUPER_ADMIN`
+- `/assignments` and `/api/me/assignments/**` are now the first student-owned surfaces
+- `POST /api/me/assignments/[assignmentId]/submit` derives ownership from the authenticated user and allows only:
+  - an active `STUDENT` member of the assignment course
+  - or `SUPER_ADMIN` for ops/testing
+- current staff users do not use the student submit route in `M3A`
 
 Still deferred:
 
-- student own-data enforcement
+- published-result and gradebook read-side for students
 - exams/rubrics/jobs/reviews course ownership and route-level course scoping
 
 ## 7. Session Boundary in apps/web
@@ -160,7 +182,7 @@ Current implemented boundary:
 - current login is provisioned-only:
   - existing linked/provisioned users may sign in
   - bootstrap super-admin emails may create the first `SUPER_ADMIN`
-  - provisioned students may sign in but still do not get staff access
+  - provisioned students may sign in and now get the first student submission surfaces
 - demo login is enabled only when `NODE_ENV === 'development'`
 
 ## 8. Milestone Sequence
@@ -197,18 +219,45 @@ Delivered:
   - `LECTURER`
   - `STUDENT`
 
-### M3. Student Access and Own-Data Enforcement
+### M3A. Assignment and Student Submission Foundation
+
+Status: closed
+
+Delivered:
+
+- `Week`, `Assignment`, and `AssignmentMaterial` runtime persistence in `@hg/postgres-store`
+- narrow staff assignment authoring:
+  - `GET` / `POST /api/courses/[courseId]/assignments`
+  - `PATCH /api/courses/[courseId]/assignments/[assignmentId]`
+- first student pages:
+  - `/assignments`
+  - `/assignments/[assignmentId]`
+- first student own-data APIs:
+  - `GET /api/me/assignments`
+  - `GET /api/me/assignments/[assignmentId]`
+  - `GET /api/me/assignments/[assignmentId]/prompt-raw`
+  - `POST /api/me/assignments/[assignmentId]/submit`
+- canonical submission ownership through `Submission.studentUserId`
+- immediate DB-backed assignment grading jobs using `jobKind = ASSIGNMENT`
+- exam-backed assignment grading that reuses the existing exam pipeline and current review/job flow
+- closure smoke confirmed:
+  - fresh assignment create with backing exam indexing
+  - demo student assignment visibility and submit
+  - worker processing through question extraction and per-question evaluation
+  - review visibility in `/reviews`
+  - publish with canonical `PublishedResult.studentUserId` and `GradebookEntry.studentUserId`
+
+### M3B. Student Results and Own-Data Read Side
 
 Status: deferred
 
 Objective:
 
-- add student-safe access only when student-facing surfaces are approved
+- add published-result and gradebook read-side surfaces for authenticated students
 
 ## 9. Recommended Immediate Next Milestone
 
-Implement `M2: Course Memberships and Staff Authorization`.
-`M2` is now complete. The next milestone is `M3: Student Access and Own-Data Enforcement`, but it remains deferred until student-facing surfaces are approved.
+`M3A` is now closed. The next milestone is `M3B: Student Results and Own-Data Read Side`.
 
 ## 10. Validation Strategy
 
@@ -221,6 +270,11 @@ Current milestone validations:
 - `pnpm.cmd --filter web exec tsc -p tsconfig.json --noEmit`
 - `pnpm.cmd --filter web build`
 - `pnpm.cmd --filter worker build`
+- focused store/runtime coverage for:
+  - assignment create/list/update
+  - student assignment visibility by active `STUDENT` membership
+  - assignment submission ownership and immediate job creation
+  - resubmission superseding older own submissions
 
 Manual smoke completed for the current workspace:
 
@@ -229,18 +283,26 @@ Manual smoke completed for the current workspace:
 - authenticated non-staff access is denied with `/forbidden` for pages and `403` for staff APIs
 - authenticated staff access works for protected pages and APIs
 - `GET /api/health` returns `200` for `SUPER_ADMIN` and `403` for authenticated non-super-admin users
+- a fresh `M3A` closure smoke verified:
+  - demo course admin created an assignment with a backing exam and successful exam indexing
+  - demo student saw the assignment in `/assignments`
+  - demo student submitted a file and received a `jobId`
+  - worker processed the assignment job through the existing exam pipeline with question extraction and per-question evaluation
+  - staff saw the resulting review in `/reviews`
+  - publish succeeded and kept canonical `PublishedResult.studentUserId` and `GradebookEntry.studentUserId` linkage
 - the smoke used temporary signed session cookies and disposable DB users because local Google OAuth env vars are not configured in this workspace
 
 ## 11. Risks and Open Questions
 
 Current risks:
 
-- exams and rubrics are still not course-owned, so M2 cannot be purely course-scoped everywhere
+- exams and rubrics are still not course-owned, so the current authz model cannot be purely course-scoped everywhere yet
 - jobs can still be created without a real course, which weakens future course-based authorization on job/review flows
-- student surfaces still do not exist, so student authorization remains intentionally deferred beyond authenticated sign-in plus staff-surface blocking
+- student own-data read-side still does not exist, so students can submit assignments in `M3A` but still do not have a published-results portal
+- current publish normalization for per-question `GENERAL` assignment reviews is technically publishable but still produces weak score/summary output and should be hardened in a follow-up
 - provider-backed Google sign-in still depends on local `AUTH_SECRET` / `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` configuration and was not exercised with real external OAuth credentials in this workspace
 
-Open questions after M2:
+Open questions after M3A:
 
 - whether `/api/exams/**`, `/api/rubrics/**`, `/api/jobs/**`, and `/api/reviews/**` should remain coarse staff-only until course ownership is tightened
-- when assignment/exam ownership should be made explicitly course-bound
+- how quickly `M3B` should expose published results, gradebook rows, and student-safe own-data read semantics on top of the new assignment submission slice

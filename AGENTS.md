@@ -35,6 +35,7 @@
   - non-auth API routes require authenticated users, with staff or course-role enforcement applied server-side
   - `/api/health` requires `SUPER_ADMIN`
   - `/courses` and `/api/courses/**` now enforce real course-scoped staff authorization where the repo model supports it
+  - `/assignments` and `/api/me/assignments/**` now expose the first student-facing surface for authenticated users with active `STUDENT` membership access
 - On `feat/postgres-runtime-slice-1`, the reviews surface now has a Postgres-backed slice when `DATABASE_URL` is configured:
   - `GET /api/reviews/[jobId]`
   - `PUT` / `PATCH /api/reviews/[jobId]`
@@ -79,6 +80,14 @@
   - `apps/web` and `apps/worker` no longer import `@hg/local-job-store` or `@hg/local-course-store` for live runtime
   - `apps/worker` now uses a worker-local `WorkerJobRecord` type instead of the archived `JobRecord` contract
   - the disabled legacy `job:create` entrypoint and unused file-backed web helpers have been removed from live packages
+- The current workspace also completed `M3A`:
+  - `Week`, `Assignment`, and `AssignmentMaterial` are now first-class Postgres runtime entities
+  - `GET` / `POST /api/courses/[courseId]/assignments` and `PATCH /api/courses/[courseId]/assignments/[assignmentId]` now support narrow staff assignment authoring under course-scoped authorization
+  - `GET /api/me/assignments`, `GET /api/me/assignments/[assignmentId]`, `GET /api/me/assignments/[assignmentId]/prompt-raw`, and `POST /api/me/assignments/[assignmentId]/submit` now support the first student submission flow
+  - each assignment now owns a backing exam artifact and auto-indexes that exam-style source for grading
+  - assignment submissions are canonically tied to `Submission.studentUserId` and immediately create DB-backed assignment grading jobs bridged through `Submission.legacyJobId`
+  - assignment-triggered jobs now run through the existing exam pipeline with exam index and question decomposition, not a separate document-only assignment grader
+  - final closure smoke now covers assignment create, student submit, worker processing through the exam pipeline, review visibility, and publish with canonical student linkage
 - Exams, rubrics, exam-index state, course metadata, lecture metadata, course RAG state, jobs, worker heartbeat, and review runtime are now DB-authoritative.
 - Filesystem artifacts under `HG_DATA_DIR` remain archive-only leftovers, explicit offline compatibility/debug artifacts, rollback tooling, and asset storage only.
 - Wave 2 also includes offline rollback tooling via `pnpm --filter @hg/postgres-store rollback:export-jobs`, which exports `PENDING` / `RUNNING` DB jobs back into the legacy queue shape only for rollback drills.
@@ -86,6 +95,9 @@
 - Keep auth/session concerns separate from grading domain logic.
 - Course-scoped authorization is now implemented for `/courses` and `/api/courses/**`, while non-course-owned staff surfaces such as exams, jobs, reviews, and rubrics remain coarse staff-only until ownership is tightened in a later milestone.
 - Development-only demo sign-in now exists in `apps/web` through an Auth.js credentials provider that seeds or reuses real Postgres-backed demo users, memberships, and sessions. It is disabled outside development.
+- `M3B` remains deferred:
+  - student published-result and gradebook read-side surfaces are not implemented yet
+  - students can submit assignments in the now-closed `M3A` flow but do not yet have their own published-results portal
 - PostgreSQL + Prisma is now the live runtime source of truth for application state. The archived local-store packages remain in-repo only for offline rollback, compatibility, archive, and debug workflows.
 
 ## Validation guidance

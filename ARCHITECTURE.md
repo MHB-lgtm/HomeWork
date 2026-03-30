@@ -49,12 +49,15 @@ Current primary page routes:
 - `/reviews/[jobId]`
 - `/courses`
 - `/courses/[courseId]`
+- `/assignments`
+- `/assignments/[assignmentId]`
 
 Current API route groups:
 
 - `apps/web/src/app/api/auth/**`
 - `apps/web/src/app/api/exams/**`
 - `apps/web/src/app/api/jobs/**`
+- `apps/web/src/app/api/me/**`
 - `apps/web/src/app/api/reviews/**`
 - `apps/web/src/app/api/rubrics/**`
 - `apps/web/src/app/api/courses/**`
@@ -223,8 +226,7 @@ Current Wave 4B addition:
 Current Auth M1 addition:
 
 - `apps/web` now owns an Auth.js-backed session boundary,
-- non-auth pages are private-by-default for authenticated staff only,
-- non-auth API routes are private-by-default for authenticated staff only,
+- non-auth pages and non-auth API routes are private-by-default for authenticated users, with staff or course-role enforcement applied server-side,
 - `GET /api/health` is now restricted to `SUPER_ADMIN`,
 - canonical session identity now resolves through Postgres `User`,
 - provider linkage now uses `AuthAccount`,
@@ -249,6 +251,30 @@ Current Auth M2 addition:
   - `STUDENT` users are blocked from current staff-only course surfaces,
 - `GET` / `PUT /api/courses/[courseId]/memberships` now exist as a narrow membership-management API for `SUPER_ADMIN` and active `COURSE_ADMIN` only,
 - non-course-owned staff surfaces such as exams, rubrics, jobs, and reviews remain coarse staff-only until ownership is tightened in a later milestone.
+
+Current Auth M3A addition:
+
+- `Week`, `Assignment`, and `AssignmentMaterial` are now first-class Postgres runtime entities,
+- assignments are now exam-backed workflow containers:
+  - staff authoring uploads one assignment source PDF,
+  - each assignment links to a backing `Exam`,
+  - backing exam index generation is triggered on create and on source replacement,
+- first student pages now exist at:
+  - `/assignments`
+  - `/assignments/[assignmentId]`
+- first student own-data APIs now exist at:
+  - `GET /api/me/assignments`
+  - `GET /api/me/assignments/[assignmentId]`
+  - `GET /api/me/assignments/[assignmentId]/prompt-raw`
+  - `POST /api/me/assignments/[assignmentId]/submit`
+- student submissions are canonically tied to `Submission.studentUserId`,
+- assignment-triggered jobs still bridge through `Submission.legacyJobId`,
+- assignment-triggered jobs now run through the existing exam pipeline with exam index and question decomposition instead of a separate document-only assignment grader.
+- manual closure smoke now confirms:
+  - course admin can create a fresh assignment with a backing exam and indexed question set
+  - demo student can see that assignment and submit a solution
+  - worker processes the resulting job through the existing exam pipeline
+  - staff can review and publish the result while keeping canonical `PublishedResult.studentUserId` and `GradebookEntry.studentUserId` linkage
 
 ### 3.2 Current persistence model
 
@@ -295,7 +321,7 @@ Current committed runtime state now has a web-only auth/session and course-membe
 
 Still not implemented:
 
-- student-facing own-data authorization,
+- student published-result and gradebook own-data read-side,
 - broad membership-management UI beyond the current narrow course-detail panel,
 - course ownership for exams, rubrics, jobs, and reviews.
 
@@ -435,7 +461,7 @@ The approved persistence direction is PostgreSQL + Prisma.
 
 This is now the active persistence design direction for the repo. Older Firebase / Firestore notes are historical context only and should not be treated as the current approved path for the next milestone.
 
-Persistence cutover for live application state is now complete through Wave 4B. Auth M1 and M2 are now closed. The next auth milestone is M3 student-safe access, and it remains deferred until student-facing surfaces are approved.
+Persistence cutover for live application state is now complete through Wave 4B. Auth M1, M2, and M3A are now closed. The next auth milestone is `M3B`, which remains focused on student published-result and own-data read surfaces.
 
 Current design source of truth:
 
@@ -472,6 +498,13 @@ The first approved DB-backed adoption seam was the review API route. The current
 - `POST /api/courses/[courseId]/rag/rebuild`
 - `POST /api/courses/[courseId]/rag/query`
 - `POST /api/courses/[courseId]/rag/suggest`
+- `GET /api/courses/[courseId]/assignments`
+- `POST /api/courses/[courseId]/assignments`
+- `PATCH /api/courses/[courseId]/assignments/[assignmentId]`
+- `GET /api/me/assignments`
+- `GET /api/me/assignments/[assignmentId]`
+- `GET /api/me/assignments/[assignmentId]/prompt-raw`
+- `POST /api/me/assignments/[assignmentId]/submit`
 - `apps/worker/src/core/loadExamIndex.ts`
 - `apps/worker/src/core/listExamQuestionIds.ts`
 - `apps/worker/src/core/attachStudyPointers.ts`
@@ -487,6 +520,9 @@ Important boundary:
 - publication is lecturer-facing and review-centric only,
 - `/reviews` is the current lecturer-facing read surface for publication summary only,
 - `apps/worker` now claims jobs from Postgres and writes review state to Postgres,
+- assignment submissions now create DB-backed grading jobs immediately and bridge back to the existing review/job surfaces through `Submission.legacyJobId`,
+- assignment authoring now creates or updates a backing exam artifact and exam index behind the scenes,
+- assignment-triggered jobs reuse the existing exam pipeline rather than a separate assignment-only evaluator,
 - `apps/web/src/app/api/jobs/**`, `apps/web/src/app/api/reviews/**`, `apps/web/src/app/api/health/route.ts`, `apps/web/src/app/api/exams/[examId]/index/route.ts`, and `apps/web/src/app/api/courses/[courseId]/rag/**` are DB-only in live runtime,
 - file-only leftover `jobs/`, `reviews/`, and `worker/heartbeat.json` artifacts are archive-only,
 - file-only leftover `examIndex.json`, `manifest.json`, and `chunks.jsonl` artifacts are compatibility/debug leftovers only and are not part of live runtime.
@@ -495,20 +531,18 @@ Important boundary:
 
 The following are intentionally not implemented yet:
 
-- student-facing authorization and own-data surfaces,
 - broader membership-management runtime surfaces,
-- assignment runtime lifecycle,
 - first-class exam-batch runtime lifecycle,
 - broader published-result runtime surfaces,
 - gradebook runtime surfaces,
-- student-facing publication surfaces,
+- student published-result and gradebook read-side surfaces,
 - broader publication history/timeline UI,
 - flag persistence and filtering,
 - audit-event persistence,
 - analytics snapshots,
 - notifications,
 - export pipelines,
-- student-safe own-data access,
+- broader student-safe own-data access beyond the current assignment submission slice,
 - broader post-cutover product work.
 
 ## 11. Open architectural questions
@@ -528,10 +562,10 @@ The main open or deferred architectural decisions are:
    - the exact DB constraints and partial indexes needed for current-effective gradebook rows.
 
 5. Assignment and exam ownership rollout
-   - how quickly the product should move from job-oriented runtime flows to canonical `Submission` / `Assignment` / `ExamBatch` ownership.
+   - how quickly the product should extend the current assignment submission slice into fuller canonical `Submission` / `Assignment` / `ExamBatch` ownership across the rest of the product.
 
 6. Auth milestone sequencing
-   - how quickly the repo should move from coarse staff access to true course-scoped authorization and later student-safe access.
+   - how quickly the repo should move from the current `M3A` student submission slice to `M3B` published student own-data read surfaces.
 
 ## 12. Validation commands that matter today
 

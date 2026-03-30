@@ -17,7 +17,7 @@ The repo now has:
 - completed Wave 3 changes that make live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers.
 - completed Wave 4A changes that remove live compatibility writes and narrow `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling.
 - completed Wave 4B changes that retire live local-store package usage from `apps/web` and `apps/worker` and declare final Postgres cutover for live application state.
-- completed Auth M1 changes that add an Auth.js web-session boundary, canonical Postgres-backed session identity, and private-by-default staff access in `apps/web`.
+- completed Auth M1 changes that add an Auth.js web-session boundary, canonical Postgres-backed session identity, and private-by-default authenticated access in `apps/web`.
 - completed Auth M2 changes that add runtime course memberships, course-scoped staff authorization on `/courses` and `/api/courses/**`, and a dev-only demo sign-in flow with real Postgres-backed users and memberships.
 - implemented offline rollback tooling that can export `PENDING` / `RUNNING` DB jobs back into the legacy queue shape for rollback drills only.
 
@@ -53,7 +53,7 @@ The repo now has:
 - `plans/auth-foundation.md`
   - record of the now-implemented auth/session foundation boundary
 - `plans/auth-membership-authorization-execution-plan.md`
-  - active auth/membership/authorization execution record with M1 and M2 closed
+  - active auth/membership/authorization execution record with M1, M2, and M3A closed
 - `plans/postgres-prisma-identity-design.md`
   - approved persistence and identity design direction beyond the original review slice
 - `plans/postgres-wave-2-execution-plan.md`
@@ -81,6 +81,7 @@ Completed:
 - `Wave 4B`
 - `Auth M1`
 - `Auth M2`
+- `Auth M3A`
 
 Current branch context:
 
@@ -93,6 +94,7 @@ Current branch context:
 - the current workspace also contains completed Wave 4B retirement of live local-store package usage and final Postgres cutover cleanup
 - the current workspace now also contains completed Auth M1 identity/session foundation work in `apps/web`
 - the current workspace now also contains completed Auth M2 course-membership and course-scoped authorization work in `apps/web`
+- the current workspace now also contains closed Auth M3A assignment and student-submission foundation work
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -170,22 +172,28 @@ Current branch context:
   - `apps/web` now has Auth.js-backed session handling
   - canonical session identity resolves through Postgres `User`
   - provider linkage uses `AuthAccount`
-  - non-auth pages and non-auth APIs are private-by-default for authenticated staff users
+- non-auth pages and non-auth APIs are private-by-default for authenticated users, with staff or course-role enforcement applied server-side
   - `/api/health` is now `SUPER_ADMIN`-only
 - review publish and new review metadata mutations now attribute session-backed `user:<id>` actors
 - `/courses` and `/api/courses/**` now use real course membership data for authorization where the repo model supports it
 - `POST /api/courses` is now `SUPER_ADMIN` only
 - `GET` / `PUT /api/courses/[courseId]/memberships` now exist as a narrow membership-management API for `SUPER_ADMIN` and active `COURSE_ADMIN`
 - development-only Auth.js demo sign-in now exists with one real demo user each for `SUPER_ADMIN`, `COURSE_ADMIN`, `LECTURER`, and `STUDENT`
+- the current workspace now also contains closed `M3A` work:
+  - `Week`, `Assignment`, and `AssignmentMaterial` runtime persistence
+  - `GET` / `POST /api/courses/[courseId]/assignments`
+  - `PATCH /api/courses/[courseId]/assignments/[assignmentId]`
+  - first student pages at `/assignments` and `/assignments/[assignmentId]`
+  - student own-data APIs at `/api/me/assignments/**`
+  - immediate DB-backed assignment grading jobs bridged through `Submission.legacyJobId`
+  - exam-backed assignment grading that reuses the existing exam pipeline with question decomposition
 
 ## 5. What is intentionally not implemented yet
 
-- student-facing own-data authorization and portal surfaces
 - broader membership-management UI beyond the narrow course-detail panel
-- assignment runtime lifecycle
 - exam-batch runtime lifecycle
 - broader `PublishedResult` / `GradebookEntry` runtime surfaces
-- student-facing publication surfaces
+- student published-result and gradebook read-side surfaces
 - broader publication history UI
 - notifications
 - analytics snapshots
@@ -214,8 +222,11 @@ Current DB-first exceptions in the workspace:
 - imported reviews can publish the current review result into `PublishedResult` and `GradebookEntry`
 - exams, rubrics, and exam-index metadata are DB-first in `apps/web`
 - courses and lectures are DB-first in `apps/web`
+- assignments, assignment materials, and assignment visibility are DB-first in `apps/web`
 - jobs, reviews, and worker health are DB-first in completed Wave 2
 - exam-index reads, RAG routes, and study pointers are DB-first in completed Wave 3
+- assignments now create or update a backing exam artifact and exam index in live runtime
+- assignment submissions now create DB-backed grading jobs immediately, inherit the assignment backing exam, and bridge into the existing job/review flow through `Submission.legacyJobId`
 - legacy files under `exams/**`, `rubrics/**`, `examIndex.json`, and `courses/**` remain explicit offline compatibility/debug artifacts or archive leftovers only
 - leftover `jobs/`, `reviews/`, and `worker/heartbeat.json` files are archive-only and are no longer part of live runtime
 - rollback export back into legacy queue files exists only as explicit offline tooling, not as a runtime dual-write path
@@ -249,7 +260,9 @@ Important clarification:
 
 - these are implemented as domain contracts and tests,
 - the current runtime now adopts DB-backed review/publication flows for imported reviews and DB-authored runtime jobs,
-- broader publication, gradebook, and student-facing lifecycle surfaces are still deferred.
+- assignment submissions now feed the current job/review pipeline through DB-backed assignment jobs,
+- assignment-triggered jobs now reuse the existing exam pipeline rather than a separate document-only assignment evaluator,
+- broader publication, gradebook, and student-facing result surfaces are still deferred.
 
 ## 8. Next milestone
 
@@ -268,6 +281,12 @@ Already implemented seams in the workspace:
 - `GET /api/jobs/[id]/submission`
 - `GET /api/jobs/[id]/submission-raw`
 - `GET /api/health`
+- `GET` / `POST /api/courses/[courseId]/assignments`
+- `PATCH /api/courses/[courseId]/assignments/[assignmentId]`
+- `GET /api/me/assignments`
+- `GET /api/me/assignments/[assignmentId]`
+- `GET /api/me/assignments/[assignmentId]/prompt-raw`
+- `POST /api/me/assignments/[assignmentId]/submit`
 
 Bridge rule that still matters:
 
@@ -275,11 +294,11 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move to post-cutover product/auth work beyond M2, without reintroducing persistence fallback
+- move next to `M3B` student published-result / own-data read surfaces, without reintroducing persistence fallback
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - treat the archived local-store packages as offline/debug code, not as a live runtime path
 - keep auth/authz separate from grading-domain logic
-- keep worker out of scope unless a later auth milestone proves a tiny compatibility change is unavoidable
+- keep worker changes narrow beyond the already-closed `M3A` assignment-job compatibility work unless a later milestone proves a broader change is unavoidable
 
 ## 9. Main constraints and do-not-change-yet boundaries
 
