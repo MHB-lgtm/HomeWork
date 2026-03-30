@@ -10,11 +10,14 @@ import { LecturesTable } from '../../../../components/courses/LecturesTable';
 import { CourseMembershipPanel } from '../../../../components/courses/CourseMembershipPanel';
 import { RagIndexPanel } from '../../../../components/courses/RagIndexPanel';
 import { RagTestPanel } from '../../../../components/courses/RagTestPanel';
-import { ImmersiveShell } from '../../../../components/layout/ImmersiveShell';
+import { PageHeader } from '../../../../components/ui/page-header';
 import { Alert, AlertDescription, AlertTitle } from '../../../../components/ui/alert';
 import { Badge } from '../../../../components/ui/badge';
-import { Button } from '../../../../components/ui/button';
+import { StatCard } from '../../../../components/ui/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../../components/ui/card';
+import { Skeleton } from '../../../../components/ui/skeleton';
+import { PageTransition, FadeIn, StaggerGroup, StaggerItem } from '../../../../components/ui/motion';
+import { BookOpen, FileText, Database, Calendar } from 'lucide-react';
 
 type CourseDetailsPageProps = {
   params: { courseId: string };
@@ -31,16 +34,11 @@ const getErrorMessage = (error: unknown) => {
   if (error instanceof CoursesClientError) {
     return error.code ? `${error.message} (${error.code})` : error.message;
   }
-  if (error instanceof Error) {
-    return error.message;
-  }
+  if (error instanceof Error) return error.message;
   return 'Failed to load course details.';
 };
 
-export default function CourseDetailsPage({
-  params,
-  canManageMemberships = false,
-}: CourseDetailsPageProps) {
+export default function CourseDetailsPage({ params, canManageMemberships = false }: CourseDetailsPageProps) {
   const [course, setCourse] = useState<Course | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,154 +55,93 @@ export default function CourseDetailsPage({
   useEffect(() => {
     const loadCourse = async () => {
       setIsLoading(true);
-      try {
-        const data = await getCourse(courseId);
-        setCourse(data);
-        setError(null);
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setIsLoading(false);
-      }
+      try { const data = await getCourse(courseId); setCourse(data); setError(null); }
+      catch (err) { setError(getErrorMessage(err)); }
+      finally { setIsLoading(false); }
     };
-
     const loadLectures = async () => {
       setIsLoadingLectures(true);
-      try {
-        const data = await listLectures(courseId);
-        setLectures(data);
-        setLecturesError(null);
-      } catch (err) {
-        setLecturesError(getErrorMessage(err));
-      } finally {
-        setIsLoadingLectures(false);
-      }
+      try { const data = await listLectures(courseId); setLectures(data); setLecturesError(null); }
+      catch (err) { setLecturesError(getErrorMessage(err)); }
+      finally { setIsLoadingLectures(false); }
     };
-
     const loadManifest = async () => {
       setLoadingManifest(true);
-      try {
-        const data = await getRagManifest(courseId);
-        setManifest(data);
-        setIndexError(null);
-      } catch (err) {
-        setIndexError(getErrorMessage(err));
-      } finally {
-        setLoadingManifest(false);
-      }
+      try { const data = await getRagManifest(courseId); setManifest(data); setIndexError(null); }
+      catch (err) { setIndexError(getErrorMessage(err)); }
+      finally { setLoadingManifest(false); }
     };
-
-    loadCourse();
-    loadLectures();
-    loadManifest();
+    loadCourse(); loadLectures(); loadManifest();
   }, [courseId]);
 
   const refreshLectures = async () => {
     setIsLoadingLectures(true);
-    try {
-      const data = await listLectures(courseId);
-      setLectures(data);
-      setLecturesError(null);
-    } catch (err) {
-      setLecturesError(getErrorMessage(err));
-    } finally {
-      setIsLoadingLectures(false);
-    }
+    try { const data = await listLectures(courseId); setLectures(data); setLecturesError(null); }
+    catch (err) { setLecturesError(getErrorMessage(err)); }
+    finally { setIsLoadingLectures(false); }
   };
 
   const refreshManifest = async () => {
     setLoadingManifest(true);
-    try {
-      const data = await getRagManifest(courseId);
-      setManifest(data);
-      setIndexError(null);
-    } catch (err) {
-      setIndexError(getErrorMessage(err));
-    } finally {
-      setLoadingManifest(false);
-    }
+    try { const data = await getRagManifest(courseId); setManifest(data); setIndexError(null); }
+    catch (err) { setIndexError(getErrorMessage(err)); }
+    finally { setLoadingManifest(false); }
   };
 
   const handleRebuild = async () => {
     setRebuilding(true);
-    try {
-      await rebuildRagIndex(courseId);
-      await refreshManifest();
-    } catch (err) {
-      setIndexError(getErrorMessage(err));
-    } finally {
-      setRebuilding(false);
-    }
+    try { await rebuildRagIndex(courseId); await refreshManifest(); }
+    catch (err) { setIndexError(getErrorMessage(err)); }
+    finally { setRebuilding(false); }
   };
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-4xl space-y-8">
-        <section className="flex w-full flex-col items-center gap-4 text-center">
-          <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Course Overview</h1>
-          <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-            Manage lectures and prepare the course content for indexing.
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
-            <Link href="/courses">
-              <Button variant="outline" size="sm">
-                Back to Courses
-              </Button>
-            </Link>
-            <Link href="/">
-              <Button size="sm">Home</Button>
-            </Link>
-          </div>
-        </section>
+    <PageTransition>
+      <div className="space-y-6">
+        <PageHeader
+          title={isLoading ? 'Loading...' : course?.title || 'Course'}
+          description="Manage lectures, assignments, and content indexing."
+          backHref="/courses"
+          actions={course && <Badge variant="brand">{course.courseId}</Badge>}
+        />
 
         {error && (
-          <Alert variant="destructive">
+          <Alert variant="error">
             <AlertTitle>Could not load course</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
-        <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-lg font-semibold text-slate-900">Course Info</CardTitle>
-              {course && <Badge variant="secondary">{course.courseId}</Badge>}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {isLoading ? (
-              <div className="text-sm text-slate-600">Loading course details...</div>
-            ) : course ? (
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm text-slate-500">Title</p>
-                  <p className="text-lg font-semibold text-slate-900">{course.title}</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
-                  <div>
-                    <p className="text-slate-500">Created</p>
-                    <p>{formatDate(course.createdAt)}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Updated</p>
-                    <p>{formatDate(course.updatedAt)}</p>
-                  </div>
-                </div>
-              </div>
-            ) : error ? null : (
-              <div className="text-sm text-slate-600">Course not found.</div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Course Stats */}
+        {course && (
+          <StaggerGroup className="grid gap-4 sm:grid-cols-3">
+            <StaggerItem>
+              <StatCard label="Lectures" value={isLoadingLectures ? '...' : lectures.length} icon={<FileText />} />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard label="Created" value={formatDate(course.createdAt)} icon={<Calendar />} />
+            </StaggerItem>
+            <StaggerItem>
+              <StatCard label="RAG Index" value={loadingManifest ? '...' : manifest ? 'Ready' : 'Not built'} icon={<Database />} />
+            </StaggerItem>
+          </StaggerGroup>
+        )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6">
-          <LectureUploadForm courseId={courseId} onUploaded={refreshLectures} />
-          <LecturesTable lectures={lectures} loading={isLoadingLectures} error={lecturesError} />
-        </div>
+        {/* Lecture Upload + Table */}
+        <FadeIn delay={0.1}>
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6">
+            <LectureUploadForm courseId={courseId} onUploaded={refreshLectures} />
+            <LecturesTable lectures={lectures} loading={isLoadingLectures} error={lecturesError} />
+          </div>
+        </FadeIn>
 
-        <CourseAssignmentsPanel courseId={courseId} />
+        {/* Assignments */}
+        <FadeIn delay={0.15}>
+          <CourseAssignmentsPanel courseId={courseId} />
+        </FadeIn>
 
-        <div id="rag-index-panel">
+        {/* RAG Index */}
+        <FadeIn delay={0.2}>
           <RagIndexPanel
             courseId={courseId}
             manifest={manifest}
@@ -214,23 +151,20 @@ export default function CourseDetailsPage({
             onRebuild={handleRebuild}
             onRefresh={refreshManifest}
           />
-        </div>
+        </FadeIn>
 
-        {canManageMemberships ? <CourseMembershipPanel courseId={courseId} /> : null}
+        {/* Membership */}
+        {canManageMemberships && (
+          <FadeIn delay={0.25}>
+            <CourseMembershipPanel courseId={courseId} />
+          </FadeIn>
+        )}
 
-        <RagTestPanel courseId={courseId} hasIndexHint={!manifest && !loadingManifest && !indexError} />
-
-        <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-slate-900">Coming next</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-slate-600">
-            <p>- Explore query and suggest tools</p>
-            <p>- Review study pointer coverage</p>
-            <p>- Share links with students</p>
-          </CardContent>
-        </Card>
+        {/* RAG Test */}
+        <FadeIn delay={0.3}>
+          <RagTestPanel courseId={courseId} hasIndexHint={!manifest && !loadingManifest && !indexError} />
+        </FadeIn>
       </div>
-    </ImmersiveShell>
+    </PageTransition>
   );
 }
