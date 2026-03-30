@@ -15,16 +15,22 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   }
 
   const label = session.user.name?.trim() || session.user.email?.trim() || 'Signed in';
+  const roleLabel =
+    session.user.globalRole === 'SUPER_ADMIN'
+      ? 'Super admin'
+      : session.user.hasStaffAccess
+        ? 'Staff'
+        : session.user.hasStudentAccess
+          ? 'Student'
+          : 'Member';
 
   return (
     <div className="flex items-center gap-2">
       {!compact ? (
-        <div className="hidden min-w-0 text-right md:block">
-          <div className="truncate text-sm font-medium text-slate-900">{label}</div>
-          <div className="text-xs text-slate-500">
-            {session.user.globalRole === 'SUPER_ADMIN' ? 'Super admin' : 'Staff'}
+          <div className="hidden min-w-0 text-right md:block">
+            <div className="truncate text-sm font-medium text-slate-900">{label}</div>
+            <div className="text-xs text-slate-500">{roleLabel}</div>
           </div>
-        </div>
       ) : null}
       <Button
         type="button"

@@ -23,6 +23,15 @@ enum CourseStatus {
   ARCHIVED
 }
 
+enum AssignmentState {
+  DRAFT
+  OPEN
+  CLOSED
+  PROCESSING
+  REVIEWED
+  PUBLISHED
+}
+
 enum CourseMembershipRole {
   COURSE_ADMIN
   LECTURER
@@ -58,6 +67,11 @@ enum CourseMaterialKind {
   DERIVED_ARTIFACT
   EXPORT_BUNDLE
   LECTURE_ASSET
+}
+
+enum AssignmentMaterialRole {
+  PROMPT
+  REFERENCE_SOLUTION
 }
 
 enum SubmissionModuleType {
@@ -114,6 +128,11 @@ enum GradingJobStatus {
   RUNNING
   DONE
   FAILED
+}
+
+enum GradingJobKind {
+  EXAM
+  ASSIGNMENT
 }
 
 enum GradingMode {
@@ -181,6 +200,8 @@ model Course {
   createdAt         DateTime           @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime           @updatedAt @db.Timestamptz(6)
   memberships       CourseMembership[]
+  weeks             Week[]
+  assignments       Assignment[]
   lectures          Lecture[]
   materials         CourseMaterial[]
   submissions       Submission[]
@@ -210,6 +231,58 @@ model CourseMembership {
   @@index([userId, status])
 }
 
+model Week {
+  id         String      @id @default(uuid()) @db.Uuid
+  domainId   String      @unique
+  courseId   String      @db.Uuid
+  order      Int
+  title      String
+  createdAt  DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime    @updatedAt @db.Timestamptz(6)
+  course     Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  assignments Assignment[]
+
+  @@unique([courseId, order])
+  @@index([courseId, createdAt(sort: Desc)])
+}
+
+model Assignment {
+  id           String               @id @default(uuid()) @db.Uuid
+  domainId     String               @unique
+  courseId     String               @db.Uuid
+  weekId       String
+  examRowId    String?              @unique @db.Uuid
+  title        String
+  openAt       DateTime             @db.Timestamptz(6)
+  deadlineAt   DateTime             @db.Timestamptz(6)
+  state        AssignmentState
+  createdAt    DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime             @updatedAt @db.Timestamptz(6)
+  course       Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  week         Week                 @relation(fields: [weekId], references: [domainId], onDelete: Restrict)
+  exam         Exam?                @relation("AssignmentBackingExam", fields: [examRowId], references: [id], onDelete: Restrict)
+  materials    AssignmentMaterial[]
+  submissions  Submission[]
+  gradingJobs  GradingJob[]
+
+  @@index([courseId, state, openAt(sort: Asc)])
+  @@index([courseId, deadlineAt(sort: Asc)])
+}
+
+model AssignmentMaterial {
+  id           String                 @id @default(uuid()) @db.Uuid
+  assignmentId String                 @db.Uuid
+  materialId   String                 @db.Uuid
+  role         AssignmentMaterialRole
+  createdAt    DateTime               @default(now()) @db.Timestamptz(6)
+  assignment   Assignment             @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  material     CourseMaterial         @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([assignmentId, role])
+  @@unique([assignmentId, materialId])
+  @@index([materialId])
+}
+
 model StoredAsset {
   id            String                  @id @default(uuid()) @db.Uuid
   assetKey      String                  @unique
@@ -227,6 +300,8 @@ model StoredAsset {
   examSnapshotJobs GradingJob[] @relation("GradingJobExamSnapshotAsset")
   submissionJobs  GradingJob[] @relation("GradingJobSubmissionAsset")
   questionJobs    GradingJob[] @relation("GradingJobQuestionAsset")
+  assignmentPromptJobs GradingJob[] @relation("GradingJobPromptAsset")
+  assignmentReferenceSolutionJobs GradingJob[] @relation("GradingJobReferenceSolutionAsset")
 }
 
 model Exam {
@@ -239,6 +314,7 @@ model Exam {
   asset      StoredAsset @relation(fields: [assetId], references: [id], onDelete: Restrict)
   rubrics    Rubric[]
   examIndex  ExamIndex?
+  assignmentBacking Assignment? @relation("AssignmentBackingExam")
   gradingJobs GradingJob[]
 }
 
@@ -329,6 +405,7 @@ model CourseMaterial {
   updatedAt  DateTime           @updatedAt @db.Timestamptz(6)
   course     Course             @relation(fields: [courseId], references: [id], onDelete: Cascade)
   asset      StoredAsset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  assignments AssignmentMaterial[]
   submissions Submission[]
 
   @@index([courseId, kind])
@@ -352,6 +429,7 @@ model Submission {
   updatedAt                DateTime             @updatedAt @db.Timestamptz(6)
   course                   Course               @relation(fields: [courseId], references: [id], onDelete: Cascade)
   studentUser              User?                @relation("SubmissionStudentUser", fields: [studentUserId], references: [id], onDelete: SetNull)
+  assignment               Assignment?          @relation(fields: [assignmentId], references: [domainId], onDelete: SetNull)
   material                 CourseMaterial       @relation(fields: [materialId], references: [id], onDelete: Restrict)
   review                   Review?
   publishedResults         PublishedResult[]
@@ -451,10 +529,14 @@ model GradebookEntry {
 model GradingJob {
   id                  String           @id @default(uuid()) @db.Uuid
   domainId            String           @unique
+  jobKind             GradingJobKind   @default(EXAM)
   courseId            String?          @db.Uuid
   submissionId        String           @unique @db.Uuid
-  examRowId           String           @db.Uuid
-  examSnapshotAssetId String           @db.Uuid
+  examRowId           String?          @db.Uuid
+  examSnapshotAssetId String?          @db.Uuid
+  assignmentId        String?
+  promptAssetId       String?          @db.Uuid
+  referenceSolutionAssetId String?     @db.Uuid
   submissionAssetId   String           @db.Uuid
   questionAssetId     String?          @db.Uuid
   status              GradingJobStatus
@@ -475,8 +557,11 @@ model GradingJob {
   updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
   course              Course?          @relation(fields: [courseId], references: [id], onDelete: SetNull)
   submission          Submission       @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  exam                Exam             @relation(fields: [examRowId], references: [id], onDelete: Restrict)
-  examSnapshotAsset   StoredAsset      @relation("GradingJobExamSnapshotAsset", fields: [examSnapshotAssetId], references: [id], onDelete: Restrict)
+  exam                Exam?            @relation(fields: [examRowId], references: [id], onDelete: Restrict)
+  assignment          Assignment?      @relation(fields: [assignmentId], references: [domainId], onDelete: SetNull)
+  examSnapshotAsset   StoredAsset?     @relation("GradingJobExamSnapshotAsset", fields: [examSnapshotAssetId], references: [id], onDelete: Restrict)
+  promptAsset         StoredAsset?     @relation("GradingJobPromptAsset", fields: [promptAssetId], references: [id], onDelete: Restrict)
+  referenceSolutionAsset StoredAsset?  @relation("GradingJobReferenceSolutionAsset", fields: [referenceSolutionAssetId], references: [id], onDelete: Restrict)
   submissionAsset     StoredAsset      @relation("GradingJobSubmissionAsset", fields: [submissionAssetId], references: [id], onDelete: Restrict)
   questionAsset       StoredAsset?     @relation("GradingJobQuestionAsset", fields: [questionAssetId], references: [id], onDelete: SetNull)
 
@@ -484,6 +569,7 @@ model GradingJob {
   @@index([status, leaseExpiresAt])
   @@index([workerId])
   @@index([courseId, createdAt(sort: Desc)])
+  @@index([assignmentId, createdAt(sort: Desc)])
 }
 
 model WorkerHeartbeat {

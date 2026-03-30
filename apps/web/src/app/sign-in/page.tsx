@@ -24,7 +24,7 @@ function getCallbackUrl(value: string | string[] | undefined): string {
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const session = await getServerSession(authOptions);
   if (session?.user?.id) {
-    redirect('/');
+    redirect(session.user.hasStudentAccess && !session.user.hasStaffAccess ? '/assignments' : '/');
   }
 
   const params = (await searchParams) ?? {};
@@ -39,9 +39,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         <section className="w-full rounded-[2rem] border border-slate-200/80 bg-white/95 p-8 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-sm">
           <div className="space-y-3 text-center">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Homework Grader</p>
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-slate-900">Staff sign in</h1>
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-slate-900">Sign in</h1>
             <p className="text-sm text-slate-600">
-              The grading workspace is private by default. Sign in with a provisioned staff account.
+              The workspace is private by default. Sign in with a provisioned account to continue.
             </p>
           </div>
 

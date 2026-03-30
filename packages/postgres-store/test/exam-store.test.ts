@@ -76,25 +76,28 @@ const createFakeExamPersistence = () => {
         ? { ...row, asset: selectFields(asset ?? {}, args.include.asset.select) }
         : row;
     },
-    async findUnique(args: { where: Record<string, unknown>; include?: Record<string, any> }) {
-      const row =
-        typeof args.where.domainId === 'string'
-          ? examRows.get(String(args.where.domainId)) ?? null
-          : typeof args.where.id === 'string'
-            ? examRowsById.get(String(args.where.id)) ?? null
-            : null;
-
-      if (!row) {
-        return null;
-      }
-
-      const asset = assetRows.get(String(row.assetId));
-      return args.include?.asset
-        ? { ...row, asset: selectFields(asset ?? {}, args.include.asset.select) }
-        : row;
+    async findFirst(args: {
+      where?: Record<string, any>;
+      include?: Record<string, any>;
+    }) {
+      const rows = await exam.findMany({
+        where: args.where,
+        include: args.include,
+      });
+      return rows[0] ?? null;
     },
-    async findMany(args?: { include?: Record<string, any>; orderBy?: Record<string, 'asc' | 'desc'> }) {
-      const rows = [...examRows.values()];
+    async findMany(args?: {
+      where?: Record<string, any>;
+      include?: Record<string, any>;
+      orderBy?: Record<string, 'asc' | 'desc'>;
+    }) {
+      let rows = [...examRows.values()];
+      if (args?.where?.assignmentBacking?.is === null) {
+        rows = rows.filter((row) => row.assignmentBacking == null);
+      }
+      if (typeof args?.where?.domainId === 'string') {
+        rows = rows.filter((row) => row.domainId === args.where.domainId);
+      }
       if (args?.orderBy?.createdAt === 'desc') {
         rows.sort(
           (left, right) => (right.createdAt as Date).getTime() - (left.createdAt as Date).getTime()
@@ -150,6 +153,47 @@ describe('PrismaExamStore', () => {
     expect(listed).toHaveLength(1);
     expect(listed[0].examFilePath).toBe('exams/exam-1/assets/midterm.pdf');
     expect(loaded?.examFilePath).toBe('exams/exam-1/assets/midterm.pdf');
+  });
+
+  it('hides assignment-backed exams from the public exam list and detail lookups', async () => {
+    const { prisma, stores } = createFakeExamPersistence();
+    const store = new PrismaExamStore(prisma as any);
+
+    stores.assetRows.set('asset-row-visible', {
+      id: 'asset-row-visible',
+      logicalBucket: 'exams',
+      path: 'C:\\data\\exams\\exam-visible\\assets\\visible.pdf',
+    });
+    stores.examRows.set('exam-visible', {
+      id: 'exam-row-visible',
+      domainId: 'exam-visible',
+      title: 'Visible Exam',
+      assetId: 'asset-row-visible',
+      createdAt: new Date('2026-03-29T10:00:00.000Z'),
+      updatedAt: new Date('2026-03-29T10:05:00.000Z'),
+      assignmentBacking: null,
+    });
+
+    stores.assetRows.set('asset-row-assignment', {
+      id: 'asset-row-assignment',
+      logicalBucket: 'exams',
+      path: 'C:\\data\\exams\\exam-assignment\\assets\\assignment.pdf',
+    });
+    stores.examRows.set('exam-assignment', {
+      id: 'exam-row-assignment',
+      domainId: 'exam-assignment',
+      title: 'Assignment Backing Exam',
+      assetId: 'asset-row-assignment',
+      createdAt: new Date('2026-03-30T10:00:00.000Z'),
+      updatedAt: new Date('2026-03-30T10:05:00.000Z'),
+      assignmentBacking: { id: 'assignment-row-1' },
+    });
+
+    const listed = await store.listExams();
+    const hidden = await store.getExam('exam-assignment');
+
+    expect(listed.map((exam) => exam.examId)).toEqual(['exam-visible']);
+    expect(hidden).toBeNull();
   });
 
   it('creates an exam and returns the legacy-compatible relative examFilePath shape', async () => {

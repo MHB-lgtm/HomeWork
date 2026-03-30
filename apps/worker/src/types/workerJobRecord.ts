@@ -8,9 +8,13 @@ export type WorkerJobRecord = {
   createdAt: string;
   updatedAt: string;
   inputs: {
+    jobKind?: 'EXAM' | 'ASSIGNMENT';
     courseId?: string;
     examId?: string;
+    assignmentId?: string;
     examFilePath: string;
+    promptFilePath?: string;
+    referenceSolutionFilePath?: string;
     questionId: string;
     submissionFilePath: string;
     submissionMimeType?: string;

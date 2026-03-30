@@ -7,6 +7,8 @@ import { toIsoString } from '../mappers/domain';
 const createCourseId = (): string =>
   `course-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
+const getDefaultWeekDomainId = (courseId: string): string => `week:${courseId}:default`;
+
 const mapCourseRow = (row: {
   domainId: string;
   title: string;
@@ -22,7 +24,7 @@ const mapCourseRow = (row: {
   });
 
 export class PrismaCourseStore {
-  constructor(private readonly prisma: Pick<PrismaClient, 'course'>) {}
+  constructor(private readonly prisma: Pick<PrismaClient, '$transaction' | 'course' | 'week'>) {}
 
   async listCourses(): Promise<Course[]> {
     const rows = await this.prisma.course.findMany({
@@ -61,19 +63,40 @@ export class PrismaCourseStore {
       throw new Error('title is required');
     }
 
-    const row = await this.prisma.course.create({
-      data: {
-        domainId: createCourseId(),
-        legacyCourseKey: null,
-        title,
-        status: 'ACTIVE',
-      },
-      select: {
-        domainId: true,
-        title: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const courseId = createCourseId();
+    const row = await this.prisma.$transaction(async (tx: any) => {
+      const course = await tx.course.create({
+        data: {
+          domainId: courseId,
+          legacyCourseKey: null,
+          title,
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+          domainId: true,
+          title: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      await tx.week.upsert({
+        where: {
+          domainId: getDefaultWeekDomainId(course.domainId),
+        },
+        update: {},
+        create: {
+          domainId: getDefaultWeekDomainId(course.domainId),
+          courseId: course.id,
+          order: 1,
+          title: 'Default Week',
+          createdAt: course.createdAt,
+          updatedAt: course.updatedAt,
+        },
+      });
+
+      return course;
     });
 
     return mapCourseRow(row);

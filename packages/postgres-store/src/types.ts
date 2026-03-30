@@ -1,4 +1,5 @@
 export type LegacyJobStatus = 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
+export type RuntimeJobKind = 'EXAM' | 'ASSIGNMENT';
 export type RuntimeGradingMode = 'RUBRIC' | 'GENERAL';
 export type RuntimeGradingScope = 'QUESTION' | 'DOCUMENT';
 export type UserGlobalRoleValue = 'USER' | 'SUPER_ADMIN';
@@ -39,10 +40,14 @@ export interface RuntimeJobStatusRecord {
 }
 
 export interface RuntimeJobClaimRecord extends RuntimeJobStatusRecord {
+  jobKind: RuntimeJobKind;
   courseId?: string | null;
-  examId: string;
+  examId?: string | null;
+  assignmentId?: string | null;
   questionId?: string | null;
-  examFilePath: string;
+  examFilePath?: string | null;
+  promptFilePath?: string | null;
+  referenceSolutionFilePath?: string | null;
   submissionFilePath: string;
   questionFilePath?: string | null;
   notes?: string | null;
@@ -83,6 +88,7 @@ export interface UserAuthAccessRecord {
   globalRole: UserGlobalRoleValue;
   status: UserStatusValue;
   hasStaffAccess: boolean;
+  hasStudentAccess: boolean;
 }
 
 export interface CourseAccessRecord {

@@ -42,6 +42,13 @@ export {
   CourseMembershipCourseNotFoundError as PostgresCourseMembershipCourseNotFoundError,
 } from './queries/course-membership-store';
 export { PrismaCourseStore } from './queries/course-store';
+export {
+  PrismaAssignmentStore,
+  AssignmentCourseNotFoundError,
+  AssignmentCourseNotFoundError as PostgresAssignmentCourseNotFoundError,
+  AssignmentNotFoundError,
+  AssignmentNotFoundError as PostgresAssignmentNotFoundError,
+} from './queries/assignment-store';
 export { PrismaExamStore } from './queries/exam-store';
 export { PrismaRubricStore } from './queries/rubric-store';
 export { PrismaExamIndexStore } from './queries/exam-index-store';

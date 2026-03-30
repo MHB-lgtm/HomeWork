@@ -1,7 +1,13 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { PrismaClient } from '@prisma/client';
-import { ReviewState, StoredAssetStorageKind, SubmissionState } from '@prisma/client';
+import {
+  AssignmentState,
+  GradingJobKind,
+  ReviewState,
+  StoredAssetStorageKind,
+  SubmissionState,
+} from '@prisma/client';
 import type {
   ReviewRecord,
   RubricSpec,
@@ -46,6 +52,8 @@ type JobStorePrisma = Pick<
   | 'publishedResult'
   | 'storedAsset'
   | 'exam'
+  | 'examIndex'
+  | 'assignment'
   | 'gradingJob'
 >;
 
@@ -67,6 +75,13 @@ type CreateRuntimeJobArgs = {
   examSourcePath: string;
   submission: BinaryUpload;
   question?: BinaryUpload | null;
+};
+
+type CreateAssignmentSubmissionJobArgs = {
+  dataDir: string;
+  assignmentId: string;
+  studentUserId: string;
+  submission: BinaryUpload;
 };
 
 const DEFAULT_VERSION_INFO = {
@@ -177,6 +192,7 @@ const mapJobStatus = (row: {
 
 const mapClaimedJob = (row: {
   domainId: string;
+  jobKind: GradingJobKind;
   status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED';
   questionId: string | null;
   submissionMimeType: string | null;
@@ -191,8 +207,11 @@ const mapClaimedJob = (row: {
   createdAt: Date;
   updatedAt: Date;
   course: { domainId: string } | null;
-  exam: { domainId: string };
-  examSnapshotAsset: { path: string };
+  exam: { domainId: string } | null;
+  assignment: { domainId: string } | null;
+  examSnapshotAsset: { path: string } | null;
+  promptAsset: { path: string } | null;
+  referenceSolutionAsset: { path: string } | null;
   submissionAsset: { path: string; mimeType: string | null };
   questionAsset: { path: string } | null;
 }): RuntimeJobClaimRecord => ({
@@ -205,10 +224,14 @@ const mapClaimedJob = (row: {
     gradingMode: row.gradingMode,
     gradingScope: row.gradingScope,
   }),
+  jobKind: row.jobKind,
   courseId: row.course?.domainId ?? null,
-  examId: row.exam.domainId,
+  examId: row.exam?.domainId ?? null,
+  assignmentId: row.assignment?.domainId ?? null,
   questionId: row.questionId ?? null,
-  examFilePath: row.examSnapshotAsset.path,
+  examFilePath: row.examSnapshotAsset?.path ?? null,
+  promptFilePath: row.promptAsset?.path ?? null,
+  referenceSolutionFilePath: row.referenceSolutionAsset?.path ?? null,
   submissionFilePath: row.submissionAsset.path,
   questionFilePath: row.questionAsset?.path ?? null,
   notes: row.notes ?? null,
@@ -272,6 +295,67 @@ const selectRuntimeReviewInclude = {
 
 export class PrismaJobStore {
   constructor(private readonly prisma: JobStorePrisma) {}
+
+  private async getAssignmentRuntimeContext(assignmentId: string) {
+    const row = await this.prisma.assignment.findUnique({
+      where: { domainId: assignmentId },
+      select: {
+        id: true,
+        domainId: true,
+        title: true,
+        openAt: true,
+        deadlineAt: true,
+        state: true,
+        course: {
+          select: {
+            id: true,
+            domainId: true,
+          },
+        },
+        exam: {
+          select: {
+            id: true,
+            domainId: true,
+            asset: {
+              select: {
+                id: true,
+                path: true,
+                mimeType: true,
+                originalName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!row) {
+      throw new Error(`Assignment not found: ${assignmentId}`);
+    }
+
+    if (!row.exam?.asset) {
+      throw new Error(`Assignment backing exam not found: ${assignmentId}`);
+    }
+
+    const examIndex = await this.prisma.examIndex.findFirst({
+      where: {
+        examRowId: row.exam.id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!examIndex) {
+      throw new Error(`Assignment exam index is not ready: ${assignmentId}`);
+    }
+
+    return {
+      assignment: row,
+      course: row.course,
+      exam: row.exam,
+    };
+  }
 
   private async ensureCourse(courseId?: string | null) {
     if (!courseId?.trim()) {
@@ -439,10 +523,14 @@ export class PrismaJobStore {
         await tx.gradingJob.create({
           data: {
             domainId: jobId,
+            jobKind: GradingJobKind.EXAM,
             courseId: args.courseId?.trim() ? course.id : null,
             submissionId: submission.id,
             examRowId: exam.id,
             examSnapshotAssetId: examSnapshotAsset.id,
+            assignmentId: null,
+            promptAssetId: null,
+            referenceSolutionAssetId: null,
             submissionAssetId: submissionAsset.id,
             questionAssetId: questionAsset?.id ?? null,
             status: 'PENDING',
@@ -464,6 +552,171 @@ export class PrismaJobStore {
         fs.rm(examSnapshot.absolutePath, { force: true }),
         fs.rm(submissionUpload.absolutePath, { force: true }),
         questionUpload ? fs.rm(questionUpload.absolutePath, { force: true }) : Promise.resolve(),
+      ]);
+      throw error;
+    }
+  }
+
+  async createAssignmentSubmissionJob(
+    args: CreateAssignmentSubmissionJobArgs
+  ): Promise<{ jobId: string }> {
+    const jobId = createJobId();
+    const now = new Date();
+    const resolvedDataDir = path.resolve(args.dataDir);
+    const context = await this.getAssignmentRuntimeContext(args.assignmentId);
+    const assignmentState = context.assignment.state;
+
+    if (assignmentState === AssignmentState.DRAFT) {
+      throw new Error('Assignment is not open for submissions');
+    }
+
+    if (assignmentState !== AssignmentState.OPEN) {
+      throw new Error('Assignment is closed for submissions');
+    }
+
+    if (now < context.assignment.openAt) {
+      throw new Error('Assignment is not open for submissions');
+    }
+
+    if (now >= context.assignment.deadlineAt) {
+      throw new Error('Assignment deadline has passed');
+    }
+
+    const examSnapshot = createUploadPath(
+      resolvedDataDir,
+      jobId,
+      path.basename(context.exam.asset.path),
+      'exam'
+    );
+    const submissionUpload = createUploadPath(
+      resolvedDataDir,
+      jobId,
+      args.submission.originalName,
+      'assignment-submission'
+    );
+
+    await copyFileAtomic(context.exam.asset.path, examSnapshot.absolutePath);
+    await writeBufferAtomic(submissionUpload.absolutePath, args.submission.buffer);
+
+    try {
+      await this.prisma.$transaction(async (tx: any) => {
+        const examSnapshotAsset = await tx.storedAsset.create({
+          data: {
+            assetKey: `job-exam-snapshot:${jobId}`,
+            storageKind: StoredAssetStorageKind.LOCAL_FILE,
+            logicalBucket: 'job_exam_snapshots',
+            path: examSnapshot.absolutePath,
+            originalName: examSnapshot.originalName,
+          },
+          select: { id: true },
+        });
+
+        const submissionAsset = await tx.storedAsset.create({
+          data: {
+            assetKey: getSubmissionAssetKey(jobId),
+            storageKind: StoredAssetStorageKind.LOCAL_FILE,
+            logicalBucket: 'job_submissions',
+            path: submissionUpload.absolutePath,
+            mimeType: args.submission.mimeType || undefined,
+            sizeBytes: args.submission.buffer.byteLength,
+            originalName: submissionUpload.originalName,
+          },
+          select: { id: true },
+        });
+
+        const submissionMaterial = await tx.courseMaterial.create({
+          data: {
+            domainId: getSubmissionMaterialDomainId(jobId),
+            courseId: context.course.id,
+            assetId: submissionAsset.id,
+            kind: 'SUBMISSION_PDF',
+            title: submissionUpload.originalName,
+            createdAt: now,
+            updatedAt: now,
+          },
+          select: { id: true },
+        });
+
+        const submission = await tx.submission.create({
+          data: {
+            domainId: getSubmissionDomainId(jobId),
+            courseId: context.course.id,
+            studentUserId: args.studentUserId,
+            moduleType: 'ASSIGNMENT',
+            assignmentId: context.assignment.domainId,
+            examBatchId: null,
+            materialId: submissionMaterial.id,
+            submittedAt: now,
+            state: SubmissionState.QUEUED,
+            legacyJobId: jobId,
+            createdAt: now,
+            updatedAt: now,
+          },
+          select: { id: true },
+        });
+
+        await tx.submission.updateMany({
+          where: {
+            assignmentId: context.assignment.domainId,
+            studentUserId: args.studentUserId,
+            id: { not: submission.id },
+            state: {
+              in: [
+                SubmissionState.UPLOADED,
+                SubmissionState.QUEUED,
+                SubmissionState.PROCESSED,
+                SubmissionState.LECTURER_EDITED,
+                SubmissionState.PUBLISHED,
+              ],
+            },
+          },
+          data: {
+            state: SubmissionState.SUPERSEDED,
+            updatedAt: now,
+          },
+        });
+
+        await tx.review.create({
+          data: {
+            domainId: getReviewDomainId(jobId),
+            courseId: context.course.id,
+            submissionId: submission.id,
+            state: ReviewState.DRAFT,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+
+        await tx.gradingJob.create({
+          data: {
+            domainId: jobId,
+            jobKind: GradingJobKind.ASSIGNMENT,
+            courseId: context.course.id,
+            submissionId: submission.id,
+            examRowId: context.exam.id,
+            examSnapshotAssetId: examSnapshotAsset.id,
+            assignmentId: context.assignment.domainId,
+            promptAssetId: null,
+            referenceSolutionAssetId: null,
+            submissionAssetId: submissionAsset.id,
+            questionAssetId: null,
+            status: 'PENDING',
+            questionId: null,
+            submissionMimeType: args.submission.mimeType || undefined,
+            gradingMode: 'GENERAL',
+            gradingScope: 'DOCUMENT',
+            notes: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        });
+      });
+
+      return { jobId };
+    } catch (error) {
+      await Promise.all([
+        fs.rm(examSnapshot.absolutePath, { force: true }),
+        fs.rm(submissionUpload.absolutePath, { force: true }),
       ]);
       throw error;
     }
@@ -569,6 +822,7 @@ export class PrismaJobStore {
         where: { id: candidate.id },
         select: {
           domainId: true,
+          jobKind: true,
           status: true,
           questionId: true,
           submissionMimeType: true,
@@ -592,7 +846,22 @@ export class PrismaJobStore {
               domainId: true,
             },
           },
+          assignment: {
+            select: {
+              domainId: true,
+            },
+          },
           examSnapshotAsset: {
+            select: {
+              path: true,
+            },
+          },
+          promptAsset: {
+            select: {
+              path: true,
+            },
+          },
+          referenceSolutionAsset: {
             select: {
               path: true,
             },
@@ -740,12 +1009,18 @@ export class PrismaJobStore {
         domainId: true,
         status: true,
         questionId: true,
+        jobKind: true,
         gradingMode: true,
         gradingScope: true,
         resultJson: true,
         createdAt: true,
         updatedAt: true,
         exam: {
+          select: {
+            domainId: true,
+          },
+        },
+        assignment: {
           select: {
             domainId: true,
           },
@@ -808,7 +1083,7 @@ export class PrismaJobStore {
         jobId: row.domainId,
         displayName: reviewRecord.displayName ?? null,
         status: row.status,
-        examId: row.exam.domainId,
+        examId: row.exam?.domainId ?? row.assignment?.domainId ?? undefined,
         questionId: row.questionId ?? null,
         gradingMode: row.gradingMode,
         gradingScope: row.gradingScope,

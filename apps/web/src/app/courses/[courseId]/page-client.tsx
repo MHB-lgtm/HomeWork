@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Course, Lecture, RagManifest } from '@hg/shared-schemas';
 import { CoursesClientError, getCourse, listLectures, getRagManifest, rebuildRagIndex } from '../../../lib/coursesClient';
 import { LectureUploadForm } from '../../../components/courses/LectureUploadForm';
+import { CourseAssignmentsPanel } from '../../../components/courses/CourseAssignmentsPanel';
 import { LecturesTable } from '../../../components/courses/LecturesTable';
 import { CourseMembershipPanel } from '../../../components/courses/CourseMembershipPanel';
 import { RagIndexPanel } from '../../../components/courses/RagIndexPanel';
@@ -200,6 +201,8 @@ export default function CourseDetailsPage({
           <LectureUploadForm courseId={courseId} onUploaded={refreshLectures} />
           <LecturesTable lectures={lectures} loading={isLoadingLectures} error={lecturesError} />
         </div>
+
+        <CourseAssignmentsPanel courseId={courseId} />
 
         <div id="rag-index-panel">
           <RagIndexPanel

@@ -6,6 +6,7 @@ declare module 'next-auth' {
       id: string;
       globalRole: 'USER' | 'SUPER_ADMIN';
       hasStaffAccess: boolean;
+      hasStudentAccess: boolean;
     };
   }
 
@@ -13,6 +14,7 @@ declare module 'next-auth' {
     id: string;
     globalRole: 'USER' | 'SUPER_ADMIN';
     hasStaffAccess: boolean;
+    hasStudentAccess: boolean;
   }
 }
 
@@ -20,5 +22,6 @@ declare module 'next-auth/jwt' {
   interface JWT {
     globalRole?: 'USER' | 'SUPER_ADMIN';
     hasStaffAccess?: boolean;
+    hasStudentAccess?: boolean;
   }
 }

@@ -50,6 +50,7 @@ const providers = [
                 resolvedUser.userId,
               globalRole: resolvedUser.globalRole,
               hasStaffAccess: resolvedUser.hasStaffAccess,
+              hasStudentAccess: resolvedUser.hasStudentAccess,
             };
           },
         }),
@@ -101,6 +102,7 @@ export const authOptions: NextAuthOptions = {
       user.name = resolvedUser.displayName ?? user.name ?? resolvedUser.normalizedEmail ?? resolvedUser.userId;
       user.globalRole = resolvedUser.globalRole;
       user.hasStaffAccess = resolvedUser.hasStaffAccess;
+      user.hasStudentAccess = resolvedUser.hasStudentAccess;
 
       return true;
     },
@@ -109,6 +111,7 @@ export const authOptions: NextAuthOptions = {
         token.sub = user.id;
         token.globalRole = user.globalRole;
         token.hasStaffAccess = user.hasStaffAccess;
+        token.hasStudentAccess = user.hasStudentAccess;
       }
 
       return token;
@@ -121,6 +124,7 @@ export const authOptions: NextAuthOptions = {
       session.user.id = token.sub;
       session.user.globalRole = token.globalRole === 'SUPER_ADMIN' ? 'SUPER_ADMIN' : 'USER';
       session.user.hasStaffAccess = token.hasStaffAccess === true;
+      session.user.hasStudentAccess = token.hasStudentAccess === true;
 
       return session;
     },

@@ -56,8 +56,10 @@ const createFakeCoursePersistence = () => {
   const lectureRows = new Map<string, Record<string, unknown>>();
   const lectureRowsById = new Map<string, Record<string, unknown>>();
   const courseMaterialRows = new Map<string, Record<string, unknown>>();
+  const weekRows = new Map<string, Record<string, unknown>>();
 
   let courseSequence = 0;
+  let weekSequence = 0;
   let assetSequence = 0;
   let lectureSequence = 0;
   let materialSequence = 0;
@@ -108,6 +110,32 @@ const createFakeCoursePersistence = () => {
       };
       storedAssetRows.set(String(row.id), row);
       return selectFields(row, args.select);
+    },
+  };
+
+  const week = {
+    async upsert(args: {
+      where: Record<string, unknown>;
+      update: Record<string, unknown>;
+      create: Record<string, unknown>;
+    }) {
+      const key = String(args.where.domainId);
+      const existing = weekRows.get(key);
+      if (existing) {
+        const updated = {
+          ...existing,
+          ...args.update,
+        };
+        weekRows.set(key, updated);
+        return updated;
+      }
+
+      const row = {
+        id: `week-row-${++weekSequence}`,
+        ...args.create,
+      };
+      weekRows.set(key, row);
+      return row;
     },
   };
 
@@ -235,8 +263,9 @@ const createFakeCoursePersistence = () => {
       storedAsset,
       lecture,
       courseMaterial,
+      week,
       async $transaction(fn: (tx: any) => Promise<unknown>) {
-        return fn({ course, storedAsset, lecture, courseMaterial });
+        return fn({ course, storedAsset, lecture, courseMaterial, week });
       },
     },
     stores: {

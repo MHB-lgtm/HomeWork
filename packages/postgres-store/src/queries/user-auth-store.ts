@@ -18,10 +18,13 @@ type UserAccessRow = {
   displayName: string | null;
   globalRole: UserGlobalRole;
   status: UserStatus;
-  memberships: Array<{ id: string }>;
+  memberships: Array<{ id: string; role: CourseMembershipRole }>;
 };
 
-const STAFF_ROLES = [CourseMembershipRole.COURSE_ADMIN, CourseMembershipRole.LECTURER];
+const STAFF_ROLES: CourseMembershipRole[] = [
+  CourseMembershipRole.COURSE_ADMIN,
+  CourseMembershipRole.LECTURER,
+];
 const EMAIL_ALIAS_KIND = 'email';
 const DEMO_PROVIDER = 'demo-login';
 const DEMO_COURSE_DOMAIN_ID = 'course-demo-authz';
@@ -52,10 +55,11 @@ const userAccessSelect = {
   memberships: {
     where: {
       status: CourseMembershipStatus.ACTIVE,
-      role: { in: STAFF_ROLES },
     },
-    select: { id: true },
-    take: 1,
+    select: {
+      id: true,
+      role: true,
+    },
   },
 } as const;
 
@@ -65,7 +69,12 @@ const mapUserAccessRow = (row: UserAccessRow): UserAuthAccessRecord => ({
   displayName: row.displayName ?? null,
   globalRole: row.globalRole,
   status: row.status,
-  hasStaffAccess: row.globalRole === UserGlobalRole.SUPER_ADMIN || row.memberships.length > 0,
+  hasStaffAccess:
+    row.globalRole === UserGlobalRole.SUPER_ADMIN ||
+    row.memberships.some((membership) => STAFF_ROLES.includes(membership.role)),
+  hasStudentAccess:
+    row.globalRole === UserGlobalRole.SUPER_ADMIN ||
+    row.memberships.some((membership) => membership.role === CourseMembershipRole.STUDENT),
 });
 
 const DEMO_IDENTITIES = {

@@ -17,12 +17,71 @@ const getNumber = (record: Record<string, unknown>, key: string): number | undef
 const hasOwn = (record: Record<string, unknown>, key: string): boolean =>
   Object.prototype.hasOwnProperty.call(record, key);
 
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value));
+
+const GENERAL_ISSUE_PENALTIES = {
+  critical: 1,
+  major: 0.5,
+  minor: 0.2,
+} as const;
+
 const STORED_REVIEW_PAYLOAD_FORMAT = 'legacy-review-record-v2';
 
 type StoredReviewRecordPayload = {
   format: typeof STORED_REVIEW_PAYLOAD_FORMAT;
   reviewRecord: ReviewRecord;
   legacyJobContext: LegacyReviewContextRecord;
+};
+
+type QuestionLikeRecord = {
+  findings: unknown[];
+};
+
+const isSeverityValue = (
+  value: unknown
+): value is keyof typeof GENERAL_ISSUE_PENALTIES =>
+  value === 'critical' || value === 'major' || value === 'minor';
+
+const isQuestionLikeRecord = (value: unknown): value is QuestionLikeRecord =>
+  isObject(value) && Array.isArray(value.findings);
+
+const derivePerQuestionGeneralScore = (
+  questions: unknown[]
+): { score: number; maxScore: number } | null => {
+  const parsedQuestions = questions.filter(isQuestionLikeRecord);
+  if (parsedQuestions.length === 0) {
+    return null;
+  }
+
+  const questionMaxScore = 100 / parsedQuestions.length;
+  const totalScore = parsedQuestions.reduce((sum, question) => {
+    const rawPenalty = question.findings.reduce<number>((penalty, finding) => {
+        if (!isObject(finding)) {
+          return penalty;
+        }
+
+        const kind = getString(finding, 'kind');
+        if (kind === 'strength') {
+          return penalty;
+        }
+
+        const severity = getString(finding, 'severity');
+        const nextPenalty = isSeverityValue(severity)
+          ? GENERAL_ISSUE_PENALTIES[severity]
+          : GENERAL_ISSUE_PENALTIES.major;
+
+        return penalty + nextPenalty;
+      }, 0);
+    const penaltyRatio = clamp(rawPenalty, 0, 1);
+
+    return sum + questionMaxScore * (1 - penaltyRatio);
+  }, 0);
+
+  return {
+    score: clamp(Math.round(totalScore), 0, 100),
+    maxScore: 100,
+  };
 };
 
 const parseStoredReviewContext = (value: unknown): LegacyReviewContextRecord | null => {
@@ -134,10 +193,16 @@ export const normalizeLegacyJobResultEnvelope = (
     : null;
 
   if (generalEvaluation) {
+    const questions = Array.isArray(generalEvaluation.questions)
+      ? generalEvaluation.questions
+      : null;
+    const derivedScore = questions ? derivePerQuestionGeneralScore(questions) : null;
+
     return {
+      ...(derivedScore ?? {}),
       summary:
         getString(generalEvaluation, 'overallSummary') ?? 'Imported general evaluation',
-      questionBreakdown: generalEvaluation.questions ?? generalEvaluation.findings ?? null,
+      questionBreakdown: questions ?? generalEvaluation.findings ?? null,
     };
   }
 

@@ -448,10 +448,31 @@ const createFakePrisma = () => {
     },
   };
 
-  const seedImportedReview = (options?: { publishable?: boolean; alreadyPublished?: boolean }) => {
+  const seedImportedReview = (options?: {
+    publishable?: boolean;
+    alreadyPublished?: boolean;
+    generalPerQuestionPublishable?: boolean;
+  }) => {
     const publishable = options?.publishable !== false;
     const reviewRecord = makeReviewRecord();
-    const resultJson = publishable
+    const resultJson = options?.generalPerQuestionPublishable
+      ? {
+          mode: 'GENERAL',
+          generalEvaluation: {
+            overallSummary: 'Mostly correct with one notable issue.',
+            questions: [
+              {
+                questionId: 'q1',
+                findings: [{ findingId: 'q1-f1', kind: 'issue', severity: 'major' }],
+              },
+              {
+                questionId: 'q2',
+                findings: [{ findingId: 'q2-f1', kind: 'strength' }],
+              },
+            ],
+          },
+        }
+      : publishable
       ? {
           mode: 'RUBRIC',
           rubricEvaluation: {
@@ -480,7 +501,7 @@ const createFakePrisma = () => {
       assignmentId: null,
       examBatchId: null,
       submittedAt: new Date('2026-03-26T10:00:00.000Z'),
-      state: publishable ? 'LECTURER_EDITED' : 'PROCESSED',
+      state: publishable || options?.generalPerQuestionPublishable ? 'LECTURER_EDITED' : 'PROCESSED',
       currentPublishedResultId: null,
     };
     submissions.set(submissionRow.domainId, submissionRow);
@@ -505,9 +526,17 @@ const createFakePrisma = () => {
       actorUserId: null,
       actorKind: 'LEGACY',
       actorRefRaw: 'review-route',
-      score: publishable ? 91 : null,
-      maxScore: publishable ? 100 : null,
-      summary: publishable ? 'Strong work' : 'Readable work, but no numeric score was produced.',
+      score: publishable
+        ? 91
+        : options?.generalPerQuestionPublishable
+          ? 75
+          : null,
+      maxScore: publishable || options?.generalPerQuestionPublishable ? 100 : null,
+      summary: publishable
+        ? 'Strong work'
+        : options?.generalPerQuestionPublishable
+          ? 'Mostly correct with one notable issue.'
+          : 'Readable work, but no numeric score was produced.',
       questionBreakdown: [],
       rawPayload: createStoredReviewRecordPayload(reviewRecord, {
         status: 'DONE',
@@ -646,6 +675,23 @@ describe('PrismaLegacyReviewRecordStore publication flow', () => {
       maxScore: 100,
       summary: 'Recovered from file-backed context',
     });
+  });
+
+  it('publishes per-question general mode reviews when the normalized envelope is publishable', async () => {
+    const { prisma, seedImportedReview, stores } = createFakePrisma();
+    seedImportedReview({ publishable: false, generalPerQuestionPublishable: true });
+
+    const store = new PrismaLegacyReviewRecordStore(prisma);
+    const publication = await store.publishReviewByLegacyJobId('job-1');
+
+    expect(publication).toMatchObject({
+      isPublished: true,
+      score: 75,
+      maxScore: 100,
+      summary: 'Mostly correct with one notable issue.',
+    });
+    expect(stores.submissions.get('legacy-submission:job-1').currentPublishedResultId).toBeTruthy();
+    expect(stores.gradebookEntries.size).toBe(1);
   });
 
   it('republish supersedes the previous effective published result and keeps one current pointer', async () => {

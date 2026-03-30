@@ -4,6 +4,7 @@ import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
+import type { Assignment } from '@hg/shared-schemas';
 import type {
   CourseAccessRecord,
   CourseMembershipRoleValue,
@@ -19,6 +20,11 @@ type AccessOptions = {
 type CourseAuthorizationRecord = {
   access: UserAuthAccessRecord;
   courseAccess: CourseAccessRecord | null;
+};
+
+type StudentAssignmentAuthorizationRecord = {
+  access: UserAuthAccessRecord;
+  assignment: Assignment;
 };
 
 class AuthenticationRequiredError extends Error {
@@ -174,6 +180,21 @@ export const requireCourseRole = async (
   return result;
 };
 
+export const requireActiveCourseMembership = async (
+  courseId: string
+): Promise<CourseAuthorizationRecord> => {
+  const result = await requireCourseMembership(courseId);
+  if (result.access.globalRole === 'SUPER_ADMIN') {
+    return result;
+  }
+
+  if (!result.courseAccess || result.courseAccess.status !== 'ACTIVE') {
+    throw new ForbiddenError();
+  }
+
+  return result;
+};
+
 export const requireActiveCourseRole = async (
   courseId: string,
   allowedRoles: readonly CourseMembershipRoleValue[]
@@ -190,9 +211,73 @@ export const requireActiveCourseRole = async (
   return result;
 };
 
+export const requireActiveStudentCourseRole = async (
+  courseId: string
+): Promise<CourseAuthorizationRecord> =>
+  requireActiveCourseRole(courseId, ['STUDENT']);
+
+export const requireStudentAssignmentAccess = async (
+  assignmentId: string
+): Promise<StudentAssignmentAuthorizationRecord> => {
+  const access = await requireAuthenticatedUser();
+  const persistence = getServerPersistence();
+  if (!persistence) {
+    throw new Error('DATABASE_URL is not set in environment');
+  }
+
+  if (access.globalRole === 'SUPER_ADMIN') {
+    const assignment = await persistence.assignments.getAssignment(assignmentId);
+    if (!assignment) {
+      throw new ForbiddenError();
+    }
+
+    return { access, assignment };
+  }
+
+  if (access.hasStaffAccess || !access.hasStudentAccess) {
+    throw new ForbiddenError();
+  }
+
+  const assignment = await persistence.assignments.getAssignmentForStudent(
+    access.userId,
+    assignmentId
+  );
+  if (!assignment) {
+    throw new ForbiddenError();
+  }
+
+  return { access, assignment };
+};
+
 export const requireStaffPageAccess = async (): Promise<UserAuthAccessRecord> => {
   try {
     return await requireStaffUser();
+  } catch (error) {
+    if (error instanceof AuthenticationRequiredError) {
+      redirect('/sign-in');
+    }
+
+    const access = await getCurrentSessionUser();
+    if (access?.hasStudentAccess) {
+      redirect('/assignments');
+    }
+
+    redirect('/forbidden');
+  }
+};
+
+export const requireStudentPageAccess = async (): Promise<UserAuthAccessRecord> => {
+  try {
+    const access = await requireAuthenticatedUser();
+    if (access.hasStaffAccess) {
+      redirect('/');
+    }
+
+    if (!access.hasStudentAccess) {
+      redirect('/forbidden');
+    }
+
+    return access;
   } catch (error) {
     if (error instanceof AuthenticationRequiredError) {
       redirect('/sign-in');

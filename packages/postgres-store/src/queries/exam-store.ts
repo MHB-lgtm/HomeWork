@@ -55,6 +55,11 @@ export class PrismaExamStore {
 
   async listExams(): Promise<LegacyExamRecord[]> {
     const rows = await this.prisma.exam.findMany({
+      where: {
+        assignmentBacking: {
+          is: null,
+        },
+      },
       include: {
         asset: {
           select: {
@@ -72,8 +77,13 @@ export class PrismaExamStore {
   }
 
   async getExam(examId: string): Promise<LegacyExamRecord | null> {
-    const row = await this.prisma.exam.findUnique({
-      where: { domainId: examId },
+    const row = await this.prisma.exam.findFirst({
+      where: {
+        domainId: examId,
+        assignmentBacking: {
+          is: null,
+        },
+      },
       include: {
         asset: {
           select: {

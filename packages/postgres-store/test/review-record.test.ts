@@ -36,7 +36,7 @@ describe('legacy review record mappers', () => {
     });
   });
 
-  it('keeps general mode non-publishable but still extracts summary', () => {
+  it('keeps legacy general mode non-publishable but still extracts summary', () => {
     const envelope = normalizeLegacyJobResultEnvelope({
       mode: 'GENERAL',
       generalEvaluation: {
@@ -48,6 +48,41 @@ describe('legacy review record mappers', () => {
     expect(envelope).toEqual({
       summary: 'Needs work',
       questionBreakdown: [{ findingId: 'F1' }],
+    });
+  });
+
+  it('derives publishable fields for per-question general mode payloads', () => {
+    const envelope = normalizeLegacyJobResultEnvelope({
+      mode: 'GENERAL',
+      generalEvaluation: {
+        overallSummary: 'Mixed performance across the assignment.',
+        questions: [
+          {
+            questionId: 'q1',
+            findings: [{ findingId: 'q1-f1', kind: 'issue', severity: 'major' }],
+          },
+          {
+            questionId: 'q2',
+            findings: [{ findingId: 'q2-f1', kind: 'strength' }],
+          },
+        ],
+      },
+    });
+
+    expect(envelope).toEqual({
+      score: 75,
+      maxScore: 100,
+      summary: 'Mixed performance across the assignment.',
+      questionBreakdown: [
+        {
+          questionId: 'q1',
+          findings: [{ findingId: 'q1-f1', kind: 'issue', severity: 'major' }],
+        },
+        {
+          questionId: 'q2',
+          findings: [{ findingId: 'q2-f1', kind: 'strength' }],
+        },
+      ],
     });
   });
 

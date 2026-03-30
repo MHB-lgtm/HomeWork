@@ -31,9 +31,13 @@ const toWorkerJobRecord = (job: RuntimeJobClaimRecord): WorkerJobRecord => ({
   createdAt: job.createdAt,
   updatedAt: job.updatedAt,
   inputs: {
+    jobKind: job.jobKind,
     courseId: job.courseId ?? undefined,
-    examId: job.examId,
-    examFilePath: job.examFilePath,
+    examId: job.examId ?? undefined,
+    assignmentId: job.assignmentId ?? undefined,
+    examFilePath: job.examFilePath ?? '',
+    promptFilePath: job.promptFilePath ?? undefined,
+    referenceSolutionFilePath: job.referenceSolutionFilePath ?? undefined,
     questionId: job.questionId ?? '',
     submissionFilePath: job.submissionFilePath,
     submissionMimeType: job.submissionMimeType ?? undefined,
@@ -101,8 +105,9 @@ export async function processNextPendingJob(
 
   const job = toWorkerJobRecord(claimedJob);
   const jobId = job.id;
+  const jobKind = job.inputs.jobKind || 'EXAM';
   const gradingMode = job.inputs.gradingMode || 'RUBRIC';
-  console.log(`[worker] Processing job ${jobId} (mode: ${gradingMode})`);
+  console.log(`[worker] Processing job ${jobId} (kind: ${jobKind}, mode: ${gradingMode})`);
 
   const renewTimer = setInterval(() => {
     void persistence.jobs

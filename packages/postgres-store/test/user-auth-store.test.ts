@@ -50,8 +50,7 @@ const createFakeAuthPrisma = () => {
     const memberships = [...membershipRows.values()].filter(
       (membership) =>
         membership.userId === row.id &&
-        membership.status === 'ACTIVE' &&
-        ['COURSE_ADMIN', 'LECTURER'].includes(String(membership.role))
+        membership.status === 'ACTIVE'
     );
 
     return selectFields(
@@ -360,6 +359,7 @@ describe('PrismaUserAuthStore', () => {
       globalRole: 'USER',
       status: 'ACTIVE',
       hasStaffAccess: true,
+      hasStudentAccess: false,
     });
   });
 
@@ -387,6 +387,7 @@ describe('PrismaUserAuthStore', () => {
       globalRole: 'USER',
       status: 'ACTIVE',
       hasStaffAccess: true,
+      hasStudentAccess: false,
     });
     expect(fake.getAuthAccount('google', 'google-sub-1')).toMatchObject({
       userId: user.id,
@@ -417,6 +418,7 @@ describe('PrismaUserAuthStore', () => {
       globalRole: 'SUPER_ADMIN',
       status: 'ACTIVE',
       hasStaffAccess: true,
+      hasStudentAccess: true,
     });
     expect(fake.getAuthAccount('google', 'bootstrap-sub')).toBeTruthy();
   });
@@ -456,6 +458,30 @@ describe('PrismaUserAuthStore', () => {
       globalRole: 'USER',
       status: 'ACTIVE',
       hasStaffAccess: false,
+      hasStudentAccess: false,
+    });
+  });
+
+  it('marks provisioned active students with hasStudentAccess while keeping staff access false', async () => {
+    const fake = createFakeAuthPrisma();
+    const user = fake.seedUser({
+      normalizedEmail: 'student@example.edu',
+      displayName: 'Student',
+    });
+    fake.seedCourse({ domainId: 'course-student', title: 'Student Course' });
+    fake.seedStaffMembership(user.id, 'STUDENT');
+
+    const store = new PrismaUserAuthStore(fake.prisma);
+    const access = await store.getUserAccessById(user.id);
+
+    expect(access).toEqual({
+      userId: user.id,
+      normalizedEmail: 'student@example.edu',
+      displayName: 'Student',
+      globalRole: 'USER',
+      status: 'ACTIVE',
+      hasStaffAccess: false,
+      hasStudentAccess: true,
     });
   });
 
@@ -473,6 +499,7 @@ describe('PrismaUserAuthStore', () => {
       globalRole: 'USER',
       status: 'ACTIVE',
       hasStaffAccess: true,
+      hasStudentAccess: false,
     });
     expect(secondCourseAdmin?.userId).toBe(courseAdmin?.userId);
     expect(student).toMatchObject({
@@ -480,6 +507,7 @@ describe('PrismaUserAuthStore', () => {
       globalRole: 'USER',
       status: 'ACTIVE',
       hasStaffAccess: false,
+      hasStudentAccess: true,
     });
     expect(fake.getAuthAccount('demo-login', 'demo-course-admin')).toBeTruthy();
     expect(fake.getAuthAccount('demo-login', 'demo-student')).toBeTruthy();
