@@ -21,7 +21,11 @@ const getErrorMessage = (error: unknown) => {
   return 'Failed to load courses.';
 };
 
-export default function CoursesPage() {
+type CoursesPageProps = {
+  canCreateCourses?: boolean;
+};
+
+export default function CoursesPage({ canCreateCourses = false }: CoursesPageProps) {
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +68,14 @@ export default function CoursesPage() {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6">
-          <CreateCourseCard onCreated={loadCourses} />
+        <div
+          className={
+            canCreateCourses
+              ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6'
+              : 'space-y-4'
+          }
+        >
+          {canCreateCourses ? <CreateCourseCard onCreated={loadCourses} /> : null}
 
           <div className="space-y-4">
             {error && (
@@ -74,6 +84,12 @@ export default function CoursesPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+            {!canCreateCourses ? (
+              <Alert>
+                <AlertTitle>Course creation is restricted</AlertTitle>
+                <AlertDescription>Only super admins can create new courses.</AlertDescription>
+              </Alert>
+            ) : null}
             <CoursesTable courses={courses} isLoading={isLoading} onRefresh={loadCourses} />
           </div>
         </div>

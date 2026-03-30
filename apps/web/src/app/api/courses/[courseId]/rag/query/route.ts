@@ -7,7 +7,7 @@ import {
   PostgresCourseRagIndexNotBuiltError,
 } from '@hg/postgres-store';
 import { getServerPersistence } from '../../../../../../lib/server/persistence';
-import { requireStaffApiAccess } from '@/lib/server/session';
+import { requireActiveCourseRoleApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +26,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { courseId: string } }
 ) {
-  const access = await requireStaffApiAccess();
+  const access = await requireActiveCourseRoleApiAccess(params.courseId, [
+    'COURSE_ADMIN',
+    'LECTURER',
+  ]);
   if (access instanceof NextResponse) return access;
 
   const persistence = ensurePersistence();

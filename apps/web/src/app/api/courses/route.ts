@@ -24,7 +24,10 @@ export async function GET() {
   if (persistence instanceof NextResponse) return persistence;
 
   try {
-    const courses = await persistence.courses.listCourses();
+    const courses =
+      access.globalRole === 'SUPER_ADMIN'
+        ? await persistence.courses.listCourses()
+        : await persistence.courseMemberships.listStaffCoursesForUser(access.userId);
     return NextResponse.json({ ok: true, data: courses });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -36,7 +39,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const access = await requireStaffApiAccess();
+  const access = await requireStaffApiAccess({ requireSuperAdmin: true });
   if (access instanceof NextResponse) return access;
 
   const persistence = ensurePersistence();

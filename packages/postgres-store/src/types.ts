@@ -3,6 +3,8 @@ export type RuntimeGradingMode = 'RUBRIC' | 'GENERAL';
 export type RuntimeGradingScope = 'QUESTION' | 'DOCUMENT';
 export type UserGlobalRoleValue = 'USER' | 'SUPER_ADMIN';
 export type UserStatusValue = 'ACTIVE' | 'DISABLED';
+export type CourseMembershipRoleValue = 'COURSE_ADMIN' | 'LECTURER' | 'STUDENT';
+export type CourseMembershipStatusValue = 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REMOVED';
 
 export interface LegacyJobRecord {
   id: string;
@@ -81,6 +83,30 @@ export interface UserAuthAccessRecord {
   globalRole: UserGlobalRoleValue;
   status: UserStatusValue;
   hasStaffAccess: boolean;
+}
+
+export interface CourseAccessRecord {
+  courseId: string;
+  courseTitle: string;
+  userId: string;
+  role: CourseMembershipRoleValue;
+  status: CourseMembershipStatusValue;
+  isStaff: boolean;
+}
+
+export interface CourseMembershipRecord {
+  membershipId: string;
+  courseId: string;
+  courseTitle: string;
+  userId: string;
+  normalizedEmail: string | null;
+  displayName: string | null;
+  role: CourseMembershipRoleValue;
+  status: CourseMembershipStatusValue;
+  joinedAt: string | null;
+  invitedByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RollbackJobExportSummary {

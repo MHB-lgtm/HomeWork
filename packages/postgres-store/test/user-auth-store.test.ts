@@ -37,11 +37,14 @@ const createFakeAuthPrisma = () => {
   const authAccountRows = new Map<string, Record<string, unknown>>();
   const aliasRows = new Map<string, Record<string, unknown>>();
   const membershipRows = new Map<string, Record<string, unknown>>();
+  const courseRows = new Map<string, Record<string, unknown>>();
+  const courseRowsById = new Map<string, Record<string, unknown>>();
 
   let userSequence = 0;
   let authAccountSequence = 0;
   let aliasSequence = 0;
   let membershipSequence = 0;
+  let courseSequence = 0;
 
   const buildUserRow = (row: Record<string, unknown>, select?: Record<string, any>) => {
     const memberships = [...membershipRows.values()].filter(
@@ -153,6 +156,81 @@ const createFakeAuthPrisma = () => {
     },
   };
 
+  const course = {
+    async create(args: { data: Record<string, unknown>; select?: Record<string, any> }) {
+      const now = new Date();
+      const row = {
+        id: `course-row-${++courseSequence}`,
+        createdAt: now,
+        updatedAt: now,
+        ...args.data,
+      };
+      courseRows.set(String(row.domainId), row);
+      courseRowsById.set(String(row.id), row);
+      return selectFields(row, args.select);
+    },
+    async findUnique(args: { where: Record<string, unknown>; select?: Record<string, any> }) {
+      let row: Record<string, unknown> | null = null;
+      if (typeof args.where.domainId === 'string') {
+        row = courseRows.get(args.where.domainId) ?? null;
+      } else if (typeof args.where.id === 'string') {
+        row = courseRowsById.get(args.where.id) ?? null;
+      }
+
+      return row ? selectFields(row, args.select) : null;
+    },
+  };
+
+  const courseMembership = {
+    async create(args: { data: Record<string, unknown>; select?: Record<string, any> }) {
+      const now = new Date();
+      const row = {
+        id: `membership-row-${++membershipSequence}`,
+        createdAt: now,
+        updatedAt: now,
+        ...args.data,
+      };
+      membershipRows.set(String(row.id), row);
+      return selectFields(row, args.select);
+    },
+    async update(args: {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+      select?: Record<string, any>;
+    }) {
+      const existing = membershipRows.get(String(args.where.id));
+      if (!existing) {
+        throw new Error(`Membership ${String(args.where.id)} not found`);
+      }
+
+      const updated = {
+        ...existing,
+        ...args.data,
+        updatedAt: new Date(),
+      };
+      membershipRows.set(String(updated.id), updated);
+      return selectFields(updated, args.select);
+    },
+    async findUnique(args: { where: Record<string, any>; select?: Record<string, any> }) {
+      let row: Record<string, unknown> | null = null;
+      if (typeof args.where.id === 'string') {
+        row = membershipRows.get(args.where.id) ?? null;
+      } else if (
+        typeof args.where.courseId_userId?.courseId === 'string' &&
+        typeof args.where.courseId_userId?.userId === 'string'
+      ) {
+        row =
+          [...membershipRows.values()].find(
+            (candidate) =>
+              candidate.courseId === args.where.courseId_userId.courseId &&
+              candidate.userId === args.where.courseId_userId.userId
+          ) ?? null;
+      }
+
+      return row ? selectFields(row, args.select) : null;
+    },
+  };
+
   const identityAlias = {
     async upsert(args: {
       where: Record<string, any>;
@@ -182,12 +260,15 @@ const createFakeAuthPrisma = () => {
   const prisma: any = {
     user,
     authAccount,
+    course,
+    courseMembership,
     identityAlias,
-    courseMembership: {},
     async $transaction<T>(callback: (tx: any) => Promise<T>) {
       return callback({
         user,
         authAccount,
+        course,
+        courseMembership,
         identityAlias,
       });
     },
@@ -211,12 +292,38 @@ const createFakeAuthPrisma = () => {
       userRows.set(row.id, row);
       return row;
     },
-    seedStaffMembership(userId: string, role: 'COURSE_ADMIN' | 'LECTURER' | 'STUDENT') {
+    seedCourse(args?: { domainId?: string; title?: string }) {
+      const row = {
+        id: `course-row-${++courseSequence}`,
+        domainId: args?.domainId ?? `course-${courseSequence}`,
+        title: args?.title ?? `Course ${courseSequence}`,
+        status: 'ACTIVE',
+      };
+      courseRows.set(row.domainId, row);
+      courseRowsById.set(row.id, row);
+      return row;
+    },
+    seedStaffMembership(
+      userId: string,
+      role: 'COURSE_ADMIN' | 'LECTURER' | 'STUDENT',
+      status: 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REMOVED' = 'ACTIVE'
+    ) {
+      const course = [...courseRows.values()][0] ?? {
+        id: `course-row-${++courseSequence}`,
+        domainId: `course-${courseSequence}`,
+        title: `Course ${courseSequence}`,
+        status: 'ACTIVE',
+      };
+      courseRows.set(String(course.domainId), course);
+      courseRowsById.set(String(course.id), course);
+
       const row = {
         id: `membership-row-${++membershipSequence}`,
         userId,
+        courseId: course.id,
         role,
-        status: 'ACTIVE',
+        status,
+        joinedAt: status === 'ACTIVE' ? new Date() : null,
       };
       membershipRows.set(row.id, row);
       return row;
@@ -258,6 +365,7 @@ describe('PrismaUserAuthStore', () => {
 
   it('links an existing user by email and records auth account plus email alias on first sign-in', async () => {
     const fake = createFakeAuthPrisma();
+    fake.seedCourse({ domainId: 'course-1', title: 'Signals' });
     const user = fake.seedUser({
       normalizedEmail: 'teacher@example.edu',
       displayName: 'Teacher',
@@ -324,5 +432,66 @@ describe('PrismaUserAuthStore', () => {
     });
 
     expect(access).toBeNull();
+  });
+
+  it('allows sign-in for a provisioned active non-staff user while keeping hasStaffAccess false', async () => {
+    const fake = createFakeAuthPrisma();
+    const user = fake.seedUser({
+      normalizedEmail: 'student@example.edu',
+      displayName: 'Student',
+    });
+
+    const store = new PrismaUserAuthStore(fake.prisma);
+    const access = await store.resolveUserForSignIn({
+      provider: 'google',
+      providerAccountId: 'student-google-sub',
+      email: 'student@example.edu',
+      displayName: 'Student',
+    });
+
+    expect(access).toEqual({
+      userId: user.id,
+      normalizedEmail: 'student@example.edu',
+      displayName: 'Student',
+      globalRole: 'USER',
+      status: 'ACTIVE',
+      hasStaffAccess: false,
+    });
+  });
+
+  it('bootstraps and reuses development demo identities with real auth accounts and memberships', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    const fake = createFakeAuthPrisma();
+    const store = new PrismaUserAuthStore(fake.prisma);
+
+    const courseAdmin = await store.resolveDemoUserForDevelopment('demo-course-admin');
+    const secondCourseAdmin = await store.resolveDemoUserForDevelopment('demo-course-admin');
+    const student = await store.resolveDemoUserForDevelopment('demo-student');
+
+    expect(courseAdmin).toMatchObject({
+      normalizedEmail: 'demo.courseadmin@homework-grader.local',
+      globalRole: 'USER',
+      status: 'ACTIVE',
+      hasStaffAccess: true,
+    });
+    expect(secondCourseAdmin?.userId).toBe(courseAdmin?.userId);
+    expect(student).toMatchObject({
+      normalizedEmail: 'demo.student@homework-grader.local',
+      globalRole: 'USER',
+      status: 'ACTIVE',
+      hasStaffAccess: false,
+    });
+    expect(fake.getAuthAccount('demo-login', 'demo-course-admin')).toBeTruthy();
+    expect(fake.getAuthAccount('demo-login', 'demo-student')).toBeTruthy();
+  });
+
+  it('rejects development demo sign-in outside development', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const fake = createFakeAuthPrisma();
+    const store = new PrismaUserAuthStore(fake.prisma);
+
+    await expect(store.resolveDemoUserForDevelopment('demo-super-admin')).rejects.toThrow(
+      'Demo sign-in is only available in development'
+    );
   });
 });

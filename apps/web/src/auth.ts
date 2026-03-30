@@ -1,21 +1,61 @@
 import type { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
-import { PrismaUserAuthStore, getPrismaClient } from '@hg/postgres-store';
+import CredentialsProvider from 'next-auth/providers/credentials';
+import {
+  DEVELOPMENT_DEMO_SIGN_IN_OPTIONS,
+  PrismaUserAuthStore,
+  getPrismaClient,
+} from '@hg/postgres-store';
 
 const getUserAuthStore = () => new PrismaUserAuthStore(getPrismaClient());
 
 const googleClientId = process.env.AUTH_GOOGLE_ID;
 const googleClientSecret = process.env.AUTH_GOOGLE_SECRET;
+const isDevelopment = process.env.NODE_ENV === 'development';
 
-const providers =
-  googleClientId && googleClientSecret
+const providers = [
+  ...(googleClientId && googleClientSecret
     ? [
         GoogleProvider({
           clientId: googleClientId,
           clientSecret: googleClientSecret,
         }),
       ]
-    : [];
+    : []),
+  ...(isDevelopment
+    ? [
+        CredentialsProvider({
+          id: 'demo-login',
+          name: 'Demo Login',
+          credentials: {
+            demoAccountId: { label: 'Demo Account ID', type: 'text' },
+          },
+          async authorize(credentials) {
+            const demoAccountId = credentials?.demoAccountId?.trim();
+            if (!demoAccountId) {
+              return null;
+            }
+
+            const resolvedUser = await getUserAuthStore().resolveDemoUserForDevelopment(demoAccountId);
+            if (!resolvedUser || resolvedUser.status !== 'ACTIVE') {
+              return null;
+            }
+
+            return {
+              id: resolvedUser.userId,
+              email: resolvedUser.normalizedEmail ?? null,
+              name:
+                resolvedUser.displayName ??
+                resolvedUser.normalizedEmail ??
+                resolvedUser.userId,
+              globalRole: resolvedUser.globalRole,
+              hasStaffAccess: resolvedUser.hasStaffAccess,
+            };
+          },
+        }),
+      ]
+    : []),
+];
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.AUTH_SECRET,
@@ -32,24 +72,27 @@ export const authOptions: NextAuthOptions = {
         return '/forbidden';
       }
 
-      const resolvedUser = await getUserAuthStore().resolveUserForSignIn({
-        provider: account.provider,
-        providerAccountId: account.providerAccountId,
-        email:
-          typeof user.email === 'string'
-            ? user.email
-            : typeof profile?.email === 'string'
-              ? profile.email
-              : null,
-        displayName:
-          typeof user.name === 'string'
-            ? user.name
-            : typeof profile?.name === 'string'
-              ? profile.name
-              : null,
-      });
+      const resolvedUser =
+        account.provider === 'demo-login' && typeof user.id === 'string'
+          ? await getUserAuthStore().getUserAccessById(user.id)
+          : await getUserAuthStore().resolveUserForSignIn({
+              provider: account.provider,
+              providerAccountId: account.providerAccountId,
+              email:
+                typeof user.email === 'string'
+                  ? user.email
+                  : typeof profile?.email === 'string'
+                    ? profile.email
+                    : null,
+              displayName:
+                typeof user.name === 'string'
+                  ? user.name
+                  : typeof profile?.name === 'string'
+                    ? profile.name
+                    : null,
+            });
 
-      if (!resolvedUser || resolvedUser.status !== 'ACTIVE' || !resolvedUser.hasStaffAccess) {
+      if (!resolvedUser || resolvedUser.status !== 'ACTIVE') {
         return '/forbidden';
       }
 
@@ -84,5 +127,12 @@ export const authOptions: NextAuthOptions = {
   },
 };
 
-export const isAuthConfigured = (): boolean =>
+export const isGoogleAuthConfigured = (): boolean =>
   Boolean(process.env.AUTH_SECRET && googleClientId && googleClientSecret);
+
+export const isDemoAuthEnabled = (): boolean => isDevelopment;
+
+export const isAuthConfigured = (): boolean => isGoogleAuthConfigured() || isDemoAuthEnabled();
+
+export const getDevelopmentDemoSignInOptions = () =>
+  isDemoAuthEnabled() ? DEVELOPMENT_DEMO_SIGN_IN_OPTIONS : [];
