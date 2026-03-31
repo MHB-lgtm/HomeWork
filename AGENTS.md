@@ -100,6 +100,12 @@
   - `GET /api/me/results` and `GET /api/me/results/[assignmentId]` now expose student-safe own-data reads sourced from `PublishedResult` and `GradebookEntry`
   - pre-publish student reads remain status-only, while published reads expose summary, score, and published breakdown without staff review metadata
   - the current auth + membership + student-flow arc is now complete through `M3B`
+- The current workspace now also completed the post-`M3B` ops phase:
+  - derived lifecycle/status alignment now exists through staff-facing `operationalStatus` and student-facing `visibleStatus`
+  - `/` now acts as the lecturer ops dashboard, while `/jobs/new` is the new home of the legacy create-job flow
+  - `GET /api/staff/dashboard`, `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`, and `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]` now expose assignment-first operational reads
+  - `/courses/[courseId]/assignments/[assignmentId]` and `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]` now provide staff ops read surfaces, while `/reviews/[jobId]` remains the edit/publish workspace
+  - staff ops reads remain course-scoped for `SUPER_ADMIN` or active `COURSE_ADMIN` / `LECTURER` membership only
 - PostgreSQL + Prisma is now the live runtime source of truth for application state. The archived local-store packages remain in-repo only for offline rollback, compatibility, archive, and debug workflows.
 
 ## Validation guidance

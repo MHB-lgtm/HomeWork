@@ -1,7 +1,7 @@
 # Auth Foundation
 
 Status: foundation milestone closed; superseded by `plans/auth-membership-authorization-execution-plan.md`
-Last updated: 2026-03-30
+Last updated: 2026-03-31
 
 ## 1. Purpose
 
@@ -32,10 +32,20 @@ Today the repo has:
 - `M3A` closure smoke now confirmed assignment create, student submit, worker processing, review visibility, and publish with canonical student linkage
 - the current workspace now also exposes status-only pre-publish student reads plus published summary/score/breakdown reads sourced from effective `PublishedResult` and `GradebookEntry`
 - the current auth + membership + student-flow arc is now complete through `M3B`
+- the current workspace now also contains the closed post-`M3B` ops phase:
+  - derived lifecycle/status alignment through `operationalStatus` and `visibleStatus`
+  - `/` as the lecturer ops dashboard
+  - `/jobs/new` as the new home of the legacy create-job screen
+  - assignment-first staff ops reads at:
+    - `GET /api/staff/dashboard`
+    - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`
+    - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+  - assignment-first staff ops pages that keep `/reviews/[jobId]` as the edit/publish workspace
 
 Still not implemented:
 
 - broader course ownership for exams, rubrics, jobs, and reviews
+- the follow-up product scope now moves to student lifecycle UX refinement and route/shell/design-system unification
 
 ## 3. Boundary that remains approved
 

@@ -1,6 +1,6 @@
 # Project Context Handoff
 
-Last updated: 2026-03-30
+Last updated: 2026-03-31
 Purpose: high-signal handoff for a fresh engineer or fresh model
 
 ## 1. Project description
@@ -83,6 +83,7 @@ Completed:
 - `Auth M2`
 - `Auth M3A`
 - `Auth M3B`
+- `Post-M3B Ops Phase`
 
 Current branch context:
 
@@ -97,6 +98,7 @@ Current branch context:
 - the current workspace now also contains completed Auth M2 course-membership and course-scoped authorization work in `apps/web`
 - the current workspace now also contains closed Auth M3A assignment and student-submission foundation work
 - the current workspace now also contains closed Auth M3B student published-result and own-data read surfaces
+- the current workspace now also contains the closed post-`M3B` ops phase with lifecycle alignment and assignment-first lecturer operational reads
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -189,6 +191,19 @@ Current branch context:
   - student own-data APIs at `/api/me/assignments/**`
   - immediate DB-backed assignment grading jobs bridged through `Submission.legacyJobId`
   - exam-backed assignment grading that reuses the existing exam pipeline with question decomposition
+- the current workspace now also contains closed `M3B` + post-`M3B` ops work:
+  - `/results` and `/results/[assignmentId]`
+  - `/api/me/results/**`
+  - status-only pre-publish student reads plus published score/summary/breakdown reads sourced from effective `PublishedResult` and `GradebookEntry`
+  - derived lifecycle/status alignment through staff `operationalStatus` and student `visibleStatus`
+  - `/` as the lecturer ops dashboard
+  - `/jobs/new` as the new home of the legacy create-job flow
+  - `GET /api/staff/dashboard`
+  - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`
+  - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+  - `/courses/[courseId]/assignments/[assignmentId]`
+  - `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+  - `/reviews/[jobId]` remaining the edit/publish workspace and publish boundary
 
 ## 5. What is intentionally not implemented yet
 
@@ -296,7 +311,9 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move next to post-`M3B` hardening and broader product ownership without reintroducing persistence fallback
+- move next to the two already-identified follow-up areas:
+  - student lifecycle UX refinement
+  - route/shell/design-system unification
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - treat the archived local-store packages as offline/debug code, not as a live runtime path
 - keep auth/authz separate from grading-domain logic

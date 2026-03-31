@@ -1,6 +1,6 @@
 # Homework Grader Architecture
 
-Last updated: 2026-03-30
+Last updated: 2026-03-31
 Status: canonical current-state architecture document
 Scope: implemented repo structure, completed milestones, approved next direction, and deferred decisions
 
@@ -43,18 +43,24 @@ Owns:
 Current primary page routes:
 
 - `/`
+- `/jobs/new`
 - `/exams`
 - `/rubrics`
 - `/reviews`
 - `/reviews/[jobId]`
 - `/courses`
 - `/courses/[courseId]`
+- `/courses/[courseId]/assignments/[assignmentId]`
+- `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
 - `/assignments`
 - `/assignments/[assignmentId]`
+- `/results`
+- `/results/[assignmentId]`
 
 Current API route groups:
 
 - `apps/web/src/app/api/auth/**`
+- `apps/web/src/app/api/staff/**`
 - `apps/web/src/app/api/exams/**`
 - `apps/web/src/app/api/jobs/**`
 - `apps/web/src/app/api/me/**`
@@ -143,7 +149,7 @@ Owns:
 
 ### 3.1 Current product/runtime shape
 
-The committed runtime is still exam-first and job-first:
+The committed runtime is now assignment-first for staff operations while remaining exam-backed and review/job-backed underneath:
 
 - exams can be uploaded through `apps/web`,
 - grading jobs can be created one at a time,
@@ -287,6 +293,28 @@ Current Auth M3B addition:
 - student result reads are assignment-centric and derive from active `STUDENT` membership visibility plus canonical `Submission.studentUserId`
 - pre-publish student reads are status-only and do not expose review drafts or staff metadata
 - published student reads now expose score, summary, and published breakdown data sourced from effective `PublishedResult` and `GradebookEntry`
+
+Current post-M3B ops phase addition:
+
+- derived lifecycle/status alignment now exists:
+  - staff reads expose `operationalStatus`
+  - student assignment/result reads expose `visibleStatus`
+- `/` now acts as the lecturer ops dashboard
+- `/jobs/new` is now the home of the legacy create-job workflow
+- new assignment-first staff operational APIs now exist:
+  - `GET /api/staff/dashboard`
+  - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`
+  - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+- new assignment-first staff operational pages now exist:
+  - `/courses/[courseId]/assignments/[assignmentId]`
+  - `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+- staff operational reads now treat `Assignment` as the primary unit and expose only the latest non-`SUPERSEDED` submission per student+assignment
+- `/reviews` and `/reviews/[jobId]` remain the edit/publish workspace and publish boundary
+- current closure smoke now confirms:
+  - `Demo Course Admin` can load `/` as the lecturer dashboard
+  - a fresh assignment can be opened through `Open Ops`
+  - the staff ops surfaces show `SUBMITTED`, `PROCESSING`, `READY_FOR_REVIEW`, and `PUBLISHED`
+  - publish through `/reviews/[jobId]` updates both the dashboard and the assignment ops surfaces
 
 ### 3.2 Current persistence model
 
@@ -574,8 +602,10 @@ The main open or deferred architectural decisions are:
 5. Assignment and exam ownership rollout
    - how quickly the product should extend the current assignment submission slice into fuller canonical `Submission` / `Assignment` / `ExamBatch` ownership across the rest of the product.
 
-6. Post-M3B student/runtime expansion
-   - how broadly the now-closed `M3B` student result read-side should expand across more product surfaces beyond the current arc.
+6. Post-M3B product expansion
+   - how the repo should prioritize the next two already-identified follow-up areas:
+     - student lifecycle UX refinement
+     - route/shell/design-system unification
 
 ## 12. Validation commands that matter today
 

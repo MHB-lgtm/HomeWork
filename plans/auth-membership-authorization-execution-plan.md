@@ -1,7 +1,7 @@
 # Auth, Membership, and Authorization Execution Plan
 
-Status: active execution plan with M1, M2, and M3A closed
-Last updated: 2026-03-30
+Status: current-state execution record with M1-M3B and the post-M3B ops phase closed
+Last updated: 2026-03-31
 
 ## 1. Executive Summary
 
@@ -24,6 +24,7 @@ Current status:
 - `M3` is now split into `M3A` and `M3B`
 - `M3A` is now closed
 - `M3B` is now closed and adds student-safe published-result and gradebook reads
+- the post-`M3B` ops phase is now closed and adds lifecycle alignment plus assignment-first lecturer operational reads
 
 ## 2. Current Repo Truth
 
@@ -62,6 +63,16 @@ Current status:
   - `GET /api/me/results`
   - `GET /api/me/results/[assignmentId]`
 - Student result reads are assignment-centric, use status-only reads before publish, and expose published summary/score/breakdown only from effective `PublishedResult` and `GradebookEntry`.
+- The current workspace now also includes derived lifecycle/status alignment:
+  - staff reads expose `operationalStatus`
+  - student assignment/result reads expose `visibleStatus`
+- The current workspace now also includes assignment-first staff operational reads:
+  - `GET /api/staff/dashboard`
+  - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`
+  - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+- `/` now acts as the lecturer ops dashboard.
+- `/jobs/new` is now the home of the legacy create-job screen.
+- `/courses/[courseId]/assignments/[assignmentId]` and `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]` now exist as staff ops read surfaces.
 
 ## 3. Recommended Identity Model
 
@@ -165,6 +176,8 @@ Current implemented M1+M2 rules:
 - `/api/courses/[courseId]/lectures` and `/api/courses/[courseId]/rag/**` require active `COURSE_ADMIN` / `LECTURER` membership in that course unless the user is `SUPER_ADMIN`
 - `/api/courses/[courseId]/memberships` requires active `COURSE_ADMIN` membership in that course unless the user is `SUPER_ADMIN`
 - `/api/courses/[courseId]/assignments` and `/api/courses/[courseId]/assignments/[assignmentId]` require active `COURSE_ADMIN` / `LECTURER` membership in that course unless the user is `SUPER_ADMIN`
+- `GET /api/staff/dashboard` is now the lecturer-facing operational aggregate and filters to courses accessible to the authenticated staff user unless the user is `SUPER_ADMIN`
+- `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions` and `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]` require active `COURSE_ADMIN` / `LECTURER` membership in that course unless the user is `SUPER_ADMIN`
 - `/assignments` and `/api/me/assignments/**` are now the first student-owned surfaces
 - `POST /api/me/assignments/[assignmentId]/submit` derives ownership from the authenticated user and allows only:
   - an active `STUDENT` member of the assignment course
@@ -268,9 +281,38 @@ Delivered:
 - published result detail sourced from effective `PublishedResult` and `GradebookEntry`
 - narrower publish normalization hardening for per-question `GENERAL` assignment reviews so student-visible score/summary output is coherent
 
+### Post-M3B Ops Phase
+
+Status: closed
+
+Delivered:
+
+- derived lifecycle/status alignment through:
+  - `OperationalSubmissionStatus`
+  - `StudentVisibleAssignmentStatus`
+  - staff-facing `operationalStatus`
+  - student-facing `visibleStatus`
+- assignment-first staff operational read models in `@hg/postgres-store`
+- staff ops schemas in `@hg/shared-schemas`
+- `GET /api/staff/dashboard`
+- `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`
+- `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+- `/` as the lecturer ops dashboard
+- `/jobs/new` as the new home of the legacy create-job flow
+- `/courses/[courseId]/assignments/[assignmentId]`
+- `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
+- assignment-first operational reads that:
+  - use `Assignment` as the primary unit
+  - show only the latest non-`SUPERSEDED` submission per student+assignment
+  - keep `/reviews/[jobId]` as the edit/publish workspace and publish boundary
+  - keep AI processing before deadline while treating deadline as a submission boundary, not a processing boundary
+
 ## 9. Recommended Immediate Next Milestone
 
-The current auth + membership + student-flow arc is now complete through `M3B`. Follow-up work should focus on hardening and broader product ownership beyond this arc rather than a new auth milestone inside it.
+The current auth + membership + student-flow arc is now complete through `M3B`, and the immediate post-`M3B` ops phase is now closed. Follow-up work should move to:
+
+- student lifecycle UX refinement
+- route/shell/design-system unification
 
 ## 10. Validation Strategy
 
@@ -304,6 +346,11 @@ Manual smoke completed for the current workspace:
   - staff saw the resulting review in `/reviews`
   - publish succeeded and kept canonical `PublishedResult.studentUserId` and `GradebookEntry.studentUserId` linkage
 - the smoke used temporary signed session cookies and disposable DB users because local Google OAuth env vars are not configured in this workspace
+- a fresh post-`M3B` ops closure smoke verified:
+  - `/` loads as the lecturer ops dashboard
+  - `Open Ops` leads from the course assignment panel into assignment-first ops pages
+  - the dashboard and assignment ops pages show `SUBMITTED`, `PROCESSING`, `READY_FOR_REVIEW`, and `PUBLISHED`
+  - publish through `/reviews/[jobId]` updates both the staff ops surfaces and the student published-result surfaces
 
 ## 11. Risks and Open Questions
 
