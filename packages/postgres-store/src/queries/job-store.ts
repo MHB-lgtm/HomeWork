@@ -40,6 +40,7 @@ import {
   reviewContextFromStoredPayload,
   reviewRecordFromStoredPayload,
 } from '../mappers/review-record';
+import { deriveOperationalSubmissionStatus } from './lifecycle-status';
 
 type JobStorePrisma = Pick<
   PrismaClient,
@@ -165,6 +166,11 @@ const mapStoredContext = (row: {
   gradingScope: 'QUESTION' | 'DOCUMENT';
 }): LegacyReviewContextRecord => ({
   status: row.status,
+  operationalStatus: deriveOperationalSubmissionStatus({
+    hasPublishedResult: false,
+    hasSubmission: true,
+    jobStatus: row.status,
+  }),
   resultJson: row.resultJson ?? null,
   errorMessage: row.errorMessage ?? null,
   submissionMimeType: row.submissionMimeType ?? null,
@@ -1091,6 +1097,11 @@ export class PrismaJobStore {
         updatedAt: toIsoString(review?.updatedAt ?? row.updatedAt),
         annotationCount: reviewRecord.annotations.length,
         hasResult: Boolean(row.resultJson),
+        operationalStatus: deriveOperationalSubmissionStatus({
+          hasPublishedResult: Boolean(row.submission.publishedResults[0]),
+          hasSubmission: true,
+          jobStatus: row.status,
+        }),
         publication: toPublicationRecord(row.submission.publishedResults[0]),
       } satisfies RuntimeReviewSummaryRecord;
     });
@@ -1136,10 +1147,18 @@ export class PrismaJobStore {
     const storedContext = currentVersion
       ? reviewContextFromStoredPayload(currentVersion.rawPayload)
       : null;
+    const derivedOperationalStatus = deriveOperationalSubmissionStatus({
+      hasPublishedResult: Boolean(row.submission.publishedResults[0]),
+      hasSubmission: true,
+      jobStatus: row.status,
+    });
 
     return {
       review,
-      context: storedContext ?? mapStoredContext(row),
+      context: {
+        ...(storedContext ?? mapStoredContext(row)),
+        operationalStatus: derivedOperationalStatus,
+      },
       submissionAsset: {
         path: row.submissionAsset.path,
         mimeType: row.submissionAsset.mimeType ?? null,

@@ -13,8 +13,11 @@ import { decimalToNumber, toIsoString } from '../mappers/domain';
 import type {
   StudentAssignmentResultRecord,
   StudentAssignmentStatusRecord,
-  StudentAssignmentSubmissionStateValue,
 } from '../types';
+import {
+  deriveStudentVisibleAssignmentStatus,
+  toLegacyStudentSubmissionState,
+} from './lifecycle-status';
 
 type StudentResultsStorePrisma = Pick<PrismaClient, 'assignment'>;
 
@@ -73,21 +76,14 @@ const fromStoredAssignmentState = (
   throw new Error(`Unsupported stored assignment state: ${state}`);
 };
 
-const deriveSubmissionState = (
-  row: StudentAssignmentRow
-): StudentAssignmentSubmissionStateValue => {
+const deriveVisibleStatus = (row: StudentAssignmentRow) => {
   const latestSubmission = row.submissions[0];
   const effectivePublished = latestSubmission?.publishedResults[0];
 
-  if (effectivePublished) {
-    return 'PUBLISHED';
-  }
-
-  if (latestSubmission) {
-    return 'SUBMITTED';
-  }
-
-  return 'NOT_SUBMITTED';
+  return deriveStudentVisibleAssignmentStatus({
+    hasPublishedResult: Boolean(effectivePublished),
+    hasSubmission: Boolean(latestSubmission),
+  });
 };
 
 const toPublishedScore = (
@@ -133,6 +129,7 @@ const buildStatusRecord = (
 ): StudentAssignmentStatusRecord => {
   const latestSubmission = row.submissions[0];
   const effectivePublished = latestSubmission?.publishedResults[0];
+  const visibleStatus = deriveVisibleStatus(row);
 
   return StudentAssignmentStatusSchema.parse({
     version: '1.0.0',
@@ -143,7 +140,8 @@ const buildStatusRecord = (
     openAt: toIsoString(row.openAt),
     deadlineAt: toIsoString(row.deadlineAt),
     assignmentState: fromStoredAssignmentState(row.state),
-    submissionState: deriveSubmissionState(row),
+    visibleStatus,
+    submissionState: toLegacyStudentSubmissionState(visibleStatus),
     submittedAt: latestSubmission ? toIsoString(latestSubmission.submittedAt) : null,
     hasPublishedResult: Boolean(effectivePublished),
     publishedAt: toPublishedAt(effectivePublished),

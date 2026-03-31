@@ -50,6 +50,9 @@ export function ImmersiveShell({
               <Link href="/courses" className="transition-colors hover:text-slate-700">
                 Courses
               </Link>
+              <Link href="/jobs/new" className="transition-colors hover:text-slate-700">
+                Jobs
+              </Link>
             </nav>
 
             <AccountMenu compact />

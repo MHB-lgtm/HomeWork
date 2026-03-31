@@ -1,5 +1,5 @@
-import HomePageClient from '@/app/page-client';
+import StaffDashboardPageClient from '@/app/staff-dashboard/page-client';
 
 export default function StaffHomePage() {
-  return <HomePageClient />;
+  return <StaffDashboardPageClient />;
 }

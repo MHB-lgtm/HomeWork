@@ -6,6 +6,14 @@ export type UserGlobalRoleValue = 'USER' | 'SUPER_ADMIN';
 export type UserStatusValue = 'ACTIVE' | 'DISABLED';
 export type CourseMembershipRoleValue = 'COURSE_ADMIN' | 'LECTURER' | 'STUDENT';
 export type CourseMembershipStatusValue = 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REMOVED';
+export type OperationalSubmissionStatusValue =
+  | 'SUBMITTED'
+  | 'PROCESSING'
+  | 'READY_FOR_REVIEW'
+  | 'PUBLISHED'
+  | 'FAILED';
+export type StudentVisibleAssignmentStatusValue = 'OPEN' | 'SUBMITTED' | 'PUBLISHED';
+export type PublishEligibilityValue = 'NOT_READY' | 'READY' | 'PUBLISHED';
 export type StudentAssignmentSubmissionStateValue =
   | 'NOT_SUBMITTED'
   | 'SUBMITTED'
@@ -66,6 +74,7 @@ export interface RuntimeReviewSummaryRecord {
   jobId: string;
   displayName: string | null;
   status: LegacyJobStatus;
+  operationalStatus: OperationalSubmissionStatusValue;
   examId?: string;
   questionId?: string | null;
   gradingMode?: RuntimeGradingMode | null;
@@ -128,6 +137,7 @@ export interface StudentAssignmentStatusRecord {
   openAt: string;
   deadlineAt: string;
   assignmentState: import('@hg/shared-schemas').Assignment['state'];
+  visibleStatus: StudentVisibleAssignmentStatusValue;
   submissionState: StudentAssignmentSubmissionStateValue;
   submittedAt?: string | null;
   hasPublishedResult: boolean;
@@ -140,6 +150,70 @@ export interface StudentAssignmentResultRecord extends StudentAssignmentStatusRe
   publishedResultId?: string | null;
   summary?: string | null;
   breakdownSnapshot?: unknown | null;
+}
+
+export interface StaffReviewPublicationSummaryRecord {
+  isPublished: boolean;
+  publishedResultId?: string | null;
+  publishedAt?: string | null;
+  score?: number | null;
+  maxScore?: number | null;
+  summary?: string | null;
+}
+
+export interface StaffDashboardAssignmentRowRecord {
+  version: '1.0.0';
+  courseId: string;
+  courseTitle: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  assignmentState: import('@hg/shared-schemas').Assignment['state'];
+  openAt: string;
+  deadlineAt: string;
+  totalActiveStudents: number;
+  notSubmittedCount: number;
+  submittedCount: number;
+  processingCount: number;
+  readyForReviewCount: number;
+  publishedCount: number;
+  failedCount: number;
+  publishableCount: number;
+  republishNeededCount: number;
+  latestActivityAt: string;
+}
+
+export interface AssignmentSubmissionOpsRowRecord {
+  version: '1.0.0';
+  courseId: string;
+  assignmentId: string;
+  submissionId: string;
+  studentUserId: string;
+  studentDisplayName: string | null;
+  studentEmail: string | null;
+  submittedAt: string;
+  operationalStatus: OperationalSubmissionStatusValue;
+  publishEligibility: PublishEligibilityValue;
+  republishNeeded: boolean;
+  jobId: string | null;
+  reviewUpdatedAt?: string | null;
+  publishedAt?: string | null;
+  score?: number | null;
+  maxScore?: number | null;
+}
+
+export interface AssignmentSubmissionOpsDetailRecord
+  extends AssignmentSubmissionOpsRowRecord {
+  courseTitle: string;
+  assignmentTitle: string;
+  reviewLink: string | null;
+  submissionDownloadLink: string;
+  publication?: StaffReviewPublicationSummaryRecord;
+  rawStatuses: {
+    assignmentState: import('@hg/shared-schemas').Assignment['state'];
+    submissionState?: string | null;
+    jobStatus?: string | null;
+    reviewState?: string | null;
+  };
 }
 
 export interface RollbackJobExportSummary {
@@ -174,6 +248,7 @@ export interface LegacyReviewSummaryRecord {
   jobId: string;
   displayName: string | null;
   status?: string;
+  operationalStatus?: OperationalSubmissionStatusValue;
   createdAt: string | null;
   updatedAt: string | null;
   annotationCount: number;
@@ -183,6 +258,7 @@ export interface LegacyReviewSummaryRecord {
 
 export interface LegacyReviewContextRecord {
   status?: string;
+  operationalStatus?: OperationalSubmissionStatusValue;
   resultJson?: unknown;
   errorMessage?: string | null;
   submissionMimeType?: string | null;

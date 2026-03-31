@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import type { Assignment } from '@hg/shared-schemas';
 import {
   AssignmentsClientError,
@@ -387,9 +388,16 @@ export function CourseAssignmentsPanel({ courseId }: CourseAssignmentsPanelProps
                         </Button>
                       </div>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => startEditing(assignment)}>
-                        Edit
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/courses/${courseId}/assignments/${assignment.assignmentId}`}>
+                          <Button size="sm" variant="outline">
+                            Open Ops
+                          </Button>
+                        </Link>
+                        <Button size="sm" variant="outline" onClick={() => startEditing(assignment)}>
+                          Edit
+                        </Button>
+                      </div>
                     )}
                   </TableCell>
                 </TableRow>

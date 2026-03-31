@@ -58,7 +58,7 @@ const getRouteTitle = (pathname: string): string => {
   return typeof matched.title === 'function' ? matched.title(pathname) : matched.title;
 };
 
-const immersivePrefixes = ['/exams', '/rubrics', '/reviews', '/courses'];
+const immersivePrefixes = ['/exams', '/rubrics', '/reviews', '/courses', '/jobs'];
 
 const isImmersiveRoutePath = (pathname: string): boolean => {
   if (pathname === '/') {

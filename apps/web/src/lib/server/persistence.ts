@@ -9,6 +9,7 @@ import {
   PrismaLectureStore,
   PrismaLegacyReviewRecordStore,
   PrismaRubricStore,
+  PrismaStaffOperationsStore,
   PrismaStudentResultsStore,
   PrismaUserAuthStore,
   PrismaWorkerHeartbeatStore,
@@ -24,6 +25,7 @@ type ServerPersistence = {
   courses: PrismaCourseStore;
   assignments: PrismaAssignmentStore;
   studentResults: PrismaStudentResultsStore;
+  staffOperations: PrismaStaffOperationsStore;
   exams: PrismaExamStore;
   lectures: PrismaLectureStore;
   courseRag: PrismaCourseRagStore;
@@ -49,6 +51,7 @@ export const getServerPersistence = (): ServerPersistence | null => {
       courses: new PrismaCourseStore(prisma),
       assignments: new PrismaAssignmentStore(prisma),
       studentResults: new PrismaStudentResultsStore(prisma),
+      staffOperations: new PrismaStaffOperationsStore(prisma),
       exams: new PrismaExamStore(prisma),
       lectures: new PrismaLectureStore(prisma),
       courseRag: new PrismaCourseRagStore(prisma),

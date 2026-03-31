@@ -402,6 +402,11 @@ describe('PrismaStudentResultsStore', () => {
       'SUBMITTED',
       'NOT_SUBMITTED',
     ]);
+    expect(results.map((result) => result.visibleStatus)).toEqual([
+      'PUBLISHED',
+      'SUBMITTED',
+      'OPEN',
+    ]);
     expect(results[0]).toMatchObject({
       assignmentId: 'assignment-published',
       submissionState: 'PUBLISHED',
@@ -492,6 +497,7 @@ describe('PrismaStudentResultsStore', () => {
 
     expect(result).toMatchObject({
       assignmentId: 'assignment-1',
+      visibleStatus: 'PUBLISHED',
       submissionState: 'PUBLISHED',
       publishedResultId: studentOnePublished.domainId,
       summary: 'Clear and correct work.',
@@ -550,6 +556,7 @@ describe('PrismaStudentResultsStore', () => {
       })
     ).resolves.toMatchObject({
       assignmentId: 'assignment-1',
+      visibleStatus: 'PUBLISHED',
       submissionState: 'PUBLISHED',
       score: 77,
       summary: 'Historical result',

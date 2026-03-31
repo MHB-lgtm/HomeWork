@@ -36,7 +36,21 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ ok: true, data: assignment });
+    const result =
+      access.access.globalRole === 'SUPER_ADMIN'
+        ? null
+        : await persistence.studentResults.getStudentAssignmentResult(
+            access.access.userId,
+            params.assignmentId
+          );
+
+    return NextResponse.json({
+      ok: true,
+      data: {
+        ...assignment,
+        visibleStatus: result?.visibleStatus ?? 'OPEN',
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message === 'Authentication required') {

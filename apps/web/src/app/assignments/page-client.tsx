@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import type { Assignment } from '@hg/shared-schemas';
+import type { StudentAssignment } from '@hg/shared-schemas';
 import { AssignmentsClientError, listMyAssignments } from '@/lib/assignmentsClient';
 import { AccountMenu } from '@/components/auth/AccountMenu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -31,7 +31,7 @@ const getErrorMessage = (error: unknown) => {
 };
 
 export default function StudentAssignmentsPageClient() {
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [assignments, setAssignments] = useState<StudentAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,8 +93,8 @@ export default function StudentAssignmentsPageClient() {
                       </CardTitle>
                       <p className="text-xs font-mono text-slate-500">{assignment.assignmentId}</p>
                     </div>
-                    <Badge variant={assignment.state === 'open' ? 'default' : 'outline'}>
-                      {assignment.state}
+                    <Badge variant={assignment.visibleStatus === 'PUBLISHED' ? 'default' : 'outline'}>
+                      {assignment.visibleStatus}
                     </Badge>
                   </div>
                 </CardHeader>

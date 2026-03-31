@@ -38,6 +38,7 @@ function toShortText(value: string, maxChars: number): string {
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+  const [displayStatus, setDisplayStatus] = useState<string | null>(null);
   const [reviewSource, setReviewSource] = useState<'postgres' | null>(null);
   const [publication, setPublication] = useState<ReviewPublicationV1 | null>(null);
   const [resultJson, setResultJson] = useState<any>(null);
@@ -88,6 +89,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     setError(null);
     setReview(reviewResult.review);
     setJobStatus(reviewResult.context?.status ?? null);
+    setDisplayStatus(reviewResult.context?.operationalStatus ?? reviewResult.context?.status ?? null);
     setReviewSource(reviewResult.context?.source ?? null);
     setPublication(reviewResult.context?.publication ?? null);
     setResultJson(reviewResult.context?.resultJson ?? null);
@@ -241,6 +243,9 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const getJobStatusBadgeVariant = (
     status: string
   ): 'default' | 'secondary' | 'outline' | 'destructive' => {
+    if (status === 'PUBLISHED' || status === 'READY_FOR_REVIEW') return 'default';
+    if (status === 'PROCESSING') return 'secondary';
+    if (status === 'SUBMITTED') return 'outline';
     if (status === 'DONE') return 'default';
     if (status === 'FAILED') return 'destructive';
     if (status === 'PENDING' || status === 'RUNNING') return 'secondary';
@@ -535,7 +540,9 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{reviewTitle}</h1>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {jobStatus && <Badge variant={getJobStatusBadgeVariant(jobStatus)}>{jobStatus}</Badge>}
+              {displayStatus && (
+                <Badge variant={getJobStatusBadgeVariant(displayStatus)}>{displayStatus}</Badge>
+              )}
               {publication?.isPublished ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
@@ -578,6 +585,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       </Button>
                     </div>
                   )}
+                  {jobStatus ? <p className="font-mono">Raw status: {jobStatus}</p> : null}
                   {submissionMimeType ? <p className="font-mono">Submission: {submissionMimeType}</p> : null}
                   {resultMode ? <p className="font-mono">Mode: {resultMode}</p> : null}
                 </div>

@@ -16,10 +16,18 @@ type ReviewFilter = 'ALL' | 'PUBLISHED' | 'UNPUBLISHED';
 
 const getStatusBadgeVariant = (status: string | null): BadgeVariant => {
   switch (status) {
-    case 'DONE':
+    case 'PUBLISHED':
+      return 'default';
+    case 'READY_FOR_REVIEW':
       return 'default';
     case 'FAILED':
       return 'destructive';
+    case 'PROCESSING':
+      return 'secondary';
+    case 'SUBMITTED':
+      return 'outline';
+    case 'DONE':
+      return 'default';
     case 'PENDING':
     case 'RUNNING':
       return 'secondary';
@@ -86,13 +94,14 @@ export default function ReviewsListPage() {
     const q = query.trim().toLowerCase();
     const matchesQuery = (item: ReviewSummary) => {
       const examName = item.examId ? examNamesById[item.examId] : '';
-      return Boolean(
-        (item.displayName && item.displayName.toLowerCase().includes(q)) ||
-        examName.toLowerCase().includes(q) ||
-        (item.status && item.status.toLowerCase().includes(q)) ||
-        (item.gradingMode && item.gradingMode.toLowerCase().includes(q)) ||
-        item.jobId.toLowerCase().includes(q) ||
-        item.publication?.summary?.toLowerCase().includes(q)
+          return Boolean(
+            (item.displayName && item.displayName.toLowerCase().includes(q)) ||
+            examName.toLowerCase().includes(q) ||
+            (item.status && item.status.toLowerCase().includes(q)) ||
+            (item.operationalStatus && item.operationalStatus.toLowerCase().includes(q)) ||
+            (item.gradingMode && item.gradingMode.toLowerCase().includes(q)) ||
+            item.jobId.toLowerCase().includes(q) ||
+            item.publication?.summary?.toLowerCase().includes(q)
       );
     };
 
@@ -195,7 +204,7 @@ export default function ReviewsListPage() {
                 Back to Dashboard
               </Button>
             </Link>
-            <Link href="/">
+            <Link href="/jobs/new">
               <Button size="sm">Create Review</Button>
             </Link>
           </div>
@@ -257,6 +266,7 @@ export default function ReviewsListPage() {
                 {filtered.map((review) => {
                   const examName = review.examId ? examNamesById[review.examId] || 'Exam' : 'Exam not linked';
                   const reviewTitle = review.displayName?.trim() || `${examName} review`;
+                  const displayStatus = review.operationalStatus ?? review.status;
 
                   return (
                     <Card key={review.jobId} className="border border-slate-200/80 bg-white transition-shadow hover:shadow-lg">
@@ -266,7 +276,7 @@ export default function ReviewsListPage() {
                             <CardTitle className="truncate text-base font-semibold text-slate-900">{reviewTitle}</CardTitle>
                             <p className="truncate text-sm text-slate-600">{examName}</p>
                           </div>
-                          <Badge variant={getStatusBadgeVariant(review.status)}>{review.status}</Badge>
+                          <Badge variant={getStatusBadgeVariant(displayStatus)}>{displayStatus}</Badge>
                         </div>
                         <p className="text-xs text-slate-600">Updated: {formatDate(review.updatedAt)}</p>
 
@@ -364,6 +374,7 @@ export default function ReviewsListPage() {
                             </div>
                             {review.examId ? <p className="font-mono">Exam ID: {review.examId}</p> : null}
                             {review.questionId ? <p className="font-mono">Question ID: {review.questionId}</p> : null}
+                            <p className="font-mono">Raw status: {review.status}</p>
                           </div>
                         </details>
 

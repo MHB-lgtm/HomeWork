@@ -1,7 +1,7 @@
 'use client';
 
-import { AssignmentSchema } from '@hg/shared-schemas';
-import type { Assignment } from '@hg/shared-schemas';
+import { AssignmentSchema, StudentAssignmentSchema } from '@hg/shared-schemas';
+import type { Assignment, StudentAssignment } from '@hg/shared-schemas';
 
 type ApiErrorPayload = {
   error?: string;
@@ -44,6 +44,24 @@ const parseAssignmentList = (data: unknown): Assignment[] => {
 
 const parseAssignment = (data: unknown): Assignment => {
   const result = AssignmentSchema.safeParse(data);
+  if (!result.success) {
+    throw new AssignmentsClientError('Invalid assignment data');
+  }
+
+  return result.data;
+};
+
+const parseStudentAssignmentList = (data: unknown): StudentAssignment[] => {
+  const result = StudentAssignmentSchema.array().safeParse(data);
+  if (!result.success) {
+    throw new AssignmentsClientError('Invalid assignment data');
+  }
+
+  return result.data;
+};
+
+const parseStudentAssignment = (data: unknown): StudentAssignment => {
+  const result = StudentAssignmentSchema.safeParse(data);
   if (!result.success) {
     throw new AssignmentsClientError('Invalid assignment data');
   }
@@ -177,7 +195,7 @@ export async function updateCourseAssignment(
   };
 }
 
-export async function listMyAssignments(): Promise<Assignment[]> {
+export async function listMyAssignments(): Promise<StudentAssignment[]> {
   const response = await fetch('/api/me/assignments');
   if (!response.ok) {
     const { message, code } = await parseErrorPayload(response, 'Failed to load assignments');
@@ -189,10 +207,10 @@ export async function listMyAssignments(): Promise<Assignment[]> {
     throw new AssignmentsClientError('Failed to load assignments');
   }
 
-  return parseAssignmentList(payload.data);
+  return parseStudentAssignmentList(payload.data);
 }
 
-export async function getMyAssignment(assignmentId: string): Promise<Assignment> {
+export async function getMyAssignment(assignmentId: string): Promise<StudentAssignment> {
   const response = await fetch(`/api/me/assignments/${assignmentId}`);
   if (!response.ok) {
     const { message, code } = await parseErrorPayload(response, 'Failed to load assignment');
@@ -204,7 +222,7 @@ export async function getMyAssignment(assignmentId: string): Promise<Assignment>
     throw new AssignmentsClientError('Failed to load assignment');
   }
 
-  return parseAssignment(payload.data);
+  return parseStudentAssignment(payload.data);
 }
 
 export async function submitMyAssignment(

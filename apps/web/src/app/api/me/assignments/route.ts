@@ -33,8 +33,19 @@ export async function GET() {
       access.globalRole === 'SUPER_ADMIN'
         ? []
         : await persistence.assignments.listVisibleAssignmentsForStudent(access.userId);
+    const results =
+      access.globalRole === 'SUPER_ADMIN'
+        ? []
+        : await persistence.studentResults.listStudentAssignmentResults(access.userId);
+    const visibleStatusByAssignmentId = new Map(
+      results.map((result) => [result.assignmentId, result.visibleStatus] as const)
+    );
+    const data = assignments.map((assignment) => ({
+      ...assignment,
+      visibleStatus: visibleStatusByAssignmentId.get(assignment.assignmentId) ?? 'OPEN',
+    }));
 
-    return NextResponse.json({ ok: true, data: assignments });
+    return NextResponse.json({ ok: true, data });
   } catch (error) {
     return NextResponse.json(
       { ok: false, error: 'Authentication required', code: 'AUTH_REQUIRED' },

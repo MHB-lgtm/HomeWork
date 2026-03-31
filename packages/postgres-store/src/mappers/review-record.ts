@@ -109,6 +109,15 @@ const parseStoredReviewContext = (value: unknown): LegacyReviewContextRecord | n
   if (typeof value.status === 'string') {
     context.status = value.status;
   }
+  if (
+    value.operationalStatus === 'SUBMITTED' ||
+    value.operationalStatus === 'PROCESSING' ||
+    value.operationalStatus === 'READY_FOR_REVIEW' ||
+    value.operationalStatus === 'PUBLISHED' ||
+    value.operationalStatus === 'FAILED'
+  ) {
+    context.operationalStatus = value.operationalStatus;
+  }
   if (hasOwn(value, 'resultJson')) {
     context.resultJson = value.resultJson;
   }
@@ -252,10 +261,13 @@ export const createStoredReviewRecordPayload = (
     return reviewRecord;
   }
 
+  const { operationalStatus: _ignoredOperationalStatus, ...storedContext } =
+    legacyJobContext;
+
   return {
     format: STORED_REVIEW_PAYLOAD_FORMAT,
     reviewRecord,
-    legacyJobContext,
+    legacyJobContext: storedContext,
   };
 };
 

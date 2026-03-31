@@ -53,6 +53,34 @@ export const AssignmentSchema = z.object({
 
 export type Assignment = z.infer<typeof AssignmentSchema>;
 
+export const OperationalSubmissionStatusSchema = z.enum([
+  'SUBMITTED',
+  'PROCESSING',
+  'READY_FOR_REVIEW',
+  'PUBLISHED',
+  'FAILED',
+]);
+
+export type OperationalSubmissionStatus = z.infer<
+  typeof OperationalSubmissionStatusSchema
+>;
+
+export const StudentVisibleAssignmentStatusSchema = z.enum([
+  'OPEN',
+  'SUBMITTED',
+  'PUBLISHED',
+]);
+
+export type StudentVisibleAssignmentStatus = z.infer<
+  typeof StudentVisibleAssignmentStatusSchema
+>;
+
+export const StudentAssignmentSchema = AssignmentSchema.extend({
+  visibleStatus: StudentVisibleAssignmentStatusSchema,
+});
+
+export type StudentAssignment = z.infer<typeof StudentAssignmentSchema>;
+
 export const StudentAssignmentSubmissionStateSchema = z.enum([
   'NOT_SUBMITTED',
   'SUBMITTED',
@@ -72,6 +100,7 @@ export const StudentAssignmentStatusSchema = z.object({
   openAt: z.string(),
   deadlineAt: z.string(),
   assignmentState: AssignmentStateSchema,
+  visibleStatus: StudentVisibleAssignmentStatusSchema,
   submissionState: StudentAssignmentSubmissionStateSchema,
   submittedAt: z.string().nullable().optional(),
   hasPublishedResult: z.boolean(),
@@ -89,6 +118,100 @@ export const StudentAssignmentResultSchema = StudentAssignmentStatusSchema.exten
 });
 
 export type StudentAssignmentResult = z.infer<typeof StudentAssignmentResultSchema>;
+
+export const PublishEligibilitySchema = z.enum([
+  'NOT_READY',
+  'READY',
+  'PUBLISHED',
+]);
+
+export type PublishEligibility = z.infer<typeof PublishEligibilitySchema>;
+
+export const StaffReviewPublicationSummarySchema = z.object({
+  isPublished: z.boolean(),
+  publishedResultId: z.string().nullable().optional(),
+  publishedAt: z.string().nullable().optional(),
+  score: z.number().nullable().optional(),
+  maxScore: z.number().nullable().optional(),
+  summary: z.string().nullable().optional(),
+});
+
+export type StaffReviewPublicationSummary = z.infer<
+  typeof StaffReviewPublicationSummarySchema
+>;
+
+export const StaffDashboardAssignmentRowSchema = z.object({
+  version: z.literal('1.0.0'),
+  courseId: z.string(),
+  courseTitle: z.string(),
+  assignmentId: z.string(),
+  assignmentTitle: z.string(),
+  assignmentState: AssignmentStateSchema,
+  openAt: z.string(),
+  deadlineAt: z.string(),
+  totalActiveStudents: z.number().int().nonnegative(),
+  notSubmittedCount: z.number().int().nonnegative(),
+  submittedCount: z.number().int().nonnegative(),
+  processingCount: z.number().int().nonnegative(),
+  readyForReviewCount: z.number().int().nonnegative(),
+  publishedCount: z.number().int().nonnegative(),
+  failedCount: z.number().int().nonnegative(),
+  publishableCount: z.number().int().nonnegative(),
+  republishNeededCount: z.number().int().nonnegative(),
+  latestActivityAt: z.string(),
+});
+
+export type StaffDashboardAssignmentRow = z.infer<
+  typeof StaffDashboardAssignmentRowSchema
+>;
+
+export const AssignmentSubmissionOpsRowSchema = z.object({
+  version: z.literal('1.0.0'),
+  courseId: z.string(),
+  assignmentId: z.string(),
+  submissionId: z.string(),
+  studentUserId: z.string(),
+  studentDisplayName: z.string().nullable(),
+  studentEmail: z.string().nullable(),
+  submittedAt: z.string(),
+  operationalStatus: OperationalSubmissionStatusSchema,
+  publishEligibility: PublishEligibilitySchema,
+  republishNeeded: z.boolean(),
+  jobId: z.string().nullable(),
+  reviewUpdatedAt: z.string().nullable().optional(),
+  publishedAt: z.string().nullable().optional(),
+  score: z.number().nullable().optional(),
+  maxScore: z.number().nullable().optional(),
+});
+
+export type AssignmentSubmissionOpsRow = z.infer<
+  typeof AssignmentSubmissionOpsRowSchema
+>;
+
+export const AssignmentSubmissionOpsRawStatusesSchema = z.object({
+  assignmentState: AssignmentStateSchema,
+  submissionState: z.string().nullable().optional(),
+  jobStatus: z.string().nullable().optional(),
+  reviewState: z.string().nullable().optional(),
+});
+
+export type AssignmentSubmissionOpsRawStatuses = z.infer<
+  typeof AssignmentSubmissionOpsRawStatusesSchema
+>;
+
+export const AssignmentSubmissionOpsDetailSchema =
+  AssignmentSubmissionOpsRowSchema.extend({
+    courseTitle: z.string(),
+    assignmentTitle: z.string(),
+    reviewLink: z.string().nullable(),
+    submissionDownloadLink: z.string(),
+    publication: StaffReviewPublicationSummarySchema.optional(),
+    rawStatuses: AssignmentSubmissionOpsRawStatusesSchema,
+  });
+
+export type AssignmentSubmissionOpsDetail = z.infer<
+  typeof AssignmentSubmissionOpsDetailSchema
+>;
 
 export const ChunkAnchorsSchema = z.object({
   pageIndex: z.number().int().nonnegative().optional(),

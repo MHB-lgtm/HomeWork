@@ -12,9 +12,16 @@ export type {
   LegacyReviewDetailRecord,
   LegacyJobRecord,
   LegacyReviewPublicationRecord,
+  PublishEligibilityValue,
+  OperationalSubmissionStatusValue,
+  StaffDashboardAssignmentRowRecord,
+  AssignmentSubmissionOpsRowRecord,
+  AssignmentSubmissionOpsDetailRecord,
+  StaffReviewPublicationSummaryRecord,
   StudentAssignmentResultRecord,
   StudentAssignmentStatusRecord,
   StudentAssignmentSubmissionStateValue,
+  StudentVisibleAssignmentStatusValue,
   RuntimeGradingMode,
   RuntimeGradingScope,
   RuntimeJobClaimRecord,
@@ -53,6 +60,7 @@ export {
   AssignmentNotFoundError as PostgresAssignmentNotFoundError,
 } from './queries/assignment-store';
 export { PrismaStudentResultsStore } from './queries/student-results-store';
+export { PrismaStaffOperationsStore } from './queries/staff-operations-store';
 export { PrismaExamStore } from './queries/exam-store';
 export { PrismaRubricStore } from './queries/rubric-store';
 export { PrismaExamIndexStore } from './queries/exam-index-store';

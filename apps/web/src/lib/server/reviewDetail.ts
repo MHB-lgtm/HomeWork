@@ -18,6 +18,7 @@ export type ReviewPublicationContext = {
 
 export type ReviewRouteContext = {
   status: string;
+  operationalStatus?: import('@hg/postgres-store').OperationalSubmissionStatusValue;
   resultJson: unknown | null;
   errorMessage: string | null;
   submissionMimeType: string | null;
@@ -59,6 +60,7 @@ const toPostgresContext = (
 
   return {
     status: context.status,
+    operationalStatus: context.operationalStatus,
     resultJson: Object.prototype.hasOwnProperty.call(context, 'resultJson')
       ? (context.resultJson ?? null)
       : null,

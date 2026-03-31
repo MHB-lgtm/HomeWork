@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import type { Assignment } from '@hg/shared-schemas';
+import type { StudentAssignment } from '@hg/shared-schemas';
 import {
   AssignmentsClientError,
   getMyAssignment,
@@ -44,7 +44,7 @@ const getErrorMessage = (error: unknown) => {
 export default function AssignmentDetailsPageClient({
   params,
 }: AssignmentDetailsPageClientProps) {
-  const [assignment, setAssignment] = useState<Assignment | null>(null);
+  const [assignment, setAssignment] = useState<StudentAssignment | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
@@ -81,6 +81,14 @@ export default function AssignmentDetailsPageClient({
     try {
       const result = await submitMyAssignment(params.assignmentId, submissionFile);
       setSubmitResult(`Submission queued. Job ID: ${result.jobId}`);
+      setAssignment((current) =>
+        current
+          ? {
+              ...current,
+              visibleStatus: 'SUBMITTED',
+            }
+          : current
+      );
       setSubmissionFile(null);
     } catch (submitError) {
       setError(getErrorMessage(submitError));
@@ -139,8 +147,8 @@ export default function AssignmentDetailsPageClient({
                 ) : null}
               </div>
               {assignment ? (
-                <Badge variant={assignment.state === 'open' ? 'default' : 'outline'}>
-                  {assignment.state}
+                <Badge variant={assignment.visibleStatus === 'PUBLISHED' ? 'default' : 'outline'}>
+                  {assignment.visibleStatus}
                 </Badge>
               ) : null}
             </div>

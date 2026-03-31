@@ -34,6 +34,7 @@ import { getReviewDomainId, getSavedReviewVersionDomainId } from '../mappers/imp
 import { PrismaPublicationRepository } from '../repos/publication-repository';
 import { PrismaReviewRepository } from '../repos/review-repository';
 import { PrismaSubmissionRepository } from '../repos/submission-repository';
+import { deriveOperationalSubmissionStatus } from './lifecycle-status';
 
 type ReviewStorePrisma = Pick<
   PrismaClient,
@@ -296,6 +297,11 @@ export class PrismaLegacyReviewRecordStore {
             jobId,
             displayName: reviewRecord.displayName ?? null,
             status: reviewContext?.status ?? 'UNKNOWN',
+            operationalStatus: deriveOperationalSubmissionStatus({
+              hasPublishedResult: Boolean(submission.publishedResults[0]),
+              hasSubmission: true,
+              jobStatus: reviewContext?.status ?? null,
+            }),
             createdAt: toIsoString(review.createdAt),
             updatedAt: toIsoString(review.updatedAt),
             annotationCount: reviewRecord.annotations.length,
@@ -352,7 +358,15 @@ export class PrismaLegacyReviewRecordStore {
         toIsoString(submission.review.createdAt),
         toIsoString(submission.review.updatedAt)
       ),
-      context: reviewContextFromStoredPayload(currentVersion.rawPayload) ?? createUnknownLegacyReviewContext(),
+      context: {
+        ...(reviewContextFromStoredPayload(currentVersion.rawPayload) ??
+          createUnknownLegacyReviewContext()),
+        operationalStatus: deriveOperationalSubmissionStatus({
+          hasPublishedResult: Boolean(submission.publishedResults[0]),
+          hasSubmission: true,
+          jobStatus: reviewContextFromStoredPayload(currentVersion.rawPayload)?.status ?? null,
+        }),
+      },
       publication: toPublicationRecord(submission),
       submissionAsset,
     };

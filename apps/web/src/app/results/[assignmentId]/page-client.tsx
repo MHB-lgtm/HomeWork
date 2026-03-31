@@ -44,8 +44,8 @@ const getErrorMessage = (error: unknown) => {
 };
 
 const getStatusMessage = (result: StudentAssignmentResult) => {
-  switch (result.submissionState) {
-    case 'NOT_SUBMITTED':
+  switch (result.visibleStatus) {
+    case 'OPEN':
       return 'No submission has been recorded for this assignment yet.';
     case 'SUBMITTED':
       return 'Your submission is recorded. Results will appear here after staff publish them.';
@@ -222,8 +222,8 @@ export default function StudentResultDetailsPageClient({
                 ) : null}
               </div>
               {result ? (
-                <Badge variant={result.submissionState === 'PUBLISHED' ? 'default' : 'outline'}>
-                  {result.submissionState}
+                <Badge variant={result.visibleStatus === 'PUBLISHED' ? 'default' : 'outline'}>
+                  {result.visibleStatus}
                 </Badge>
               ) : null}
             </div>

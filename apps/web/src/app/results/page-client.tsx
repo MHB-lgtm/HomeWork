@@ -34,13 +34,13 @@ const getErrorMessage = (error: unknown) => {
   return 'Failed to load results.';
 };
 
-const getStatusVariant = (status: StudentAssignmentStatus['submissionState']) => {
+const getStatusVariant = (status: StudentAssignmentStatus['visibleStatus']) => {
   switch (status) {
     case 'PUBLISHED':
       return 'default';
     case 'SUBMITTED':
       return 'secondary';
-    case 'NOT_SUBMITTED':
+    case 'OPEN':
       return 'outline';
   }
 };
@@ -111,8 +111,8 @@ export default function StudentResultsPageClient() {
                       <p className="text-sm text-slate-500">{result.courseTitle}</p>
                       <p className="text-xs font-mono text-slate-500">{result.assignmentId}</p>
                     </div>
-                    <Badge variant={getStatusVariant(result.submissionState)}>
-                      {result.submissionState}
+                    <Badge variant={getStatusVariant(result.visibleStatus)}>
+                      {result.visibleStatus}
                     </Badge>
                   </div>
                 </CardHeader>

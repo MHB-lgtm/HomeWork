@@ -9,6 +9,7 @@ export type ReviewRecordV1 = {
 
 export type ReviewContextV1 = {
   status: string;
+  operationalStatus?: 'SUBMITTED' | 'PROCESSING' | 'READY_FOR_REVIEW' | 'PUBLISHED' | 'FAILED';
   resultJson: unknown | null;
   errorMessage: string | null;
   submissionMimeType: string | null;
@@ -31,6 +32,7 @@ export type ReviewSummary = {
   jobId: string;
   displayName?: string | null;
   status: string;
+  operationalStatus?: 'SUBMITTED' | 'PROCESSING' | 'READY_FOR_REVIEW' | 'PUBLISHED' | 'FAILED';
   examId?: string;
   questionId?: string;
   gradingMode?: 'RUBRIC' | 'GENERAL';

@@ -10,6 +10,7 @@ type ReviewSummary = {
   jobId: string;
   displayName?: string | null;
   status: string;
+  operationalStatus?: import('@hg/postgres-store').OperationalSubmissionStatusValue;
   examId?: string;
   questionId?: string;
   gradingMode?: 'RUBRIC' | 'GENERAL';
@@ -31,6 +32,7 @@ const toImportedDbSummary = (dbSummary: LegacyReviewSummaryRecord): ReviewSummar
   jobId: dbSummary.jobId,
   displayName: dbSummary.displayName,
   status: dbSummary.status ?? 'UNKNOWN',
+  operationalStatus: dbSummary.operationalStatus,
   createdAt: dbSummary.createdAt,
   updatedAt: dbSummary.updatedAt,
   annotationCount: dbSummary.annotationCount,
