@@ -209,6 +209,11 @@ Current branch context:
     - `/assignments/[assignmentId]` as the safe submit/resubmit/detail surface
     - `/results` as the waiting/publication lens for submitted or published rows only
     - a dedicated student assignment read model behind `/api/me/assignments/**` that derives `submittedAt`, `hasSubmission`, `hasPublishedResult`, `canSubmit`, and `canResubmit`
+  - the closed route/shell/design-system unification slice:
+    - stable public URLs across staff and student surfaces
+    - `(staff)` and `(student)` as the official live route groups
+    - `WorkspaceShell` as the shared live shell/navigation owner
+    - shared `PageHeader` / `StatusBadge` primitives across the main live pages
 
 ## 5. What is intentionally not implemented yet
 
@@ -316,8 +321,7 @@ Bridge rule that still matters:
 
 Recommended next scope:
 
-- move next to the two already-identified follow-up areas:
-  - route/shell/design-system unification
+- move next beyond the closed auth + membership + student-flow arc into broader product hardening and expansion
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - treat the archived local-store packages as offline/debug code, not as a live runtime path
 - keep auth/authz separate from grading-domain logic

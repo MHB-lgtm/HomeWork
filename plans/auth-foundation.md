@@ -46,11 +46,16 @@ Today the repo has:
   - `/assignments/[assignmentId]` as the safe submit/resubmit/detail page
   - `/results` as the waiting/publication lens for submitted or published rows only
   - a dedicated student assignment read model behind `/api/me/assignments/**` that derives `submittedAt`, `hasSubmission`, `hasPublishedResult`, `canSubmit`, and `canResubmit`
+- the current workspace now also contains the closed route/shell/design-system unification slice:
+  - `(staff)` and `(student)` as the official live route-group boundaries
+  - `WorkspaceShell` as the shared live shell and navigation owner
+  - stable public URLs with unified page ownership and shared `PageHeader` / `StatusBadge` presentation
+  - `AccountMenu` reduced to account/session actions only
 
 Still not implemented:
 
 - broader course ownership for exams, rubrics, jobs, and reviews
-- the follow-up product scope now moves to route/shell/design-system unification
+- the follow-up product scope now moves beyond the closed auth + membership + student-flow arc
 
 ## 3. Boundary that remains approved
 

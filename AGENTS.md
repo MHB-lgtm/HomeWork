@@ -111,6 +111,12 @@
   - `/assignments/[assignmentId]` now renders safe submit, waiting, published, and resubmit states without exposing staff review internals
   - `/results` now acts as the student waiting/publication lens and lists only assignments with a latest submission or published result
   - `/api/me/assignments/**` now uses a dedicated student assignment read model that derives `submittedAt`, `hasSubmission`, `hasPublishedResult`, `canSubmit`, and `canResubmit`
+- The current workspace now also completed section 4 route/shell/design-system unification:
+  - public URLs remain stable across staff and student surfaces
+  - `(staff)` and `(student)` are now the official live route-group boundaries for role-owned pages
+  - `WorkspaceShell` now owns the live shell and navigation behavior for both staff and student routes
+  - `AccountMenu` is now limited to account/session actions, while role navigation is centralized in shell config
+  - shared `PageHeader` and `StatusBadge` primitives now drive the main live page headers and status presentation
 - PostgreSQL + Prisma is now the live runtime source of truth for application state. The archived local-store packages remain in-repo only for offline rollback, compatibility, archive, and debug workflows.
 
 ## Validation guidance

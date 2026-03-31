@@ -333,6 +333,15 @@ Current student lifecycle UX refinement addition:
   - `PUBLISHED` shows the current published summary, score, and breakdown
   - publish through `/reviews/[jobId]` updates both the dashboard and the assignment ops surfaces
 
+Current route/shell/design-system unification addition:
+
+- public URLs remain stable for staff and student surfaces
+- `(staff)` and `(student)` are now the official live route-group boundaries for role-owned pages
+- `WorkspaceShell` now owns the live navigation and shell behavior for both roles
+- `AccountMenu` now handles account/session actions only and no longer owns role navigation links
+- shared `PageHeader` and `StatusBadge` primitives now drive the main live page headers and status presentation
+- `/jobs/new` now uses a dedicated `jobs-new/page-client.tsx` entrypoint instead of the legacy root page-client path
+
 ### 3.2 Current persistence model
 
 The primary persistence model is now DB-first for live application state. Filesystem usage remains for asset bytes, archive-only legacy files, rollback tooling, and explicit offline compatibility/debug materialization under `HG_DATA_DIR`.
@@ -517,7 +526,7 @@ The approved persistence direction is PostgreSQL + Prisma.
 
 This is now the active persistence design direction for the repo. Older Firebase / Firestore notes are historical context only and should not be treated as the current approved path for the next milestone.
 
-Persistence cutover for live application state is now complete through Wave 4B. Auth M1, M2, M3A, and M3B are now closed. The current auth + membership + student-flow arc is now complete through the student own-data read side.
+Persistence cutover for live application state is now complete through Wave 4B. Auth M1, M2, M3A, M3B, the post-M3B ops phase, section 3, and section 4 are now closed. The current auth + membership + student-flow arc is now structurally closed end-to-end.
 
 Current design source of truth:
 
@@ -619,9 +628,10 @@ The main open or deferred architectural decisions are:
 5. Assignment and exam ownership rollout
    - how quickly the product should extend the current assignment submission slice into fuller canonical `Submission` / `Assignment` / `ExamBatch` ownership across the rest of the product.
 
-6. Post-M3B product expansion
-   - how the repo should prioritize the next two already-identified follow-up areas:
-     - route/shell/design-system unification
+6. Post-section-4 product expansion
+   - how the repo should prioritize the next broader follow-up areas after the closed auth + membership + student-flow arc:
+     - broader course ownership hardening for non-course-owned staff surfaces
+     - broader publication, gradebook, and student portal expansion
 
 ## 12. Validation commands that matter today
 
