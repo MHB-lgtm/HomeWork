@@ -314,6 +314,23 @@ Current post-M3B ops phase addition:
   - `Demo Course Admin` can load `/` as the lecturer dashboard
   - a fresh assignment can be opened through `Open Ops`
   - the staff ops surfaces show `SUBMITTED`, `PROCESSING`, `READY_FOR_REVIEW`, and `PUBLISHED`
+
+Current student lifecycle UX refinement addition:
+
+- `/assignments` now acts as the student action workspace and groups visible assignments into ready-to-submit, submitted, and published sections
+- `/assignments/[assignmentId]` now renders safe `OPEN`, `SUBMITTED`, and `PUBLISHED` states, including resubmission while the assignment remains open
+- `/api/me/assignments` and `/api/me/assignments/[assignmentId]` now use a dedicated student assignment read model that derives:
+  - `visibleStatus`
+  - `submittedAt`
+  - `hasSubmission`
+  - `hasPublishedResult`
+  - `canSubmit`
+  - `canResubmit`
+- `/results` now acts as a waiting/publication lens and lists only assignments with a latest non-`SUPERSEDED` submission or published result
+- `/results/[assignmentId]` remains safe before publish:
+  - `OPEN` shows a no-submission-yet state
+  - `SUBMITTED` shows a waiting-for-publication state
+  - `PUBLISHED` shows the current published summary, score, and breakdown
   - publish through `/reviews/[jobId]` updates both the dashboard and the assignment ops surfaces
 
 ### 3.2 Current persistence model
@@ -604,7 +621,6 @@ The main open or deferred architectural decisions are:
 
 6. Post-M3B product expansion
    - how the repo should prioritize the next two already-identified follow-up areas:
-     - student lifecycle UX refinement
      - route/shell/design-system unification
 
 ## 12. Validation commands that matter today

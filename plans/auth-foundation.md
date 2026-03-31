@@ -41,11 +41,16 @@ Today the repo has:
     - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`
     - `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
   - assignment-first staff ops pages that keep `/reviews/[jobId]` as the edit/publish workspace
+- the current workspace now also contains the first student lifecycle UX refinement slice:
+  - `/assignments` as the grouped student action workspace for `OPEN`, `SUBMITTED`, and `PUBLISHED`
+  - `/assignments/[assignmentId]` as the safe submit/resubmit/detail page
+  - `/results` as the waiting/publication lens for submitted or published rows only
+  - a dedicated student assignment read model behind `/api/me/assignments/**` that derives `submittedAt`, `hasSubmission`, `hasPublishedResult`, `canSubmit`, and `canResubmit`
 
 Still not implemented:
 
 - broader course ownership for exams, rubrics, jobs, and reviews
-- the follow-up product scope now moves to student lifecycle UX refinement and route/shell/design-system unification
+- the follow-up product scope now moves to route/shell/design-system unification
 
 ## 3. Boundary that remains approved
 

@@ -106,6 +106,11 @@
   - `GET /api/staff/dashboard`, `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions`, and `GET /api/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]` now expose assignment-first operational reads
   - `/courses/[courseId]/assignments/[assignmentId]` and `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]` now provide staff ops read surfaces, while `/reviews/[jobId]` remains the edit/publish workspace
   - staff ops reads remain course-scoped for `SUPER_ADMIN` or active `COURSE_ADMIN` / `LECTURER` membership only
+- The current workspace now also includes the first student lifecycle UX refinement slice:
+  - `/assignments` now acts as the grouped student action workspace for `OPEN`, `SUBMITTED`, and `PUBLISHED` assignment states
+  - `/assignments/[assignmentId]` now renders safe submit, waiting, published, and resubmit states without exposing staff review internals
+  - `/results` now acts as the student waiting/publication lens and lists only assignments with a latest submission or published result
+  - `/api/me/assignments/**` now uses a dedicated student assignment read model that derives `submittedAt`, `hasSubmission`, `hasPublishedResult`, `canSubmit`, and `canResubmit`
 - PostgreSQL + Prisma is now the live runtime source of truth for application state. The archived local-store packages remain in-repo only for offline rollback, compatibility, archive, and debug workflows.
 
 ## Validation guidance

@@ -204,6 +204,11 @@ Current branch context:
   - `/courses/[courseId]/assignments/[assignmentId]`
   - `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]`
   - `/reviews/[jobId]` remaining the edit/publish workspace and publish boundary
+  - the first student lifecycle UX refinement slice:
+    - `/assignments` as the grouped student action workspace
+    - `/assignments/[assignmentId]` as the safe submit/resubmit/detail surface
+    - `/results` as the waiting/publication lens for submitted or published rows only
+    - a dedicated student assignment read model behind `/api/me/assignments/**` that derives `submittedAt`, `hasSubmission`, `hasPublishedResult`, `canSubmit`, and `canResubmit`
 
 ## 5. What is intentionally not implemented yet
 
@@ -312,7 +317,6 @@ Bridge rule that still matters:
 Recommended next scope:
 
 - move next to the two already-identified follow-up areas:
-  - student lifecycle UX refinement
   - route/shell/design-system unification
 - keep rollback export offline-only and do not reintroduce live fallback reads
 - treat the archived local-store packages as offline/debug code, not as a live runtime path

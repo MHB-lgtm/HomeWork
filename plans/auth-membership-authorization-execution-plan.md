@@ -309,9 +309,15 @@ Delivered:
 
 ## 9. Recommended Immediate Next Milestone
 
-The current auth + membership + student-flow arc is now complete through `M3B`, and the immediate post-`M3B` ops phase is now closed. Follow-up work should move to:
+The current auth + membership + student-flow arc is now complete through `M3B`, and the immediate post-`M3B` ops phase is now closed. The current workspace now also contains the first student lifecycle UX refinement slice:
 
-- student lifecycle UX refinement
+- `/assignments` as the grouped student action workspace for `OPEN`, `SUBMITTED`, and `PUBLISHED`
+- `/assignments/[assignmentId]` as the safe submit/resubmit/detail surface
+- `/results` as the waiting/publication lens for submitted or published rows only
+- a dedicated student assignment read model behind `/api/me/assignments/**` that derives `submittedAt`, `hasSubmission`, `hasPublishedResult`, `canSubmit`, and `canResubmit`
+
+Follow-up work should now move to:
+
 - route/shell/design-system unification
 
 ## 10. Validation Strategy
