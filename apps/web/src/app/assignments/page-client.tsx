@@ -11,7 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ImmersiveShell } from '@/components/layout/ImmersiveShell';
 
-const formatDate = (value: string) => {
+const formatDate = (value: string | null | undefined) => {
+  if (!value) {
+    return 'Not available';
+  }
+
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     return value;
@@ -28,6 +32,106 @@ const getErrorMessage = (error: unknown) => {
     return error.message;
   }
   return 'Failed to load assignments.';
+};
+
+const getActionConfig = (assignment: StudentAssignment) => {
+  switch (assignment.visibleStatus) {
+    case 'OPEN':
+      return {
+        href: `/assignments/${assignment.assignmentId}`,
+        label: assignment.canSubmit ? 'Open assignment' : 'View assignment',
+      };
+    case 'SUBMITTED':
+      return {
+        href: `/assignments/${assignment.assignmentId}`,
+        label: assignment.canResubmit ? 'View or resubmit' : 'View submission status',
+      };
+    case 'PUBLISHED':
+      return {
+        href: `/results/${assignment.assignmentId}`,
+        label: 'View published result',
+      };
+  }
+};
+
+const renderAssignmentMeta = (assignment: StudentAssignment) => {
+  if (assignment.visibleStatus === 'OPEN' && !assignment.canSubmit) {
+    return 'Submission window closed.';
+  }
+
+  if (assignment.visibleStatus === 'SUBMITTED') {
+    return assignment.submittedAt
+      ? `Submitted on ${formatDate(assignment.submittedAt)}.`
+      : 'Submission received and awaiting publication.';
+  }
+
+  if (assignment.visibleStatus === 'PUBLISHED') {
+    return assignment.canResubmit
+      ? 'Published result is available. Updated submissions are still allowed.'
+      : 'Published result is available.';
+  }
+
+  return 'Ready for your submission.';
+};
+
+const renderSection = (
+  title: string,
+  description: string,
+  assignments: StudentAssignment[]
+) => {
+  if (assignments.length === 0) {
+    return null;
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="space-y-1">
+        <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+        <p className="text-sm text-slate-600">{description}</p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        {assignments.map((assignment) => {
+          const action = getActionConfig(assignment);
+
+          return (
+            <Card
+              key={assignment.assignmentId}
+              className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]"
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg font-semibold text-slate-900">
+                      {assignment.title}
+                    </CardTitle>
+                    <p className="text-xs font-mono text-slate-500">{assignment.assignmentId}</p>
+                  </div>
+                  <Badge variant={assignment.visibleStatus === 'PUBLISHED' ? 'default' : 'outline'}>
+                    {assignment.visibleStatus}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1 text-sm text-slate-600">
+                  <div>Opens: {formatDate(assignment.openAt)}</div>
+                  <div>Deadline: {formatDate(assignment.deadlineAt)}</div>
+                  <div>{renderAssignmentMeta(assignment)}</div>
+                </div>
+                <Link href={action.href} className="block">
+                  <Button className="w-full">{action.label}</Button>
+                </Link>
+                {assignment.visibleStatus === 'PUBLISHED' && assignment.canResubmit ? (
+                  <p className="text-xs text-slate-500">
+                    Need to replace your work? Open the assignment page to submit a new version.
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    </section>
+  );
 };
 
 export default function StudentAssignmentsPageClient() {
@@ -52,13 +156,25 @@ export default function StudentAssignmentsPageClient() {
     void load();
   }, []);
 
+  const readyAssignments = assignments.filter((assignment) => assignment.visibleStatus === 'OPEN');
+  const submittedAssignments = assignments.filter(
+    (assignment) => assignment.visibleStatus === 'SUBMITTED'
+  );
+  const publishedAssignments = assignments.filter(
+    (assignment) => assignment.visibleStatus === 'PUBLISHED'
+  );
+
   return (
     <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-10 pt-10 md:px-6">
       <div className="mx-auto w-full max-w-5xl space-y-8">
         <header className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/90 px-6 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
           <div className="space-y-1">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">Student Workspace</p>
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-slate-900">Assignments</h1>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Student Workspace
+            </p>
+            <h1 className="font-heading text-3xl font-bold tracking-tight text-slate-900">
+              Assignments
+            </h1>
           </div>
           <AccountMenu />
         </header>
@@ -79,36 +195,22 @@ export default function StudentAssignmentsPageClient() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {assignments.map((assignment) => (
-              <Card
-                key={assignment.assignmentId}
-                className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]"
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <CardTitle className="text-lg font-semibold text-slate-900">
-                        {assignment.title}
-                      </CardTitle>
-                      <p className="text-xs font-mono text-slate-500">{assignment.assignmentId}</p>
-                    </div>
-                    <Badge variant={assignment.visibleStatus === 'PUBLISHED' ? 'default' : 'outline'}>
-                      {assignment.visibleStatus}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-1 text-sm text-slate-600">
-                    <div>Opens: {formatDate(assignment.openAt)}</div>
-                    <div>Deadline: {formatDate(assignment.deadlineAt)}</div>
-                  </div>
-                  <Link href={`/assignments/${assignment.assignmentId}`} className="block">
-                    <Button className="w-full">Open assignment</Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
+          <div className="space-y-8">
+            {renderSection(
+              'Ready to submit',
+              'Assignments that are available in your workspace right now.',
+              readyAssignments
+            )}
+            {renderSection(
+              'Submitted',
+              'Your submission is recorded. These rows stay safe and hide staff review progress until publish.',
+              submittedAssignments
+            )}
+            {renderSection(
+              'Published',
+              'Published results are available here and in the Results workspace.',
+              publishedAssignments
+            )}
           </div>
         )}
       </div>

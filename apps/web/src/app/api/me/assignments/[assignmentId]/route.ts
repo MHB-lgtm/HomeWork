@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerPersistence } from '@/lib/server/persistence';
-import { requireStudentAssignmentAccess } from '@/lib/server/session';
+import { requireStudentApiAccess } from '@/lib/server/session';
 
 export const runtime = 'nodejs';
 
@@ -20,15 +20,16 @@ export async function GET(
   _request: Request,
   { params }: { params: { assignmentId: string } }
 ) {
-  try {
-    const access = await requireStudentAssignmentAccess(params.assignmentId);
-    const persistence = ensurePersistence();
-    if (persistence instanceof NextResponse) return persistence;
+  const access = await requireStudentApiAccess({ allowSuperAdmin: true });
+  if (access instanceof NextResponse) {
+    return access;
+  }
 
-    const assignment =
-      access.access.globalRole === 'SUPER_ADMIN'
-        ? await persistence.assignments.getAssignment(params.assignmentId)
-        : access.assignment;
+  const persistence = ensurePersistence();
+  if (persistence instanceof NextResponse) return persistence;
+
+  if (access.globalRole === 'SUPER_ADMIN') {
+    const assignment = await persistence.assignments.getAssignment(params.assignmentId);
     if (!assignment) {
       return NextResponse.json(
         { ok: false, error: 'Assignment not found', code: 'ASSIGNMENT_NOT_FOUND' },
@@ -36,33 +37,30 @@ export async function GET(
       );
     }
 
-    const result =
-      access.access.globalRole === 'SUPER_ADMIN'
-        ? null
-        : await persistence.studentResults.getStudentAssignmentResult(
-            access.access.userId,
-            params.assignmentId
-          );
-
     return NextResponse.json({
       ok: true,
       data: {
         ...assignment,
-        visibleStatus: result?.visibleStatus ?? 'OPEN',
+        visibleStatus: 'OPEN',
+        submittedAt: null,
+        hasSubmission: false,
+        hasPublishedResult: false,
+        canSubmit: false,
+        canResubmit: false,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === 'Authentication required') {
-      return NextResponse.json(
-        { ok: false, error: message, code: 'AUTH_REQUIRED' },
-        { status: 401 }
-      );
-    }
+  }
 
+  const assignment = await persistence.studentAssignments.getStudentAssignment(
+    access.userId,
+    params.assignmentId
+  );
+  if (!assignment) {
     return NextResponse.json(
-      { ok: false, error: 'Forbidden', code: 'FORBIDDEN' },
-      { status: 403 }
+      { ok: false, error: 'Assignment not found', code: 'ASSIGNMENT_NOT_FOUND' },
+      { status: 404 }
     );
   }
+
+  return NextResponse.json({ ok: true, data: assignment });
 }

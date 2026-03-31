@@ -280,7 +280,9 @@ export class PrismaStudentResultsStore {
       },
     })) as unknown as StudentAssignmentRow[];
 
-    return rows.map(buildStatusRecord);
+    return rows
+      .filter((row) => row.submissions.length > 0)
+      .map(buildStatusRecord);
   }
 
   async getStudentAssignmentResult(

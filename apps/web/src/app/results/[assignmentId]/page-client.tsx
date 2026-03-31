@@ -18,7 +18,7 @@ type StudentResultDetailsPageClientProps = {
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const formatDate = (value: string | null | undefined) => {
   if (!value) {
@@ -41,17 +41,6 @@ const getErrorMessage = (error: unknown) => {
     return error.message;
   }
   return 'Failed to load result.';
-};
-
-const getStatusMessage = (result: StudentAssignmentResult) => {
-  switch (result.visibleStatus) {
-    case 'OPEN':
-      return 'No submission has been recorded for this assignment yet.';
-    case 'SUBMITTED':
-      return 'Your submission is recorded. Results will appear here after staff publish them.';
-    case 'PUBLISHED':
-      return null;
-  }
 };
 
 const renderBreakdown = (breakdownSnapshot: unknown) => {
@@ -88,9 +77,7 @@ const renderBreakdown = (breakdownSnapshot: unknown) => {
             className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none"
           >
             <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-900">
-                {questionId}
-              </CardTitle>
+              <CardTitle className="text-base font-semibold text-slate-900">{questionId}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {summary ? <p className="text-sm text-slate-700">{summary}</p> : null}
@@ -102,9 +89,7 @@ const renderBreakdown = (breakdownSnapshot: unknown) => {
                         ? finding.title
                         : `Finding ${findingIndex + 1}`;
                     const description =
-                      typeof finding.description === 'string'
-                        ? finding.description
-                        : null;
+                      typeof finding.description === 'string' ? finding.description : null;
                     const severity =
                       typeof finding.severity === 'string' ? finding.severity : null;
                     const kind = typeof finding.kind === 'string' ? finding.kind : 'issue';
@@ -169,8 +154,6 @@ export default function StudentResultDetailsPageClient({
 
     void load();
   }, [params.assignmentId]);
-
-  const statusMessage = result ? getStatusMessage(result) : null;
 
   return (
     <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-10 pt-10 md:px-6">
@@ -249,19 +232,34 @@ export default function StudentResultDetailsPageClient({
                       Score
                     </div>
                     <div className="mt-2 text-sm text-slate-900">
-                      {result.hasPublishedResult && result.score !== null && result.score !== undefined
+                      {result.visibleStatus === 'PUBLISHED' &&
+                      result.score !== null &&
+                      result.score !== undefined
                         ? `${result.score}/${result.maxScore ?? 100}`
                         : 'Awaiting publication'}
                     </div>
                   </div>
                 </div>
 
-                {statusMessage ? (
+                {result.visibleStatus === 'OPEN' ? (
                   <Alert>
-                    <AlertTitle>Status</AlertTitle>
-                    <AlertDescription>{statusMessage}</AlertDescription>
+                    <AlertTitle>No submission yet</AlertTitle>
+                    <AlertDescription>
+                      No submission has been recorded for this assignment yet. Use the assignment page to upload your work.
+                    </AlertDescription>
                   </Alert>
-                ) : (
+                ) : null}
+
+                {result.visibleStatus === 'SUBMITTED' ? (
+                  <Alert>
+                    <AlertTitle>Awaiting publication</AlertTitle>
+                    <AlertDescription>
+                      Your submission is recorded. This page stays intentionally minimal until staff publish the result.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+
+                {result.visibleStatus === 'PUBLISHED' ? (
                   <div className="space-y-6">
                     <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
                       <CardHeader className="pb-2">
@@ -281,7 +279,7 @@ export default function StudentResultDetailsPageClient({
                       {renderBreakdown(result.breakdownSnapshot)}
                     </div>
                   </div>
-                )}
+                ) : null}
               </>
             ) : (
               <div className="text-sm text-slate-600">Result not available.</div>

@@ -77,6 +77,11 @@ export type StudentVisibleAssignmentStatus = z.infer<
 
 export const StudentAssignmentSchema = AssignmentSchema.extend({
   visibleStatus: StudentVisibleAssignmentStatusSchema,
+  submittedAt: z.string().nullable().optional(),
+  hasSubmission: z.boolean(),
+  hasPublishedResult: z.boolean(),
+  canSubmit: z.boolean(),
+  canResubmit: z.boolean(),
 });
 
 export type StudentAssignment = z.infer<typeof StudentAssignmentSchema>;

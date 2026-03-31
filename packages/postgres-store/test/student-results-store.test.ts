@@ -303,7 +303,7 @@ const createFakeStudentResultsPrisma = () => {
 };
 
 describe('PrismaStudentResultsStore', () => {
-  it('lists only own visible assignment results and keeps status-only rows before publish', async () => {
+  it('lists only own submitted or published rows and keeps open detail available separately', async () => {
     const fake = createFakeStudentResultsPrisma();
     const store = new PrismaStudentResultsStore(fake.prisma as any);
 
@@ -391,21 +391,18 @@ describe('PrismaStudentResultsStore', () => {
 
     const results = await store.listStudentAssignmentResults('student-1');
 
-    expect(results).toHaveLength(3);
+    expect(results).toHaveLength(2);
     expect(results.map((result) => result.assignmentId)).toEqual([
       'assignment-published',
       'assignment-submitted',
-      'assignment-not-submitted',
     ]);
     expect(results.map((result) => result.submissionState)).toEqual([
       'PUBLISHED',
       'SUBMITTED',
-      'NOT_SUBMITTED',
     ]);
     expect(results.map((result) => result.visibleStatus)).toEqual([
       'PUBLISHED',
       'SUBMITTED',
-      'OPEN',
     ]);
     expect(results[0]).toMatchObject({
       assignmentId: 'assignment-published',
@@ -421,8 +418,14 @@ describe('PrismaStudentResultsStore', () => {
       score: null,
       maxScore: null,
     });
-    expect(results[2]).toMatchObject({
+    const openDetail = await store.getStudentAssignmentResult(
+      'student-1',
+      'assignment-not-submitted'
+    );
+
+    expect(openDetail).toMatchObject({
       assignmentId: 'assignment-not-submitted',
+      visibleStatus: 'OPEN',
       submissionState: 'NOT_SUBMITTED',
       hasPublishedResult: false,
       submittedAt: null,

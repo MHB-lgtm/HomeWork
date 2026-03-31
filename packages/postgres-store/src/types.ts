@@ -146,6 +146,9 @@ export interface StudentAssignmentStatusRecord {
   maxScore?: number | null;
 }
 
+export type StudentAssignmentRecord =
+  import('@hg/shared-schemas').StudentAssignment;
+
 export interface StudentAssignmentResultRecord extends StudentAssignmentStatusRecord {
   publishedResultId?: string | null;
   summary?: string | null;

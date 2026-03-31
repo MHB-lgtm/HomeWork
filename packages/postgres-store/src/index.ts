@@ -18,6 +18,7 @@ export type {
   AssignmentSubmissionOpsRowRecord,
   AssignmentSubmissionOpsDetailRecord,
   StaffReviewPublicationSummaryRecord,
+  StudentAssignmentRecord,
   StudentAssignmentResultRecord,
   StudentAssignmentStatusRecord,
   StudentAssignmentSubmissionStateValue,
@@ -59,6 +60,7 @@ export {
   AssignmentNotFoundError,
   AssignmentNotFoundError as PostgresAssignmentNotFoundError,
 } from './queries/assignment-store';
+export { PrismaStudentAssignmentsStore } from './queries/student-assignments-store';
 export { PrismaStudentResultsStore } from './queries/student-results-store';
 export { PrismaStaffOperationsStore } from './queries/staff-operations-store';
 export { PrismaExamStore } from './queries/exam-store';
