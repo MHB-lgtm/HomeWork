@@ -10,11 +10,12 @@ import {
   getAssignmentSubmissionOps,
   StaffOperationsClientError,
 } from '@/lib/staffOperationsClient';
-import { ImmersiveShell } from '@/components/layout/ImmersiveShell';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 type AssignmentOpsPageClientProps = {
@@ -55,38 +56,6 @@ const formatScore = (row: { score?: number | null; maxScore?: number | null }) =
   }
 
   return `${row.score}/${row.maxScore}`;
-};
-
-const getOperationalBadgeVariant = (
-  status: AssignmentSubmissionOpsRow['operationalStatus']
-): 'default' | 'secondary' | 'outline' | 'destructive' => {
-  switch (status) {
-    case 'PUBLISHED':
-      return 'default';
-    case 'READY_FOR_REVIEW':
-      return 'default';
-    case 'PROCESSING':
-      return 'secondary';
-    case 'FAILED':
-      return 'destructive';
-    case 'SUBMITTED':
-    default:
-      return 'outline';
-  }
-};
-
-const getPublishBadgeVariant = (
-  status: AssignmentSubmissionOpsRow['publishEligibility']
-): 'default' | 'secondary' | 'outline' | 'destructive' => {
-  switch (status) {
-    case 'PUBLISHED':
-      return 'default';
-    case 'READY':
-      return 'secondary';
-    case 'NOT_READY':
-    default:
-      return 'outline';
-  }
 };
 
 const buildAssignmentSummary = (assignment: StaffDashboardAssignmentRow) => [
@@ -138,17 +107,13 @@ export default function AssignmentOpsPageClient({
   );
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-        <section className="flex w-full flex-col items-center gap-4 text-center">
-          <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-            Assignment Operations
-          </h1>
-          <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-            Track the current submission row per student and jump into the review workspace when
-            a submission is ready.
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <PageHeader
+        title={assignment?.assignmentTitle ?? 'Assignment Operations'}
+        description="Track the current submission row per student and jump into the review workspace when a submission is ready."
+        badges={assignment ? <Badge variant="secondary">{assignment.assignmentState}</Badge> : null}
+        actions={
+          <>
             <Link href={`/courses/${courseId}`}>
               <Button variant="outline" size="sm">
                 Back to Course
@@ -162,139 +127,130 @@ export default function AssignmentOpsPageClient({
             <Link href="/reviews">
               <Button size="sm">Reviews</Button>
             </Link>
-          </div>
-        </section>
+          </>
+        }
+      />
 
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Assignment ops error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Assignment ops error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <Card className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
-          <CardHeader className="space-y-3 pb-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  {assignment?.assignmentTitle ?? 'Loading assignment...'}
-                </CardTitle>
-                <p className="text-sm text-slate-600">
-                  {assignment?.courseTitle ?? 'Course summary'}
-                </p>
-              </div>
-              {assignment ? (
-                <div className="flex flex-wrap gap-2">
-                  <Badge variant="secondary">{assignment.assignmentState}</Badge>
-                  <Badge variant="outline">{assignment.assignmentId}</Badge>
-                </div>
-              ) : null}
+      <Card className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
+        <CardHeader className="space-y-3 pb-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-lg font-semibold text-slate-900">
+                {assignment?.assignmentTitle ?? 'Loading assignment...'}
+              </CardTitle>
+              <p className="text-sm text-slate-600">
+                {assignment?.courseTitle ?? 'Course summary'}
+              </p>
             </div>
-            {assignment ? (
-              <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-3">
-                <div>Open: {formatDate(assignment.openAt)}</div>
-                <div>Deadline: {formatDate(assignment.deadlineAt)}</div>
-                <div>Latest activity: {formatDate(assignment.latestActivityAt)}</div>
+            {assignment ? <Badge variant="outline">{assignment.assignmentId}</Badge> : null}
+          </div>
+          {assignment ? (
+            <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-3">
+              <div>Open: {formatDate(assignment.openAt)}</div>
+              <div>Deadline: {formatDate(assignment.deadlineAt)}</div>
+              <div>Latest activity: {formatDate(assignment.latestActivityAt)}</div>
+            </div>
+          ) : null}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading assignment ops...</div>
+          ) : assignment ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {summaryBadges.map((item) => (
+                  <Badge key={item.label} variant={item.variant}>
+                    {item.value} {item.label.toLowerCase()}
+                  </Badge>
+                ))}
               </div>
-            ) : null}
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {loading ? (
-              <div className="text-sm text-slate-600">Loading assignment ops...</div>
-            ) : assignment ? (
-              <>
-                <div className="flex flex-wrap gap-2">
-                  {summaryBadges.map((item) => (
-                    <Badge key={item.label} variant={item.variant}>
-                      {item.value} {item.label.toLowerCase()}
-                    </Badge>
-                  ))}
-                </div>
 
-                {submissions.length === 0 ? (
-                  <div className="text-sm text-slate-600">
-                    No student submissions yet. Active student seats are counted above, but only
-                    latest non-superseded submissions appear here.
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Publish</TableHead>
-                        <TableHead>Score</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {submissions.map((submission) => (
-                        <TableRow key={submission.submissionId}>
-                          <TableCell className="align-top">
-                            <div className="space-y-1">
-                              <div className="font-medium text-slate-900">
-                                {submission.studentDisplayName ?? 'Unnamed student'}
-                              </div>
-                              <div className="text-xs text-slate-600">
-                                {submission.studentEmail ?? submission.studentUserId}
-                              </div>
-                              <div className="text-xs font-mono text-slate-500">
-                                {submission.submissionId}
-                              </div>
+              {submissions.length === 0 ? (
+                <div className="text-sm text-slate-600">
+                  No student submissions yet. Active student seats are counted above, but only
+                  latest non-superseded submissions appear here.
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Submitted</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Publish</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {submissions.map((submission) => (
+                      <TableRow key={submission.submissionId}>
+                        <TableCell className="align-top">
+                          <div className="space-y-1">
+                            <div className="font-medium text-slate-900">
+                              {submission.studentDisplayName ?? 'Unnamed student'}
                             </div>
-                          </TableCell>
-                          <TableCell className="align-top text-sm text-slate-600">
-                            <div>{formatDate(submission.submittedAt)}</div>
-                            <div className="text-xs">Review updated: {formatDate(submission.reviewUpdatedAt)}</div>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <Badge variant={getOperationalBadgeVariant(submission.operationalStatus)}>
-                              {submission.operationalStatus}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="align-top">
-                            <div className="space-y-2">
-                              <Badge variant={getPublishBadgeVariant(submission.publishEligibility)}>
-                                {submission.publishEligibility}
-                              </Badge>
-                              {submission.republishNeeded ? (
-                                <div className="text-xs text-slate-600">Republish needed</div>
-                              ) : null}
+                            <div className="text-xs text-slate-600">
+                              {submission.studentEmail ?? submission.studentUserId}
                             </div>
-                          </TableCell>
-                          <TableCell className="align-top text-sm text-slate-600">
-                            <div>{formatScore(submission)}</div>
-                            <div className="text-xs">Published: {formatDate(submission.publishedAt)}</div>
-                          </TableCell>
-                          <TableCell className="align-top text-right">
-                            <div className="flex justify-end gap-2">
-                              <Link
-                                href={`/courses/${courseId}/assignments/${assignmentId}/submissions/${submission.submissionId}`}
-                              >
-                                <Button size="sm" variant="outline">
-                                  Details
-                                </Button>
+                            <div className="text-xs font-mono text-slate-500">
+                              {submission.submissionId}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top text-sm text-slate-600">
+                          <div>{formatDate(submission.submittedAt)}</div>
+                          <div className="text-xs">Review updated: {formatDate(submission.reviewUpdatedAt)}</div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <StatusBadge status={submission.operationalStatus} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="space-y-2">
+                            <StatusBadge status={submission.publishEligibility} />
+                            {submission.republishNeeded ? (
+                              <div className="text-xs text-slate-600">Republish needed</div>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top text-sm text-slate-600">
+                          <div>{formatScore(submission)}</div>
+                          <div className="text-xs">Published: {formatDate(submission.publishedAt)}</div>
+                        </TableCell>
+                        <TableCell className="align-top text-right">
+                          <div className="flex justify-end gap-2">
+                            <Link
+                              href={`/courses/${courseId}/assignments/${assignmentId}/submissions/${submission.submissionId}`}
+                            >
+                              <Button size="sm" variant="outline">
+                                Details
+                              </Button>
+                            </Link>
+                            {submission.jobId ? (
+                              <Link href={`/reviews/${submission.jobId}`}>
+                                <Button size="sm">Review</Button>
                               </Link>
-                              {submission.jobId ? (
-                                <Link href={`/reviews/${submission.jobId}`}>
-                                  <Button size="sm">Review</Button>
-                                </Link>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </>
-            ) : (
-              <div className="text-sm text-slate-600">Assignment not found.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </ImmersiveShell>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </>
+          ) : (
+            <div className="text-sm text-slate-600">Assignment not found.</div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

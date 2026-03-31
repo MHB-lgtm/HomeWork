@@ -9,32 +9,9 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Input } from '../../components/ui/input';
-import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
-
-type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive';
+import { PageHeader } from '../../components/ui/page-header';
+import { StatusBadge } from '../../components/ui/status-badge';
 type ReviewFilter = 'ALL' | 'PUBLISHED' | 'UNPUBLISHED';
-
-const getStatusBadgeVariant = (status: string | null): BadgeVariant => {
-  switch (status) {
-    case 'PUBLISHED':
-      return 'default';
-    case 'READY_FOR_REVIEW':
-      return 'default';
-    case 'FAILED':
-      return 'destructive';
-    case 'PROCESSING':
-      return 'secondary';
-    case 'SUBMITTED':
-      return 'outline';
-    case 'DONE':
-      return 'default';
-    case 'PENDING':
-    case 'RUNNING':
-      return 'secondary';
-    default:
-      return 'outline';
-  }
-};
 
 const formatDate = (value?: string | null) => {
   if (!value) return '-';
@@ -185,20 +162,20 @@ export default function ReviewsListPage() {
   };
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-        <section className="flex w-full flex-col items-center gap-4 text-center">
-          <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">All Reviews</h1>
-          <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-            Monitor review progress, rename jobs, and jump into detailed feedback.
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <PageHeader
+        title="All Reviews"
+        description="Monitor review progress, rename jobs, and jump into detailed feedback."
+        badges={
+          <>
             <Badge variant="secondary">{reviews.length} reviews</Badge>
             <Badge variant="outline">{totalAnnotations} annotations</Badge>
             <Badge variant="outline">{withResults} with results</Badge>
             <Badge variant="outline">{publishedCount} published</Badge>
-          </div>
-          <div className="flex flex-wrap justify-center gap-2">
+          </>
+        }
+        actions={
+          <>
             <Link href="/">
               <Button variant="outline" size="sm">
                 Back to Dashboard
@@ -207,8 +184,9 @@ export default function ReviewsListPage() {
             <Link href="/jobs/new">
               <Button size="sm">Create Review</Button>
             </Link>
-          </div>
-        </section>
+          </>
+        }
+      />
 
         <Card className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
           <CardHeader className="pb-3">
@@ -276,7 +254,7 @@ export default function ReviewsListPage() {
                             <CardTitle className="truncate text-base font-semibold text-slate-900">{reviewTitle}</CardTitle>
                             <p className="truncate text-sm text-slate-600">{examName}</p>
                           </div>
-                          <Badge variant={getStatusBadgeVariant(displayStatus)}>{displayStatus}</Badge>
+                          <StatusBadge status={displayStatus} />
                         </div>
                         <p className="text-xs text-slate-600">Updated: {formatDate(review.updatedAt)}</p>
 
@@ -391,7 +369,6 @@ export default function ReviewsListPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </ImmersiveShell>
+    </div>
   );
 }

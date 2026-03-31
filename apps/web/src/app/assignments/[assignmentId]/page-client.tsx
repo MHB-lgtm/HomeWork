@@ -8,13 +8,12 @@ import {
   getMyAssignment,
   submitMyAssignment,
 } from '@/lib/assignmentsClient';
-import { AccountMenu } from '@/components/auth/AccountMenu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { ImmersiveShell } from '@/components/layout/ImmersiveShell';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 type AssignmentDetailsPageClientProps = {
   params: {
@@ -44,9 +43,6 @@ const getErrorMessage = (error: unknown) => {
   }
   return 'Failed to load assignment.';
 };
-
-const getBadgeVariant = (assignment: StudentAssignment) =>
-  assignment.visibleStatus === 'PUBLISHED' ? 'default' : 'outline';
 
 const getStatusCopy = (assignment: StudentAssignment) => {
   switch (assignment.visibleStatus) {
@@ -134,78 +130,67 @@ export default function AssignmentDetailsPageClient({
       : 'Replace submission';
 
   return (
-    <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-10 pt-10 md:px-6">
-      <div className="mx-auto w-full max-w-4xl space-y-8">
-        <header className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/90 px-6 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Student Workspace
-            </p>
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-slate-900">
-              Assignment
-            </h1>
-          </div>
-          <AccountMenu />
-        </header>
+    <div className="mx-auto w-full max-w-4xl space-y-8">
+      <PageHeader
+        eyebrow="Student Workspace"
+        title={assignment?.title ?? 'Assignment'}
+        description="Submit new work, check your latest submission safely, and open the published result only after staff release it."
+        badges={assignment ? <StatusBadge status={assignment.visibleStatus} /> : null}
+      />
 
-        <div className="flex flex-wrap gap-2">
-          <Link href="/assignments">
+      <div className="flex flex-wrap gap-2">
+        <Link href="/assignments">
+          <Button variant="outline" size="sm">
+            Back to assignments
+          </Button>
+        </Link>
+        {assignment ? (
+          <a
+            href={`/api/me/assignments/${assignment.assignmentId}/prompt-raw`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <Button size="sm">Open assignment PDF</Button>
+          </a>
+        ) : null}
+        {assignment?.visibleStatus === 'PUBLISHED' ? (
+          <Link href={`/results/${assignment.assignmentId}`}>
             <Button variant="outline" size="sm">
-              Back to assignments
+              Open published result
             </Button>
           </Link>
-          {assignment ? (
-            <a
-              href={`/api/me/assignments/${assignment.assignmentId}/prompt-raw`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Button size="sm">Open assignment PDF</Button>
-            </a>
-          ) : null}
-          {assignment?.visibleStatus === 'PUBLISHED' ? (
-            <Link href={`/results/${assignment.assignmentId}`}>
-              <Button variant="outline" size="sm">
-                Open published result
-              </Button>
-            </Link>
-          ) : null}
-        </div>
-
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Assignment error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
         ) : null}
+      </div>
 
-        {submitResult ? (
-          <Alert>
-            <AlertTitle>Submission accepted</AlertTitle>
-            <AlertDescription>{submitResult}</AlertDescription>
-          </Alert>
-        ) : null}
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Assignment error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  {loading ? 'Loading...' : assignment?.title ?? 'Assignment not found'}
-                </CardTitle>
-                {assignment ? (
-                  <p className="text-xs font-mono text-slate-500">{assignment.assignmentId}</p>
-                ) : null}
-              </div>
-              {assignment ? (
-                <Badge variant={getBadgeVariant(assignment)}>{assignment.visibleStatus}</Badge>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
+      {submitResult ? (
+        <Alert>
+          <AlertTitle>Submission accepted</AlertTitle>
+          <AlertDescription>{submitResult}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+        <CardHeader className="pb-3">
+          <div className="space-y-1">
+            <CardTitle className="text-lg font-semibold text-slate-900">
+              {loading ? 'Loading...' : assignment?.title ?? 'Assignment not found'}
+            </CardTitle>
             {assignment ? (
-              <>
-                <div className="grid gap-4 md:grid-cols-3">
+              <p className="text-xs font-mono text-slate-500">{assignment.assignmentId}</p>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {assignment ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                       Opens
@@ -233,77 +218,76 @@ export default function AssignmentDetailsPageClient({
                   <AlertDescription>{getStatusCopy(assignment)}</AlertDescription>
                 </Alert>
 
-                {assignment.visibleStatus === 'SUBMITTED' ? (
-                  <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-semibold text-slate-900">
-                        Waiting for publication
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm text-slate-700">
-                      Your submission is safely recorded. Staff may already be reviewing it, but no
-                      score or feedback will appear here until they publish the result.
-                    </CardContent>
-                  </Card>
-                ) : null}
+              {assignment.visibleStatus === 'SUBMITTED' ? (
+                <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      Waiting for publication
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-slate-700">
+                    Your submission is safely recorded. Staff may already be reviewing it, but no
+                    score or feedback will appear here until they publish the result.
+                  </CardContent>
+                </Card>
+              ) : null}
 
-                {assignment.visibleStatus === 'PUBLISHED' ? (
-                  <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-semibold text-slate-900">
-                        Published result available
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <p className="text-sm text-slate-700">
-                        The published result is now visible in your Results workspace.
-                      </p>
-                      <Link href={`/results/${assignment.assignmentId}`}>
-                        <Button>Open published result</Button>
-                      </Link>
-                    </CardContent>
-                  </Card>
-                ) : null}
+              {assignment.visibleStatus === 'PUBLISHED' ? (
+                <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      Published result available
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <p className="text-sm text-slate-700">
+                      The published result is now visible in your Results workspace.
+                    </p>
+                    <Link href={`/results/${assignment.assignmentId}`}>
+                      <Button>Open published result</Button>
+                    </Link>
+                  </CardContent>
+                </Card>
+              ) : null}
 
-                {assignment.canResubmit ? (
-                  <Alert>
-                    <AlertTitle>Resubmission available</AlertTitle>
-                    <AlertDescription>
-                      Uploading a new file will replace your current active submission for this
-                      assignment.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
+              {assignment.canResubmit ? (
+                <Alert>
+                  <AlertTitle>Resubmission available</AlertTitle>
+                  <AlertDescription>
+                    Uploading a new file will replace your current active submission for this
+                    assignment.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
 
-                {showUploadForm ? (
-                  <form
-                    onSubmit={handleSubmit}
-                    className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4"
-                  >
-                    <div className="space-y-2">
-                      <label htmlFor="student-submission" className="text-sm font-medium text-slate-700">
-                        Submission file
-                      </label>
-                      <Input
-                        id="student-submission"
-                        type="file"
-                        accept=".pdf,image/*"
-                        disabled={submitting}
-                        onChange={(event) => setSubmissionFile(event.target.files?.[0] || null)}
-                      />
-                    </div>
-                    <Button type="submit" disabled={submitting || !submissionFile}>
-                      {submitting ? 'Submitting...' : uploadButtonLabel}
-                    </Button>
-                  </form>
-                ) : null}
-              </>
-            ) : (
-              <div className="text-sm text-slate-600">Assignment not available.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </ImmersiveShell>
+              {showUploadForm ? (
+                <form
+                  onSubmit={handleSubmit}
+                  className="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4"
+                >
+                  <div className="space-y-2">
+                    <label htmlFor="student-submission" className="text-sm font-medium text-slate-700">
+                      Submission file
+                    </label>
+                    <Input
+                      id="student-submission"
+                      type="file"
+                      accept=".pdf,image/*"
+                      disabled={submitting}
+                      onChange={(event) => setSubmissionFile(event.target.files?.[0] || null)}
+                    />
+                  </div>
+                  <Button type="submit" disabled={submitting || !submissionFile}>
+                    {submitting ? 'Submitting...' : uploadButtonLabel}
+                  </Button>
+                </form>
+              ) : null}
+            </>
+          ) : (
+            <div className="text-sm text-slate-600">Assignment not available.</div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

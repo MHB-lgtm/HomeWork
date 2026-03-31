@@ -1,4 +1,4 @@
-import { AppShell } from '@/components/layout/AppShell';
+import { WorkspaceShell } from '@/components/layout/WorkspaceShell';
 import { requireStaffPageAccess } from '@/lib/server/session';
 
 export const dynamic = 'force-dynamic';
@@ -10,5 +10,5 @@ export default async function StaffLayout({
 }) {
   await requireStaffPageAccess();
 
-  return <AppShell>{children}</AppShell>;
+  return <WorkspaceShell role="staff">{children}</WorkspaceShell>;
 }

@@ -8,8 +8,8 @@ import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
 import { EmptyState } from '../../components/ui/empty-state';
 import { Input } from '../../components/ui/input';
-import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
 import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
+import { PageHeader } from '../../components/ui/page-header';
 import { StatusBadge } from '../../components/ui/status-badge';
 import { Textarea } from '../../components/ui/textarea';
 import { CardSkeleton } from '../../components/ui/skeleton';
@@ -248,22 +248,32 @@ export default function RubricsPage() {
   const editorStatus = isSaving ? 'saving' : message?.type === 'success' ? 'saved' : canSave ? 'ready' : 'incomplete';
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-      <section className="flex w-full flex-col items-center gap-4 text-center">
-        <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Rubrics</h1>
-        <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-          Define consistent grading criteria and guidance per question.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <StatusBadge status={hasTargetSelection ? 'DONE' : 'PENDING'} label={hasTargetSelection ? 'Target selected' : 'Select target'} />
-          <StatusBadge
-            status={editorStatus === 'saving' ? 'RUNNING' : editorStatus === 'saved' ? 'DONE' : 'PENDING'}
-            label={editorStatus === 'saving' ? 'Saving' : editorStatus === 'saved' ? 'Saved' : editorStatus === 'ready' ? 'Ready' : 'Incomplete'}
-            className={editorStatus === 'ready' ? 'bg-amber-100 text-amber-900' : undefined}
-          />
-        </div>
-      </section>
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <PageHeader
+        title="Rubrics"
+        description="Define consistent grading criteria and guidance per question."
+        badges={
+          <>
+            <StatusBadge
+              status={hasTargetSelection ? 'DONE' : 'PENDING'}
+              label={hasTargetSelection ? 'Target selected' : 'Select target'}
+            />
+            <StatusBadge
+              status={editorStatus === 'saving' ? 'RUNNING' : editorStatus === 'saved' ? 'DONE' : 'PENDING'}
+              label={
+                editorStatus === 'saving'
+                  ? 'Saving'
+                  : editorStatus === 'saved'
+                    ? 'Saved'
+                    : editorStatus === 'ready'
+                      ? 'Ready'
+                      : 'Incomplete'
+              }
+              className={editorStatus === 'ready' ? 'bg-amber-100 text-amber-900' : undefined}
+            />
+          </>
+        }
+      />
 
       {message ? (
         <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : undefined}>
@@ -494,7 +504,6 @@ export default function RubricsPage() {
           </PanelContent>
         </Panel>
       </div>
-      </div>
-    </ImmersiveShell>
+    </div>
   );
 }

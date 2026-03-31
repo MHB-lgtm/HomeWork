@@ -7,11 +7,12 @@ import {
   listStaffDashboardAssignments,
   StaffOperationsClientError,
 } from '@/lib/staffOperationsClient';
-import { ImmersiveShell } from '@/components/layout/ImmersiveShell';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 const getErrorMessage = (error: unknown) => {
@@ -88,23 +89,21 @@ export default function StaffDashboardPageClient() {
   );
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-        <section className="flex w-full flex-col items-center gap-4 text-center">
-          <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-            Lecturer Ops Dashboard
-          </h1>
-          <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-            Track assignment submissions live, jump into reviews, and publish when ready.
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <PageHeader
+        title="Lecturer Ops Dashboard"
+        description="Track assignment submissions live, jump into reviews, and publish when ready."
+        badges={
+          <>
             <Badge variant="secondary">{totals.assignments} assignments</Badge>
             <Badge variant="outline">{totals.activeStudents} active student seats</Badge>
             <Badge variant="outline">{totals.processing} processing</Badge>
             <Badge variant="outline">{totals.ready} ready</Badge>
             <Badge variant="outline">{totals.publishable} publishable</Badge>
-          </div>
-          <div className="flex flex-wrap justify-center gap-2">
+          </>
+        }
+        actions={
+          <>
             <Link href="/jobs/new">
               <Button size="sm">New Legacy Job</Button>
             </Link>
@@ -118,104 +117,103 @@ export default function StaffDashboardPageClient() {
                 Reviews
               </Button>
             </Link>
-          </div>
-        </section>
+          </>
+        }
+      />
 
-        <Card className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold text-slate-900">
-              Assignment Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {error ? (
-              <Alert variant="destructive">
-                <AlertTitle>Dashboard error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            ) : null}
+      <Card className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-semibold text-slate-900">
+            Assignment Activity
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertTitle>Dashboard error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          ) : null}
 
-            {loading ? (
-              <div className="text-sm text-slate-600">Loading dashboard...</div>
-            ) : rows.length === 0 ? (
-              <div className="text-sm text-slate-600">
-                No accessible assignments yet. Create or open a course assignment to start tracking submissions.
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Assignment</TableHead>
-                    <TableHead>Course</TableHead>
-                    <TableHead>Window</TableHead>
-                    <TableHead>Current status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+          {loading ? (
+            <div className="text-sm text-slate-600">Loading dashboard...</div>
+          ) : rows.length === 0 ? (
+            <EmptyState
+              title="No accessible assignments yet"
+              description="Create or open a course assignment to start tracking submissions."
+            />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Assignment</TableHead>
+                  <TableHead>Course</TableHead>
+                  <TableHead>Window</TableHead>
+                  <TableHead>Current status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow key={`${row.courseId}:${row.assignmentId}`}>
+                    <TableCell className="align-top">
+                      <div className="space-y-1">
+                        <div className="font-medium text-slate-900">{row.assignmentTitle}</div>
+                        <div className="text-xs font-mono text-slate-500">{row.assignmentId}</div>
+                        <div className="text-xs text-slate-600">State: {row.assignmentState}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="space-y-1">
+                        <div className="font-medium text-slate-900">{row.courseTitle}</div>
+                        <div className="text-xs font-mono text-slate-500">{row.courseId}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="align-top text-sm text-slate-600">
+                      <div>Open: {formatDate(row.openAt)}</div>
+                      <div>Deadline: {formatDate(row.deadlineAt)}</div>
+                      <div>Latest: {formatDate(row.latestActivityAt)}</div>
+                    </TableCell>
+                    <TableCell className="align-top">
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline">{row.totalActiveStudents} active</Badge>
+                        {row.notSubmittedCount > 0 ? (
+                          <Badge variant="outline">{row.notSubmittedCount} not submitted</Badge>
+                        ) : null}
+                        {row.processingCount > 0 ? (
+                          <Badge variant="secondary">{row.processingCount} processing</Badge>
+                        ) : null}
+                        {row.readyForReviewCount > 0 ? (
+                          <Badge>{row.readyForReviewCount} ready</Badge>
+                        ) : null}
+                        {row.publishedCount > 0 ? (
+                          <Badge>{row.publishedCount} published</Badge>
+                        ) : null}
+                        {row.failedCount > 0 ? (
+                          <Badge variant="destructive">{row.failedCount} failed</Badge>
+                        ) : null}
+                        {row.republishNeededCount > 0 ? (
+                          <Badge variant="secondary">
+                            {row.republishNeededCount} republish
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500">{toStatusSummary(row)}</p>
+                    </TableCell>
+                    <TableCell className="align-top text-right">
+                      <div className="flex justify-end">
+                        <Link href={`/courses/${row.courseId}/assignments/${row.assignmentId}`}>
+                          <Button size="sm">Open assignment</Button>
+                        </Link>
+                      </div>
+                    </TableCell>
                   </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={`${row.courseId}:${row.assignmentId}`}>
-                      <TableCell className="align-top">
-                        <div className="space-y-1">
-                          <div className="font-medium text-slate-900">{row.assignmentTitle}</div>
-                          <div className="text-xs font-mono text-slate-500">{row.assignmentId}</div>
-                          <div className="text-xs text-slate-600">State: {row.assignmentState}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <div className="space-y-1">
-                          <div className="font-medium text-slate-900">{row.courseTitle}</div>
-                          <div className="text-xs font-mono text-slate-500">{row.courseId}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="align-top text-sm text-slate-600">
-                        <div>Open: {formatDate(row.openAt)}</div>
-                        <div>Deadline: {formatDate(row.deadlineAt)}</div>
-                        <div>Latest: {formatDate(row.latestActivityAt)}</div>
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline">{row.totalActiveStudents} active</Badge>
-                          {row.notSubmittedCount > 0 ? (
-                            <Badge variant="outline">{row.notSubmittedCount} not submitted</Badge>
-                          ) : null}
-                          {row.processingCount > 0 ? (
-                            <Badge variant="secondary">{row.processingCount} processing</Badge>
-                          ) : null}
-                          {row.readyForReviewCount > 0 ? (
-                            <Badge>{row.readyForReviewCount} ready</Badge>
-                          ) : null}
-                          {row.publishedCount > 0 ? (
-                            <Badge>{row.publishedCount} published</Badge>
-                          ) : null}
-                          {row.failedCount > 0 ? (
-                            <Badge variant="destructive">{row.failedCount} failed</Badge>
-                          ) : null}
-                          {row.republishNeededCount > 0 ? (
-                            <Badge variant="secondary">
-                              {row.republishNeededCount} republish
-                            </Badge>
-                          ) : null}
-                        </div>
-                        <p className="mt-2 text-xs text-slate-500">{toStatusSummary(row)}</p>
-                      </TableCell>
-                      <TableCell className="align-top text-right">
-                        <div className="flex justify-end">
-                          <Link
-                            href={`/courses/${row.courseId}/assignments/${row.assignmentId}`}
-                          >
-                            <Button size="sm">Open assignment</Button>
-                          </Link>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </ImmersiveShell>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

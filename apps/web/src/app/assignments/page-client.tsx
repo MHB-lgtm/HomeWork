@@ -4,12 +4,12 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { StudentAssignment } from '@hg/shared-schemas';
 import { AssignmentsClientError, listMyAssignments } from '@/lib/assignmentsClient';
-import { AccountMenu } from '@/components/auth/AccountMenu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ImmersiveShell } from '@/components/layout/ImmersiveShell';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 
 const formatDate = (value: string | null | undefined) => {
   if (!value) {
@@ -100,15 +100,13 @@ const renderSection = (
             >
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
+                <div className="space-y-1">
                     <CardTitle className="text-lg font-semibold text-slate-900">
                       {assignment.title}
                     </CardTitle>
                     <p className="text-xs font-mono text-slate-500">{assignment.assignmentId}</p>
                   </div>
-                  <Badge variant={assignment.visibleStatus === 'PUBLISHED' ? 'default' : 'outline'}>
-                    {assignment.visibleStatus}
-                  </Badge>
+                  <StatusBadge status={assignment.visibleStatus} />
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -165,55 +163,47 @@ export default function StudentAssignmentsPageClient() {
   );
 
   return (
-    <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-10 pt-10 md:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-8">
-        <header className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/90 px-6 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Student Workspace
-            </p>
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-slate-900">
-              Assignments
-            </h1>
-          </div>
-          <AccountMenu />
-        </header>
+    <div className="mx-auto w-full max-w-5xl space-y-8">
+      <PageHeader
+        eyebrow="Student Workspace"
+        title="Assignments"
+        description="Submit new work, monitor waiting assignments, and jump to published results without exposing staff-side review internals."
+      />
 
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Could not load assignments</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load assignments</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-        {loading ? (
-          <div className="text-sm text-slate-600">Loading assignments...</div>
-        ) : assignments.length === 0 ? (
-          <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-            <CardContent className="py-10 text-center text-sm text-slate-600">
-              No assignments are visible yet for your courses.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-8">
-            {renderSection(
-              'Ready to submit',
-              'Assignments that are available in your workspace right now.',
-              readyAssignments
-            )}
-            {renderSection(
-              'Submitted',
-              'Your submission is recorded. These rows stay safe and hide staff review progress until publish.',
-              submittedAssignments
-            )}
-            {renderSection(
-              'Published',
-              'Published results are available here and in the Results workspace.',
-              publishedAssignments
-            )}
-          </div>
-        )}
-      </div>
-    </ImmersiveShell>
+      {loading ? (
+        <div className="text-sm text-slate-600">Loading assignments...</div>
+      ) : assignments.length === 0 ? (
+        <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+          <CardContent className="py-10">
+            <EmptyState title="No assignments are visible yet" description="Assignments will appear here when a course assignment opens for your account." />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-8">
+          {renderSection(
+            'Ready to submit',
+            'Assignments that are available in your workspace right now.',
+            readyAssignments
+          )}
+          {renderSection(
+            'Submitted',
+            'Your submission is recorded. These rows stay safe and hide staff review progress until publish.',
+            submittedAssignments
+          )}
+          {renderSection(
+            'Published',
+            'Published results are available here and in the Results workspace.',
+            publishedAssignments
+          )}
+        </div>
+      )}
+    </div>
   );
 }

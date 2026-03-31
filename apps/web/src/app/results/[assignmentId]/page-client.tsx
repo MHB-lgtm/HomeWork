@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { StudentAssignmentResult } from '@hg/shared-schemas';
-import { AccountMenu } from '@/components/auth/AccountMenu';
-import { ImmersiveShell } from '@/components/layout/ImmersiveShell';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageHeader } from '@/components/ui/page-header';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { ResultsClientError, getMyResult } from '@/lib/resultsClient';
 
 type StudentResultDetailsPageClientProps = {
@@ -156,65 +156,52 @@ export default function StudentResultDetailsPageClient({
   }, [params.assignmentId]);
 
   return (
-    <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-10 pt-10 md:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-8">
-        <header className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/90 px-6 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+    <div className="mx-auto w-full max-w-5xl space-y-8">
+      <PageHeader
+        eyebrow="Student Workspace"
+        title={result?.assignmentTitle ?? 'Result'}
+        description="This page stays minimal until staff publish the result. Published details appear here only after the release boundary is crossed."
+        badges={result ? <StatusBadge status={result.visibleStatus} /> : null}
+      />
+
+      <div className="flex flex-wrap gap-2">
+        <Link href="/results">
+          <Button variant="outline" size="sm">
+            Back to results
+          </Button>
+        </Link>
+        <Link href={`/assignments/${params.assignmentId}`}>
+          <Button variant="outline" size="sm">
+            Open assignment
+          </Button>
+        </Link>
+      </div>
+
+      {error ? (
+        <Alert variant="destructive">
+          <AlertTitle>Result error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
+        <CardHeader className="pb-3">
           <div className="space-y-1">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
-              Student Workspace
-            </p>
-            <h1 className="font-heading text-3xl font-bold tracking-tight text-slate-900">
-              Result
-            </h1>
-          </div>
-          <AccountMenu />
-        </header>
-
-        <div className="flex flex-wrap gap-2">
-          <Link href="/results">
-            <Button variant="outline" size="sm">
-              Back to results
-            </Button>
-          </Link>
-          <Link href={`/assignments/${params.assignmentId}`}>
-            <Button variant="outline" size="sm">
-              Open assignment
-            </Button>
-          </Link>
-        </div>
-
-        {error ? (
-          <Alert variant="destructive">
-            <AlertTitle>Result error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <CardTitle className="text-lg font-semibold text-slate-900">
-                  {loading ? 'Loading...' : result?.assignmentTitle ?? 'Result not found'}
-                </CardTitle>
-                {result ? (
-                  <>
-                    <p className="text-sm text-slate-500">{result.courseTitle}</p>
-                    <p className="text-xs font-mono text-slate-500">{result.assignmentId}</p>
-                  </>
-                ) : null}
-              </div>
-              {result ? (
-                <Badge variant={result.visibleStatus === 'PUBLISHED' ? 'default' : 'outline'}>
-                  {result.visibleStatus}
-                </Badge>
-              ) : null}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
+            <CardTitle className="text-lg font-semibold text-slate-900">
+              {loading ? 'Loading...' : result?.assignmentTitle ?? 'Result not found'}
+            </CardTitle>
             {result ? (
               <>
-                <div className="grid gap-4 md:grid-cols-3">
+                <p className="text-sm text-slate-500">{result.courseTitle}</p>
+                <p className="text-xs font-mono text-slate-500">{result.assignmentId}</p>
+              </>
+            ) : null}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {result ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-3">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3">
                     <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                       Submitted
@@ -241,52 +228,51 @@ export default function StudentResultDetailsPageClient({
                   </div>
                 </div>
 
-                {result.visibleStatus === 'OPEN' ? (
-                  <Alert>
-                    <AlertTitle>No submission yet</AlertTitle>
-                    <AlertDescription>
-                      No submission has been recorded for this assignment yet. Use the assignment page to upload your work.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
+              {result.visibleStatus === 'OPEN' ? (
+                <Alert>
+                  <AlertTitle>No submission yet</AlertTitle>
+                  <AlertDescription>
+                    No submission has been recorded for this assignment yet. Use the assignment page to upload your work.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
 
-                {result.visibleStatus === 'SUBMITTED' ? (
-                  <Alert>
-                    <AlertTitle>Awaiting publication</AlertTitle>
-                    <AlertDescription>
-                      Your submission is recorded. This page stays intentionally minimal until staff publish the result.
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
+              {result.visibleStatus === 'SUBMITTED' ? (
+                <Alert>
+                  <AlertTitle>Awaiting publication</AlertTitle>
+                  <AlertDescription>
+                    Your submission is recorded. This page stays intentionally minimal until staff publish the result.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
 
-                {result.visibleStatus === 'PUBLISHED' ? (
-                  <div className="space-y-6">
-                    <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base font-semibold text-slate-900">
-                          Published summary
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-slate-700">
-                          {result.summary ?? 'No published summary was attached to this result.'}
-                        </p>
-                      </CardContent>
-                    </Card>
+              {result.visibleStatus === 'PUBLISHED' ? (
+                <div className="space-y-6">
+                  <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base font-semibold text-slate-900">
+                        Published summary
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-slate-700">
+                        {result.summary ?? 'No published summary was attached to this result.'}
+                      </p>
+                    </CardContent>
+                  </Card>
 
-                    <div className="space-y-3">
-                      <h2 className="text-lg font-semibold text-slate-900">Published breakdown</h2>
-                      {renderBreakdown(result.breakdownSnapshot)}
-                    </div>
+                  <div className="space-y-3">
+                    <h2 className="text-lg font-semibold text-slate-900">Published breakdown</h2>
+                    {renderBreakdown(result.breakdownSnapshot)}
                   </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="text-sm text-slate-600">Result not available.</div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </ImmersiveShell>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="text-sm text-slate-600">Result not available.</div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

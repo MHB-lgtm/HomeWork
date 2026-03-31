@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { Button } from '../ui/button';
 
@@ -27,25 +26,11 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
 
   return (
     <div className="flex items-center gap-2">
-      {session.user.hasStudentAccess ? (
-        <>
-          <Link href="/assignments">
-            <Button type="button" variant="outline" size="sm">
-              Assignments
-            </Button>
-          </Link>
-          <Link href="/results">
-            <Button type="button" variant="outline" size="sm">
-              Results
-            </Button>
-          </Link>
-        </>
-      ) : null}
       {!compact ? (
-          <div className="hidden min-w-0 text-right md:block">
-            <div className="truncate text-sm font-medium text-slate-900">{label}</div>
-            <div className="text-xs text-slate-500">{roleLabel}</div>
-          </div>
+        <div className="hidden min-w-0 text-right md:block">
+          <div className="truncate text-sm font-medium text-slate-900">{label}</div>
+          <div className="text-xs text-slate-500">{roleLabel}</div>
+        </div>
       ) : null}
       <Button
         type="button"

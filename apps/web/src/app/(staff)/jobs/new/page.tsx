@@ -1,5 +1,5 @@
-import HomePageClient from '@/app/page-client';
+import JobsNewPageClient from '@/app/jobs-new/page-client';
 
 export default function StaffNewJobPage() {
-  return <HomePageClient />;
+  return <JobsNewPageClient />;
 }

@@ -19,6 +19,7 @@ import {
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
+import { StatusBadge } from '../../../components/ui/status-badge';
 import { cn } from '../../../lib/utils';
 import { PDFViewer } from '../../../components/review/pdf/PDFViewer';
 import { StudyPointersPanel } from '../../../components/review/StudyPointersPanel';
@@ -238,18 +239,6 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       case 'minor':
         return 'secondary';
     }
-  };
-
-  const getJobStatusBadgeVariant = (
-    status: string
-  ): 'default' | 'secondary' | 'outline' | 'destructive' => {
-    if (status === 'PUBLISHED' || status === 'READY_FOR_REVIEW') return 'default';
-    if (status === 'PROCESSING') return 'secondary';
-    if (status === 'SUBMITTED') return 'outline';
-    if (status === 'DONE') return 'default';
-    if (status === 'FAILED') return 'destructive';
-    if (status === 'PENDING' || status === 'RUNNING') return 'secondary';
-    return 'outline';
   };
 
   const copyTechnicalValue = async (value: string) => {
@@ -500,17 +489,17 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const reviewTitle = review?.displayName?.trim() || 'Review details';
   if (loading) {
     return (
-      <main className="min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
+      <div className="min-h-[60vh] text-slate-900">
         <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
           <p className="text-slate-600">Loading...</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
+      <div className="min-h-[60vh] text-slate-900">
         <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
           <Alert variant="destructive" className="mb-4">
             <AlertTitle>Error</AlertTitle>
@@ -520,12 +509,12 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
             Back to Reviews
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="h-screen flex flex-col overflow-hidden text-slate-900 bg-[radial-gradient(1200px_520px_at_50%_-8%,rgba(255,255,255,0.98),rgba(255,255,255,0)_62%),radial-gradient(900px_520px_at_12%_38%,rgba(59,130,246,0.2),rgba(59,130,246,0)_70%),radial-gradient(900px_520px_at_88%_38%,rgba(56,189,248,0.18),rgba(56,189,248,0)_70%),linear-gradient(180deg,#f8fbff_0%,#eef4ff_48%,#f8fafc_100%)]">
+    <div className="flex min-h-[calc(100vh-9rem)] flex-col overflow-hidden text-slate-900">
       {/* Header - Fixed height */}
       <div className="shrink-0 border-b border-slate-200/80 bg-white/90 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-white/80 md:p-8">
         <div className="max-w-[1600px] mx-auto">
@@ -540,9 +529,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
               <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{reviewTitle}</h1>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {displayStatus && (
-                <Badge variant={getJobStatusBadgeVariant(displayStatus)}>{displayStatus}</Badge>
-              )}
+              {displayStatus ? <StatusBadge status={displayStatus} /> : null}
               {publication?.isPublished ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
@@ -1007,6 +994,6 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

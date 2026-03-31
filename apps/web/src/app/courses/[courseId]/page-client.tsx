@@ -10,11 +10,11 @@ import { LecturesTable } from '../../../components/courses/LecturesTable';
 import { CourseMembershipPanel } from '../../../components/courses/CourseMembershipPanel';
 import { RagIndexPanel } from '../../../components/courses/RagIndexPanel';
 import { RagTestPanel } from '../../../components/courses/RagTestPanel';
-import { ImmersiveShell } from '../../../components/layout/ImmersiveShell';
 import { Alert, AlertDescription, AlertTitle } from '../../../components/ui/alert';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card';
+import { PageHeader } from '../../../components/ui/page-header';
 
 type CourseDetailsPageProps = {
   params: { courseId: string };
@@ -138,64 +138,61 @@ export default function CourseDetailsPage({
   };
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-4xl space-y-8">
-        <section className="flex w-full flex-col items-center gap-4 text-center">
-          <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Course Overview</h1>
-          <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-            Manage lectures and prepare the course content for indexing.
-          </p>
-          <div className="flex flex-wrap justify-center gap-2">
+    <div className="mx-auto w-full max-w-4xl space-y-8">
+      <PageHeader
+        title={course?.title ?? 'Course Overview'}
+        description="Manage lectures, assignment authoring, memberships, and RAG indexing for this course."
+        badges={course ? <Badge variant="secondary">{course.courseId}</Badge> : null}
+        actions={
+          <>
             <Link href="/courses">
               <Button variant="outline" size="sm">
                 Back to Courses
               </Button>
             </Link>
             <Link href="/">
-              <Button size="sm">Home</Button>
+              <Button size="sm">Dashboard</Button>
             </Link>
-          </div>
-        </section>
+          </>
+        }
+      />
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertTitle>Could not load course</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load course</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-lg font-semibold text-slate-900">Course Info</CardTitle>
-              {course && <Badge variant="secondary">{course.courseId}</Badge>}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {isLoading ? (
-              <div className="text-sm text-slate-600">Loading course details...</div>
-            ) : course ? (
-              <div className="space-y-3">
+      <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg font-semibold text-slate-900">Course Info</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {isLoading ? (
+            <div className="text-sm text-slate-600">Loading course details...</div>
+          ) : course ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-slate-500">Title</p>
+                <p className="text-lg font-semibold text-slate-900">{course.title}</p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 text-sm text-slate-600 sm:grid-cols-2">
                 <div>
-                  <p className="text-sm text-slate-500">Title</p>
-                  <p className="text-lg font-semibold text-slate-900">{course.title}</p>
+                  <p className="text-slate-500">Created</p>
+                  <p>{formatDate(course.createdAt)}</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
-                  <div>
-                    <p className="text-slate-500">Created</p>
-                    <p>{formatDate(course.createdAt)}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-500">Updated</p>
-                    <p>{formatDate(course.updatedAt)}</p>
-                  </div>
+                <div>
+                  <p className="text-slate-500">Updated</p>
+                  <p>{formatDate(course.updatedAt)}</p>
                 </div>
               </div>
-            ) : error ? null : (
-              <div className="text-sm text-slate-600">Course not found.</div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          ) : error ? null : (
+            <div className="text-sm text-slate-600">Course not found.</div>
+          )}
+        </CardContent>
+      </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-6">
           <LectureUploadForm courseId={courseId} onUploaded={refreshLectures} />
@@ -230,7 +227,6 @@ export default function CourseDetailsPage({
             <p>- Share links with students</p>
           </CardContent>
         </Card>
-      </div>
-    </ImmersiveShell>
+    </div>
   );
 }

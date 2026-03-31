@@ -6,8 +6,8 @@ import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
 import { EmptyState } from '../../components/ui/empty-state';
 import { Input } from '../../components/ui/input';
-import { ImmersiveShell } from '../../components/layout/ImmersiveShell';
 import { Panel, PanelContent, PanelHeader, PanelTitle } from '../../components/ui/panel';
+import { PageHeader } from '../../components/ui/page-header';
 import { StatusBadge } from '../../components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { CardSkeleton, TableRowSkeleton } from '../../components/ui/skeleton';
@@ -179,14 +179,11 @@ export default function ExamsPage() {
   };
 
   return (
-    <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-      <section className="flex w-full flex-col items-center gap-4 text-center">
-        <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Exams</h1>
-        <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
-          Upload and manage exam templates for grading.
-        </p>
-      </section>
+    <div className="mx-auto w-full max-w-6xl space-y-8">
+      <PageHeader
+        title="Exams"
+        description="Upload and manage exam templates for grading."
+      />
 
       {message ? (
         <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={cn('rounded-xl', alertTone)}>
@@ -358,7 +355,6 @@ export default function ExamsPage() {
           )}
         </PanelContent>
       </Panel>
-      </div>
-    </ImmersiveShell>
+    </div>
   );
 }
