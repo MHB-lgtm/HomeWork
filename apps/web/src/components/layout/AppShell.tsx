@@ -369,21 +369,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [mobileOpen]);
 
-  // Skip shell for landing page, role selection, and immersive routes
-  const isLocaleLanding = /^\/[a-z]{2}$/.test(pathname);
-  if (pathname === '/' && !pathname.startsWith('/courses') && !pathname.startsWith('/exams') && !pathname.startsWith('/reviews') && !pathname.startsWith('/rubrics')) {
-    // Only skip for the actual root landing - let staff routes through
-  }
-  if (isLocaleLanding) return <>{children}</>;
-
-  // Immersive routes (workspace, full-screen result, lecturer review) render their own chrome.
-  const isImmersive =
-    /\/assignments\/[^/]+\/(workspace|result)$/.test(pathname) ||
-    /\/reviews\/[^/]+$/.test(pathname);
-  if (isImmersive) return <>{children}</>;
-
   const navContext = useMemo(() => detectNavContext(pathname), [pathname]);
-  const { items: navItems, brandLabel } = navContext;
 
   useEffect(() => {
     if (!navContext.canLoadCourses) {
@@ -413,6 +399,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [navContext.canLoadCourses]);
 
+  // Skip shell for landing page, role selection, and immersive routes
+  const isLocaleLanding = /^\/[a-z]{2}$/.test(pathname);
+  if (isLocaleLanding) return <>{children}</>;
+
+  // Immersive routes (workspace, full-screen result, lecturer review) render their own chrome.
+  const isImmersive =
+    /\/assignments\/[^/]+\/(workspace|result)$/.test(pathname) ||
+    /\/reviews\/[^/]+$/.test(pathname);
+  if (isImmersive) return <>{children}</>;
+
+  const { items: navItems, brandLabel } = navContext;
   const sidebarCourses = navContext.canLoadCourses ? loadedCourses : navContext.courses;
   const breadcrumbs = getBreadcrumbs(pathname);
   const pageTitle = getPageTitle(pathname);
