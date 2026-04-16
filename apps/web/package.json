@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm --filter @hg/shared-schemas build && pnpm --filter @hg/domain-workflow build && pnpm --filter @hg/postgres-store build && next build",
     "start": "next start",
     "lint": "next lint"
   },

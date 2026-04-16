@@ -4,6 +4,7 @@
   "private": true,
   "description": "MVP homework grader monorepo",
   "scripts": {
+    "build": "pnpm --filter @hg/shared-schemas build && pnpm --filter @hg/domain-workflow build && pnpm --filter @hg/postgres-store build && pnpm --filter web build",
     "dev:worker": "pnpm --filter worker dev",
     "dev:web": "pnpm --filter web dev"
   },
