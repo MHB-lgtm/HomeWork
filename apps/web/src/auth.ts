@@ -11,6 +11,7 @@ const getUserAuthStore = () => new PrismaUserAuthStore(getPrismaClient());
 
 const googleClientId = process.env.AUTH_GOOGLE_ID;
 const googleClientSecret = process.env.AUTH_GOOGLE_SECRET;
+const authSecret = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 const providers = [
@@ -59,7 +60,7 @@ const providers = [
 ];
 
 export const authOptions: NextAuthOptions = {
-  secret: process.env.AUTH_SECRET,
+  secret: authSecret,
   session: {
     strategy: 'jwt',
   },
@@ -132,7 +133,9 @@ export const authOptions: NextAuthOptions = {
 };
 
 export const isGoogleAuthConfigured = (): boolean =>
-  Boolean(process.env.AUTH_SECRET && googleClientId && googleClientSecret);
+  Boolean(authSecret && googleClientId && googleClientSecret);
+
+export const isAuthSecretConfigured = (): boolean => Boolean(authSecret);
 
 export const isDemoAuthEnabled = (): boolean => isDevelopment;
 

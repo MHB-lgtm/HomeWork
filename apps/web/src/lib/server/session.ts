@@ -2,7 +2,6 @@ import 'server-only';
 
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
 import { NextResponse } from 'next/server';
 import type { Assignment } from '@hg/shared-schemas';
 import type {
@@ -10,7 +9,7 @@ import type {
   CourseMembershipRoleValue,
   UserAuthAccessRecord,
 } from '@hg/postgres-store';
-import { authOptions } from '@/auth';
+import { getOptionalServerSession } from './auth-session';
 import { getServerPersistence } from './persistence';
 
 type AccessOptions = {
@@ -49,7 +48,7 @@ class SuperAdminRequiredError extends ForbiddenError {
 }
 
 const getCurrentSessionUser = cache(async (): Promise<UserAuthAccessRecord | null> => {
-  const session = await getServerSession(authOptions);
+  const session = await getOptionalServerSession();
   const userId = session?.user?.id;
 
   if (!userId) {

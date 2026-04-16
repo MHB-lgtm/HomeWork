@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Rubik } from 'next/font/google';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/auth';
+import { isAuthSecretConfigured } from '@/auth';
 import { AuthSessionProvider } from '../components/auth/AuthSessionProvider';
+import { getOptionalServerSession } from '../lib/server/auth-session';
 import './globals.css';
 
 const rubik = Rubik({
@@ -22,12 +22,15 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession(authOptions);
+  const authEnabled = isAuthSecretConfigured();
+  const session = await getOptionalServerSession();
 
   return (
     <html lang="en" className={rubik.variable}>
       <body className="antialiased font-sans">
-        <AuthSessionProvider session={session}>{children}</AuthSessionProvider>
+        <AuthSessionProvider enabled={authEnabled} session={session}>
+          {children}
+        </AuthSessionProvider>
       </body>
     </html>
   );

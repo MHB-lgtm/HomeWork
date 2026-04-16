@@ -1,13 +1,12 @@
 import { redirect } from 'next/navigation';
-import { getServerSession } from 'next-auth';
 import {
-  authOptions,
   getDevelopmentDemoSignInOptions,
   isDemoAuthEnabled,
   isGoogleAuthConfigured,
 } from '@/auth';
 import { DemoSignInButtons } from '@/components/auth/DemoSignInButtons';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
+import { getOptionalServerSession } from '@/lib/server/auth-session';
 
 type SignInPageProps = {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
@@ -22,7 +21,7 @@ function getCallbackUrl(value: string | string[] | undefined): string {
 }
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
-  const session = await getServerSession(authOptions);
+  const session = await getOptionalServerSession();
   if (session?.user?.id) {
     redirect(session.user.hasStudentAccess && !session.user.hasStaffAccess ? '/assignments' : '/');
   }
