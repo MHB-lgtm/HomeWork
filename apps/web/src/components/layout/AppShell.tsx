@@ -20,7 +20,9 @@ import {
   ChevronDown,
   GraduationCap,
   Sparkles,
+  TrendingUp,
 } from 'lucide-react';
+import { DEMO_COURSES, DEMO_STUDENT } from '../../lib/demoSeed';
 
 type NavItem = {
   href: string;
@@ -46,20 +48,21 @@ const staffNavItems: NavItem[] = [
 ];
 
 function buildLecturerCourses(localePrefix: string): CourseNavItem[] {
-  return [
-    { id: 'c1', title: 'Linear Algebra', meta: 'MATH 2210', href: `${localePrefix}/l/courses/c1` },
-    { id: 'c2', title: 'Calculus II', meta: 'MATH 1220', href: `${localePrefix}/l/courses/c2` },
-    { id: 'c3', title: 'Introduction to Physics', meta: 'PHYS 1010', href: `${localePrefix}/l/courses/c3` },
-  ];
+  return DEMO_COURSES.map((c) => ({
+    id: c.id,
+    title: c.title,
+    meta: c.code,
+    href: `${localePrefix}/l/courses/${c.id}`,
+  }));
 }
 
 function buildStudentCourses(localePrefix: string): CourseNavItem[] {
-  return [
-    { id: 'c1', title: 'Linear Algebra', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c1` },
-    { id: 'c2', title: 'Calculus II', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c2` },
-    { id: 'c3', title: 'Introduction to Physics', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c3` },
-    { id: 'c4', title: 'Discrete Mathematics', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c4` },
-  ];
+  return DEMO_COURSES.filter((c) => DEMO_STUDENT.enrolledCourseIds.includes(c.id)).map((c) => ({
+    id: c.id,
+    title: c.title,
+    meta: c.semester,
+    href: `${localePrefix}/s/courses/${c.id}`,
+  }));
 }
 
 function buildLecturerNavItems(localePrefix: string): NavItem[] {
@@ -75,7 +78,8 @@ function buildStudentNavItems(localePrefix: string): NavItem[] {
   return [
     { href: `${localePrefix}/s/dashboard`, label: 'Dashboard', icon: <LayoutDashboard size={18} />, matches: (p) => p.includes('/s/dashboard') },
     { href: `${localePrefix}/s/courses`, label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.includes('/s/courses'), group: 'courses' },
-    { href: `${localePrefix}/s/results`, label: 'Results', icon: <BarChart3 size={18} />, matches: (p) => p.includes('/s/results') },
+    { href: `${localePrefix}/s/results`, label: 'Results', icon: <BarChart3 size={18} />, matches: (p) => p.includes('/s/results') && !p.includes('/progress') },
+    { href: `${localePrefix}/s/progress`, label: 'Progress', icon: <TrendingUp size={18} />, matches: (p) => p.includes('/s/progress') },
   ];
 }
 
@@ -97,6 +101,9 @@ function getPageTitle(pathname: string): string {
   if (pathname.includes('/l/analytics')) return 'Analytics';
   // Student routes
   if (pathname.includes('/s/dashboard')) return 'Dashboard';
+  if (pathname.includes('/s/progress')) return 'Progress';
+  if (pathname.includes('/s/courses/') && pathname.includes('/weeks/')) return 'Week';
+  if (pathname.includes('/s/courses/') && pathname.includes('/assignments/')) return 'Assignment';
   if (pathname.includes('/s/courses/')) return 'Course';
   if (pathname.includes('/s/courses')) return 'Courses';
   if (pathname.includes('/s/results')) return 'Results';
@@ -112,6 +119,7 @@ function getBreadcrumbs(pathname: string): { label: string; href?: string }[] {
     rubrics: 'Rubrics', assignments: 'Assignments', results: 'Results',
     dashboard: 'Dashboard', analytics: 'Analytics', create: 'Create',
     review: 'Review', workspace: 'Workspace', result: 'Result',
+    weeks: 'Weeks', progress: 'Progress', submissions: 'Submissions',
     l: 'Lecturer', s: 'Student',
   };
 
@@ -367,6 +375,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Only skip for the actual root landing - let staff routes through
   }
   if (isLocaleLanding) return <>{children}</>;
+
+  // Immersive routes (workspace, full-screen result, lecturer review) render their own chrome.
+  const isImmersive =
+    /\/assignments\/[^/]+\/(workspace|result)$/.test(pathname) ||
+    /\/reviews\/[^/]+$/.test(pathname);
+  if (isImmersive) return <>{children}</>;
 
   const navContext = useMemo(() => detectNavContext(pathname), [pathname]);
   const { items: navItems, brandLabel } = navContext;

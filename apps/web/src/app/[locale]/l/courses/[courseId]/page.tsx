@@ -16,6 +16,7 @@ import { Button } from '../../../../../components/ui/button';
 import { Card } from '../../../../../components/ui/card';
 import { DataTable, Column } from '../../../../../components/ui/data-table';
 import { Badge } from '../../../../../components/ui/badge';
+import { getCourseOrFallback, getAssignmentsForCourse, getWeeksForCourse } from '../../../../../lib/demoSeed';
 
 /* ── Types ── */
 
@@ -136,13 +137,56 @@ export default function CourseDetailPage() {
   const courseId = params.courseId as string;
   const lecturerPrefix = `/${locale}/l`;
   const [activeTab, setActiveTab] = useState<Tab>('assignments');
+
+  // Pull live course identity from the shared seed so the lecturer sees the same names everywhere.
+  const seededCourse = getCourseOrFallback(courseId);
+  const seededAssignments = getAssignmentsForCourse(courseId);
+  const seededWeeks = getWeeksForCourse(courseId);
+
+  const assignments: Assignment[] = useMemo(() => {
+    if (seededAssignments.length === 0) return mockAssignments;
+    const enrolled = seededCourse.studentCount;
+    return seededAssignments.map((a) => {
+      const submitted =
+        a.status === 'OPEN'
+          ? Math.round(enrolled * 0.2)
+          : a.status === 'SUBMITTED'
+            ? Math.round(enrolled * 0.55)
+            : a.status === 'CLOSED'
+              ? Math.round(enrolled * 0.65)
+              : a.status === 'WAITING_FOR_REVIEW' || a.status === 'PROCESSING'
+                ? Math.round(enrolled * 0.85)
+                : a.status === 'READY_FOR_REVIEW'
+                  ? Math.round(enrolled * 0.9)
+                  : Math.round(enrolled * 0.94);
+      const graded =
+        a.status === 'READY_FOR_REVIEW' || a.status === 'PUBLISHED'
+          ? submitted
+          : a.status === 'PROCESSING'
+            ? Math.round(submitted * 0.6)
+            : 0;
+      const published = a.status === 'PUBLISHED' ? submitted : 0;
+      return {
+        id: a.id,
+        title: a.title,
+        week: a.weekNumber,
+        openDate: a.releasedAt,
+        deadline: a.deadline,
+        submissions: submitted,
+        totalStudents: enrolled,
+        graded,
+        published,
+      };
+    });
+  }, [seededAssignments, seededCourse.studentCount]);
+
   const assignmentsByWeek = useMemo(() => {
     const grouped = new Map<number, Assignment[]>();
-    mockAssignments.forEach((assignment) => {
+    assignments.forEach((assignment) => {
       grouped.set(assignment.week, [...(grouped.get(assignment.week) ?? []), assignment]);
     });
     return [...grouped.entries()].sort(([left], [right]) => left - right);
-  }, []);
+  }, [assignments]);
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'assignments', label: 'Assignments', icon: <FileText className="h-4 w-4" /> },
@@ -182,7 +226,7 @@ export default function CourseDetailPage() {
       key: 'submissionCount',
       label: 'Submissions',
       render: (row) => (
-        <span className="text-(--text-secondary)">{row.submissionCount as number}/{mockAssignments.length}</span>
+        <span className="text-(--text-secondary)">{row.submissionCount as number}/{assignments.length}</span>
       ),
     },
     {
@@ -201,8 +245,8 @@ export default function CourseDetailPage() {
     <div className="system-page-stack space-y-12">
       <PageHeader
         backHref={`${lecturerPrefix}/courses`}
-        title={courseMeta.name}
-        subtitle={`${courseMeta.code} · ${courseMeta.semester}`}
+        title={seededCourse.title}
+        subtitle={`${seededCourse.code} · ${seededCourse.semester} · ${seededCourse.lecturer}`}
         eyebrow="Course command center"
         icon={<BookOpen />}
         gradient

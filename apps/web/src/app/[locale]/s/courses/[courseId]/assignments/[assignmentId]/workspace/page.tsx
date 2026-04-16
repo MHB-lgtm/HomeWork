@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   PenTool, Type, Eraser, Undo2, ChevronLeft, ChevronRight,
   ChevronDown, ChevronUp, Bold, Italic, Underline, List, ListOrdered,
@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../../../../../../../lib/utils';
 import { Button } from '../../../../../../../../components/ui/button';
+import { getAssignment, getCourseOrFallback } from '../../../../../../../../lib/demoSeed';
 
 /* ── Lexical Imports ── */
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
@@ -65,13 +66,12 @@ interface Question {
    Constants
    ───────────────────────────────────────────── */
 
-const MOCK_ASSIGNMENT = {
-  title: 'Homework 2',
-  course: 'Calculus II \u2014 Spring 2025-26',
-  deadline: 'Apr 30, 2026 23:59',
-};
-
-const QUESTIONS: Question[] = [
+/**
+ * Rich question set for the Calculus II Homework 2 assignment (c2-w2-a1).
+ * Other assignments fall back to the seed's question titles, since the demo
+ * doesn't yet ship full prompt text for every assignment.
+ */
+const CALC_HW2_QUESTIONS: Question[] = [
   {
     id: 'q1',
     number: 1,
@@ -277,11 +277,15 @@ function QuestionsPanel({
   onClose,
   activeQuestionId,
   onSelectQuestion,
+  questions,
+  meta,
 }: {
   open: boolean;
   onClose: () => void;
   activeQuestionId: string;
   onSelectQuestion: (id: string) => void;
+  questions: Question[];
+  meta: { course: string; title: string; deadline: string };
 }) {
   if (!open) return null;
 
@@ -314,13 +318,13 @@ function QuestionsPanel({
 
         <div className="flex-1 overflow-y-auto p-4">
           <div className="rounded-lg bg-(--brand-subtle) px-3 py-2 mb-4">
-            <p className="text-xs font-medium text-(--brand)">{MOCK_ASSIGNMENT.course}</p>
-            <p className="text-sm font-semibold text-(--text-primary) mt-0.5">{MOCK_ASSIGNMENT.title}</p>
-            <p className="text-xs text-(--text-tertiary) mt-1">Due {MOCK_ASSIGNMENT.deadline}</p>
+            <p className="text-xs font-medium text-(--brand)">{meta.course}</p>
+            <p className="text-sm font-semibold text-(--text-primary) mt-0.5">{meta.title}</p>
+            <p className="text-xs text-(--text-tertiary) mt-1">Due {meta.deadline}</p>
           </div>
 
           <ol className="space-y-1.5">
-            {QUESTIONS.map((q) => {
+            {questions.map((q) => {
               const isActive = q.id === activeQuestionId;
               const partsCount = q.parts?.length ?? 0;
               return (
@@ -369,10 +373,12 @@ function QuestionCard({
   question,
   expanded,
   onToggle,
+  total,
 }: {
   question: Question;
   expanded: boolean;
   onToggle: () => void;
+  total: number;
 }) {
   return (
     <section className="shrink-0 border-b border-(--border) bg-(--surface-secondary)">
@@ -387,7 +393,7 @@ function QuestionCard({
             Q{question.number}
           </span>
           <span className="text-sm font-semibold text-(--text-primary)">
-            Question {question.number} of {QUESTIONS.length}
+            Question {question.number} of {total}
           </span>
         </div>
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-(--text-tertiary)">
@@ -486,6 +492,43 @@ function SubmissionSuccess({ onBack }: { onBack: () => void }) {
 
 export default function WorkspacePage() {
   const router = useRouter();
+  const params = useParams();
+  const courseIdParam = (params?.courseId as string) ?? '';
+  const assignmentIdParam = (params?.assignmentId as string) ?? '';
+
+  // Resolve assignment + question set from the shared seed.
+  const { questions, meta } = useMemo(() => {
+    const assignment = getAssignment(assignmentIdParam);
+    const course = getCourseOrFallback(assignment?.courseId ?? courseIdParam);
+
+    const fallbackQuestions: Question[] = (assignment?.questions ?? []).map((q) => ({
+      id: `q${q.id}`,
+      number: q.id,
+      intro: q.title,
+    }));
+
+    const isCalcHw2 = assignmentIdParam === 'c2-w2-a1';
+    const resolvedQuestions = isCalcHw2 || fallbackQuestions.length === 0 ? CALC_HW2_QUESTIONS : fallbackQuestions;
+
+    const deadlineLabel = assignment
+      ? new Date(assignment.deadline).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : '\u2014';
+
+    return {
+      questions: resolvedQuestions,
+      meta: {
+        title: assignment?.title ?? 'Assignment',
+        course: course.title,
+        deadline: deadlineLabel,
+      },
+    };
+  }, [assignmentIdParam, courseIdParam]);
 
   const [mode, setMode] = useState<WorkspaceMode>('text');
   const [instructionsOpen, setInstructionsOpen] = useState(false);
@@ -493,17 +536,23 @@ export default function WorkspacePage() {
   const [showSaved, setShowSaved] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [activeQuestionId, setActiveQuestionId] = useState<string>(QUESTIONS[0].id);
+  const [activeQuestionId, setActiveQuestionId] = useState<string>(questions[0]?.id ?? 'q1');
   const [questionExpanded, setQuestionExpanded] = useState(true);
 
-  const activeQuestionIndex = QUESTIONS.findIndex((q) => q.id === activeQuestionId);
-  const activeQuestion = QUESTIONS[activeQuestionIndex] ?? QUESTIONS[0];
+  const activeQuestionIndex = Math.max(
+    0,
+    questions.findIndex((q) => q.id === activeQuestionId),
+  );
+  const activeQuestion = questions[activeQuestionIndex] ?? questions[0];
 
-  const goToQuestion = useCallback((delta: number) => {
-    const next = activeQuestionIndex + delta;
-    if (next < 0 || next >= QUESTIONS.length) return;
-    setActiveQuestionId(QUESTIONS[next].id);
-  }, [activeQuestionIndex]);
+  const goToQuestion = useCallback(
+    (delta: number) => {
+      const next = activeQuestionIndex + delta;
+      if (next < 0 || next >= questions.length) return;
+      setActiveQuestionId(questions[next].id);
+    },
+    [activeQuestionIndex, questions],
+  );
 
   // Drawing state
   const [drawTool, setDrawTool] = useState<DrawTool>('pen');
@@ -728,10 +777,10 @@ export default function WorkspacePage() {
         {/* Title */}
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-medium text-(--text-primary) truncate leading-tight">
-            {MOCK_ASSIGNMENT.title}
+            {meta.title}
           </span>
           <span className="text-[11px] text-(--text-tertiary) truncate leading-tight">
-            {MOCK_ASSIGNMENT.course}
+            {meta.course}
           </span>
         </div>
 
@@ -882,7 +931,7 @@ export default function WorkspacePage() {
           Questions
         </span>
         <div className="flex items-center gap-1 overflow-x-auto">
-          {QUESTIONS.map((q) => {
+          {questions.map((q) => {
             const isActive = q.id === activeQuestionId;
             return (
               <button
@@ -906,7 +955,7 @@ export default function WorkspacePage() {
         <div className="flex-1" />
 
         <span className="text-[11px] text-(--text-tertiary) hidden sm:inline">
-          {activeQuestionIndex + 1} / {QUESTIONS.length}
+          {activeQuestionIndex + 1} / {questions.length}
         </span>
         <button
           onClick={() => goToQuestion(-1)}
@@ -918,7 +967,7 @@ export default function WorkspacePage() {
         </button>
         <button
           onClick={() => goToQuestion(1)}
-          disabled={activeQuestionIndex === QUESTIONS.length - 1}
+          disabled={activeQuestionIndex === questions.length - 1}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-(--text-tertiary) hover:bg-(--surface-hover) transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           aria-label="Next question"
         >
@@ -934,6 +983,7 @@ export default function WorkspacePage() {
             question={activeQuestion}
             expanded={questionExpanded}
             onToggle={() => setQuestionExpanded((v) => !v)}
+            total={questions.length}
           />
 
           {mode === 'text' ? (
@@ -961,6 +1011,8 @@ export default function WorkspacePage() {
           onClose={() => setInstructionsOpen(false)}
           activeQuestionId={activeQuestionId}
           onSelectQuestion={setActiveQuestionId}
+          questions={questions}
+          meta={meta}
         />
       </div>
 

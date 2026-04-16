@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { BarChart3, Trophy, GraduationCap, TrendingUp, FileX, ChevronRight } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import { StatCard } from '../../../../components/ui/stat-card';
@@ -10,114 +11,15 @@ import { Card } from '../../../../components/ui/card';
 import { Badge } from '../../../../components/ui/badge';
 import { Button } from '../../../../components/ui/button';
 import { EmptyState } from '../../../../components/ui/empty-state';
-
-/* ── Types ── */
-
-interface ResultEntry {
-  id: string;
-  courseId: string;
-  courseName: string;
-  assignmentId: string;
-  assignmentTitle: string;
-  weekNumber: number;
-  score: number;
-  gradedAt: string;
-}
+import {
+  DEMO_COURSES,
+  DEMO_STUDENT,
+  getPublishedAssignments,
+} from '../../../../lib/demoSeed';
 
 type SortKey = 'latest' | 'highest' | 'lowest';
 
-/* ── Mock Data ── */
-
-const MOCK_RESULTS: ResultEntry[] = [
-  {
-    id: '1',
-    courseId: 'la-101',
-    courseName: 'Linear Algebra',
-    assignmentId: 'hw-5',
-    assignmentTitle: 'Matrix Operations & Determinants',
-    weekNumber: 5,
-    score: 85,
-    gradedAt: '2026-03-25T14:30:00Z',
-  },
-  {
-    id: '2',
-    courseId: 'la-101',
-    courseName: 'Linear Algebra',
-    assignmentId: 'hw-4',
-    assignmentTitle: 'Vector Spaces & Subspaces',
-    weekNumber: 4,
-    score: 92,
-    gradedAt: '2026-03-18T10:15:00Z',
-  },
-  {
-    id: '3',
-    courseId: 'la-101',
-    courseName: 'Linear Algebra',
-    assignmentId: 'hw-3',
-    assignmentTitle: 'Systems of Linear Equations',
-    weekNumber: 3,
-    score: 78,
-    gradedAt: '2026-03-11T09:45:00Z',
-  },
-  {
-    id: '4',
-    courseId: 'calc-102',
-    courseName: 'Calculus II',
-    assignmentId: 'hw-7',
-    assignmentTitle: 'Integration Techniques',
-    weekNumber: 7,
-    score: 95,
-    gradedAt: '2026-03-23T16:00:00Z',
-  },
-  {
-    id: '5',
-    courseId: 'calc-102',
-    courseName: 'Calculus II',
-    assignmentId: 'hw-6',
-    assignmentTitle: 'Taylor Series Expansions',
-    weekNumber: 6,
-    score: 72,
-    gradedAt: '2026-03-16T11:30:00Z',
-  },
-  {
-    id: '6',
-    courseId: 'phys-101',
-    courseName: 'Physics I',
-    assignmentId: 'hw-4',
-    assignmentTitle: 'Newtonian Mechanics',
-    weekNumber: 4,
-    score: 88,
-    gradedAt: '2026-03-22T13:20:00Z',
-  },
-  {
-    id: '7',
-    courseId: 'phys-101',
-    courseName: 'Physics I',
-    assignmentId: 'hw-3',
-    assignmentTitle: 'Energy & Momentum Conservation',
-    weekNumber: 3,
-    score: 64,
-    gradedAt: '2026-03-15T14:00:00Z',
-  },
-  {
-    id: '8',
-    courseId: 'la-101',
-    courseName: 'Linear Algebra',
-    assignmentId: 'hw-2',
-    assignmentTitle: 'Eigenvalues & Eigenvectors',
-    weekNumber: 2,
-    score: 82,
-    gradedAt: '2026-03-04T08:30:00Z',
-  },
-];
-
-/* ── Helpers ── */
-
-function scoreColor(score: number): {
-  border: string;
-  text: string;
-  bg: string;
-} {
+function scoreColor(score: number): { border: string; text: string; bg: string } {
   if (score >= 90) return { border: 'border-(--success)', text: 'text-(--success)', bg: 'bg-(--success-subtle)' };
   if (score >= 75) return { border: 'border-(--brand)', text: 'text-(--brand)', bg: 'bg-(--brand-subtle)' };
   if (score >= 60) return { border: 'border-(--warning)', text: 'text-(--warning)', bg: 'bg-(--warning-subtle)' };
@@ -125,13 +27,8 @@ function scoreColor(score: number): {
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
-
-/* ── Select component (shared styling) ── */
 
 function Select({
   value,
@@ -165,60 +62,64 @@ function Select({
   );
 }
 
-/* ── Page ── */
-
 export default function ResultsPage() {
+  const params = useParams();
+  const locale = (params?.locale as string) ?? 'en';
+  const studentPrefix = `/${locale}/s`;
+
   const [courseFilter, setCourseFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortKey>('latest');
 
+  const enrolledCourses = DEMO_COURSES.filter((c) => DEMO_STUDENT.enrolledCourseIds.includes(c.id));
+  const all = useMemo(() => getPublishedAssignments(), []);
+
   const filtered = useMemo(() => {
-    let list = [...MOCK_RESULTS];
-
+    let list = [...all];
     if (courseFilter !== 'all') {
-      list = list.filter((r) => r.courseName === courseFilter);
+      list = list.filter((r) => r.courseId === courseFilter);
     }
-
     switch (sortBy) {
       case 'latest':
-        list.sort((a, b) => new Date(b.gradedAt).getTime() - new Date(a.gradedAt).getTime());
+        list.sort((a, b) => new Date(b.publishedAt ?? 0).getTime() - new Date(a.publishedAt ?? 0).getTime());
         break;
       case 'highest':
-        list.sort((a, b) => b.score - a.score);
+        list.sort((a, b) => (b.finalScore ?? 0) - (a.finalScore ?? 0));
         break;
       case 'lowest':
-        list.sort((a, b) => a.score - b.score);
+        list.sort((a, b) => (a.finalScore ?? 0) - (b.finalScore ?? 0));
         break;
     }
-
     return list;
-  }, [courseFilter, sortBy]);
+  }, [all, courseFilter, sortBy]);
+
+  const grades = all.map((a) => Math.round(((a.finalScore ?? 0) / a.maxScore) * 100));
+  const avg = grades.length ? Math.round(grades.reduce((s, g) => s + g, 0) / grades.length) : 0;
+  const best = grades.length ? Math.max(...grades) : 0;
 
   return (
     <div className="space-y-12">
-      {/* Header */}
       <PageHeader title="Results" subtitle="Your graded assignments across all courses." />
 
-      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard label="Average Grade" value={82} icon={<BarChart3 />} accent="#0d9488" />
-        <StatCard label="Best Grade" value={95} icon={<Trophy />} accent="#16a34a" />
-        <StatCard label="Total Graded" value={8} icon={<GraduationCap />} accent="#0891b2" />
+        <StatCard label="Average grade" value={avg} icon={<BarChart3 />} accent="#0d9488" />
+        <StatCard label="Best grade" value={best} icon={<Trophy />} accent="#16a34a" />
+        <StatCard label="Total graded" value={all.length} icon={<GraduationCap />} accent="#0891b2" />
         <StatCard
           label="Trend"
-          value="+4.2"
-          trend={{ value: '+4.2', positive: true }}
+          value={avg >= 80 ? 'Strong' : avg >= 70 ? 'On track' : 'Needs work'}
           icon={<TrendingUp />}
           accent="#9333ea"
         />
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <Select value={courseFilter} onChange={setCourseFilter}>
-          <option value="all">All Courses</option>
-          <option value="Linear Algebra">Linear Algebra</option>
-          <option value="Calculus II">Calculus II</option>
-          <option value="Physics I">Physics I</option>
+          <option value="all">All courses</option>
+          {enrolledCourses.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.title}
+            </option>
+          ))}
         </Select>
 
         <Select value={sortBy} onChange={(v) => setSortBy(v as SortKey)}>
@@ -228,7 +129,6 @@ export default function ResultsPage() {
         </Select>
       </div>
 
-      {/* Results list */}
       {filtered.length === 0 ? (
         <EmptyState
           icon={<FileX />}
@@ -242,32 +142,38 @@ export default function ResultsPage() {
         />
       ) : (
         <div className="grid gap-4">
-          {filtered.map((r) => {
-            const colors = scoreColor(r.score);
+          {filtered.map((a) => {
+            const pct = Math.round(((a.finalScore ?? 0) / a.maxScore) * 100);
+            const colors = scoreColor(pct);
+            const courseName = DEMO_COURSES.find((c) => c.id === a.courseId)?.title ?? a.courseId;
 
             return (
-              <Link key={r.id} href={`/s/courses/${r.courseId}/assignments/${r.assignmentId}/result`}>
+              <Link
+                key={a.id}
+                href={`${studentPrefix}/courses/${a.courseId}/assignments/${a.id}/result`}
+              >
                 <Card hover className="flex items-center gap-5 px-6 py-5 cursor-pointer group">
-                  {/* Left: info */}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium tracking-[0.12em] uppercase text-(--text-tertiary)">
-                      {r.courseName}
+                      {courseName}
                     </p>
-                    <p className="mt-1.5 text-base font-medium text-(--text-primary) truncate">
-                      {r.assignmentTitle}
-                    </p>
+                    <p className="mt-1.5 text-base font-medium text-(--text-primary) truncate">{a.title}</p>
                     <div className="flex items-center gap-2 mt-3">
                       <Badge variant="default" size="sm">
-                        Week {r.weekNumber}
+                        Week {a.weekNumber}
                       </Badge>
+                      {a.publishedAt && (
+                        <span className="text-xs text-(--text-quaternary)">
+                          Published {formatDate(a.publishedAt)}
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  {/* Right: score + date */}
                   <div className="flex items-center gap-4 shrink-0">
                     <div className="text-end hidden sm:block">
                       <p className="text-sm text-(--text-tertiary) whitespace-nowrap">
-                        {formatDate(r.gradedAt)}
+                        {a.finalScore}/{a.maxScore}
                       </p>
                     </div>
 
@@ -280,7 +186,7 @@ export default function ResultsPage() {
                       )}
                       style={{ width: 52, height: 52 }}
                     >
-                      {r.score}
+                      {pct}
                     </div>
 
                     <ChevronRight className="h-5 w-5 text-(--text-quaternary) opacity-0 group-hover:opacity-100 transition-opacity duration-150 hidden sm:block rtl:rotate-180" />

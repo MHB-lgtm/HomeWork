@@ -2,36 +2,22 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ChevronRight, Calendar } from 'lucide-react';
+import { ChevronRight, Calendar, BookOpen } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import { PageHeader } from '../../../../components/ui/page-header';
 import { Card } from '../../../../components/ui/card';
 import { Badge } from '../../../../components/ui/badge';
-
-/* ── Mock data ── */
-
-type Course = {
-  id: string;
-  name: string;
-  semester: string;
-  completedAssignments: number;
-  totalAssignments: number;
-  nextDeadline: string;
-  nextAssignment: string;
-};
-
-const courses: Course[] = [
-  { id: 'c1', name: 'Linear Algebra', semester: 'Spring 2026', completedAssignments: 6, totalAssignments: 10, nextDeadline: '2026-04-02', nextAssignment: 'Orthogonality and Projections' },
-  { id: 'c2', name: 'Calculus II', semester: 'Spring 2026', completedAssignments: 8, totalAssignments: 12, nextDeadline: '2026-04-03', nextAssignment: 'Series Convergence Tests' },
-  { id: 'c3', name: 'Introduction to Physics', semester: 'Spring 2026', completedAssignments: 4, totalAssignments: 8, nextDeadline: '2026-04-01', nextAssignment: 'Work and Energy Problems' },
-  { id: 'c4', name: 'Discrete Mathematics', semester: 'Spring 2026', completedAssignments: 3, totalAssignments: 9, nextDeadline: '2026-04-04', nextAssignment: 'Graph Theory Proofs' },
-];
+import {
+  DEMO_COURSES,
+  DEMO_STUDENT,
+  getAssignmentsForCourse,
+  getCourseProgress,
+} from '../../../../lib/demoSeed';
 
 function formatDeadline(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
   if (diffDays < 0) return 'Overdue';
   if (diffDays === 0) return 'Due today';
   if (diffDays === 1) return 'Due tomorrow';
@@ -51,68 +37,89 @@ export default function StudentCoursesPage() {
   const locale = params.locale as string;
   const studentPrefix = `/${locale}/s`;
 
-  return (
-    <div className="system-page-stack space-y-12">
-      <PageHeader title="My Courses" subtitle="Your enrolled courses for the current semester." />
+  const enrolled = DEMO_COURSES.filter((c) => DEMO_STUDENT.enrolledCourseIds.includes(c.id));
 
-      {/* Course grid */}
+  return (
+    <div className="space-y-12">
+      <PageHeader
+        eyebrow="Spring 2026"
+        title="My courses"
+        subtitle="Your enrolled courses for the current semester."
+        icon={<BookOpen />}
+      />
+
       <div className="grid gap-6 sm:grid-cols-2">
-        {courses.map((course) => {
-          const progress = Math.round((course.completedAssignments / course.totalAssignments) * 100);
-          const urgency = deadlineUrgency(course.nextDeadline);
+        {enrolled.map((course) => {
+          const progress = getCourseProgress(course.id);
+          const completion = progress.total ? Math.round((progress.published / progress.total) * 100) : 0;
+          const assignments = getAssignmentsForCourse(course.id);
+          const next = assignments
+            .filter((a) => a.status === 'OPEN' || a.status === 'SUBMITTED')
+            .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())[0];
+          const urgency = next ? deadlineUrgency(next.deadline) : 'default';
 
           return (
             <Link key={course.id} href={`${studentPrefix}/courses/${course.id}`} className="block h-full">
-              <Card hover className="flex h-full flex-col px-8 py-9">
-                {/* Title + semester */}
+              <Card hover className="flex h-full flex-col px-8 py-9 cursor-pointer">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-lg font-semibold text-(--text-primary) truncate leading-snug">
-                      {course.name}
+                    <p className="text-xs font-semibold uppercase tracking-wider text-(--text-quaternary)">
+                      {course.code}
                     </p>
+                    <p className="mt-1 text-lg font-semibold text-(--text-primary) truncate leading-snug">
+                      {course.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-(--text-tertiary) truncate">{course.lecturer}</p>
                   </div>
-                  <Badge variant="brand" size="sm">{course.semester}</Badge>
+                  <Badge variant="brand" size="sm">
+                    {course.semester}
+                  </Badge>
                 </div>
 
-                {/* Progress bar */}
                 <div className="mt-8">
                   <div className="mb-2.5 flex items-center justify-between text-sm">
                     <span className="text-(--text-tertiary)">
-                      {course.completedAssignments}/{course.totalAssignments} completed
+                      {progress.published}/{progress.total} graded
                     </span>
-                    <span className="font-semibold tabular-nums text-(--text-secondary)">{progress}%</span>
+                    <span className="font-semibold tabular-nums text-(--text-secondary)">{completion}%</span>
                   </div>
                   <div className="h-2 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
                     <div
-                      className="h-full rounded-full bg-(--brand) transition-all"
-                      style={{ width: `${progress}%` }}
+                      className="h-full rounded-full bg-(--brand) transition-all duration-700"
+                      style={{ width: `${completion}%` }}
                     />
                   </div>
+                  {progress.averageGrade > 0 && (
+                    <p className="mt-3 text-xs text-(--text-tertiary)">
+                      Average grade so far: <span className="font-semibold text-(--text-primary) tabular-nums">{progress.averageGrade}</span>
+                    </p>
+                  )}
                 </div>
 
-                {/* Next deadline */}
                 <div className="mt-auto flex items-center justify-between rounded-2xl bg-(--surface-secondary) px-5 py-5 pt-6">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium uppercase tracking-[0.18em] text-(--text-quaternary)">
-                      Next due
+                      {next ? 'Next due' : 'No open work'}
                     </p>
                     <p className="mt-1.5 truncate text-sm font-medium text-(--text-primary)">
-                      {course.nextAssignment}
+                      {next ? next.title : 'You\u2019re all caught up'}
                     </p>
                   </div>
-                  <div className="ms-4 flex items-center gap-1.5 shrink-0">
-                    <Calendar className="h-4 w-4 text-(--text-quaternary)" />
-                    <span
-                      className={cn(
-                        'text-sm font-semibold tabular-nums',
-                        urgency === 'error' && 'text-(--error)',
-                        urgency === 'warning' && 'text-(--warning)',
-                        urgency === 'default' && 'text-(--text-tertiary)',
-                      )}
-                    >
-                      {formatDeadline(course.nextDeadline)}
-                    </span>
-                  </div>
+                  {next && (
+                    <div className="ms-4 flex items-center gap-1.5 shrink-0">
+                      <Calendar className="h-4 w-4 text-(--text-quaternary)" />
+                      <span
+                        className={cn(
+                          'text-sm font-semibold tabular-nums',
+                          urgency === 'error' && 'text-(--error)',
+                          urgency === 'warning' && 'text-(--warning)',
+                          urgency === 'default' && 'text-(--text-tertiary)',
+                        )}
+                      >
+                        {formatDeadline(next.deadline)}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </Card>
             </Link>

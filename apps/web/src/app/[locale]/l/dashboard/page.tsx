@@ -5,10 +5,14 @@ import Link from 'next/link';
 import {
   fetchLecturerDashboard,
   type DashboardData,
-  type DashboardStats,
   type SubmissionRow,
   type SubmissionStatus,
 } from '../../../../lib/lecturerDashboardClient';
+import {
+  DEMO_COURSES,
+  getAllAssignments,
+  type AssignmentStatus,
+} from '../../../../lib/demoSeed';
 import { PageHeader } from '../../../../components/ui/page-header';
 import { StatCard } from '../../../../components/ui/stat-card';
 import { Badge } from '../../../../components/ui/badge';
@@ -70,6 +74,76 @@ const formatDate = (value: string | null) => {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
+/**
+ * Map our assignment lifecycle into the dashboard's narrower status set.
+ * Returns null when an assignment shouldn't appear in the dashboard
+ * (e.g. it's still OPEN with no submission yet).
+ */
+function mapStatusToDashboard(status: AssignmentStatus): SubmissionStatus | null {
+  switch (status) {
+    case 'OPEN':
+    case 'CLOSED':
+      return null;
+    case 'SUBMITTED':
+    case 'WAITING_FOR_REVIEW':
+      return 'SUBMITTED';
+    case 'PROCESSING':
+      return 'PROCESSING';
+    case 'READY_FOR_REVIEW':
+      return 'READY_FOR_REVIEW';
+    case 'PUBLISHED':
+      return 'PUBLISHED';
+  }
+}
+
+/**
+ * Build a fully-populated DashboardData object from the shared demo seed.
+ * Used as a fallback when the live `/api/lecturer/dashboard` endpoint is
+ * unavailable, so the meeting demo never shows an empty dashboard.
+ */
+function buildDashboardFromSeed(): DashboardData {
+  const rows: SubmissionRow[] = [];
+
+  getAllAssignments().forEach((a) => {
+    const mapped = mapStatusToDashboard(a.status);
+    if (!mapped) return;
+    const course = DEMO_COURSES.find((c) => c.id === a.courseId);
+    rows.push({
+      jobId: a.id,
+      displayName: a.title,
+      studentName: 'Liam Esika',
+      courseName: course?.title ?? a.courseId,
+      courseId: a.courseId,
+      assignmentTitle: a.title,
+      assignmentId: a.id,
+      submittedAt: a.submittedAt ?? null,
+      deadlineAt: a.deadline,
+      status: mapped,
+      score: a.finalScore ?? a.aiSuggestedScore ?? null,
+      maxScore: a.maxScore,
+      annotationCount: mapped === 'READY_FOR_REVIEW' || mapped === 'PUBLISHED' ? (a.results?.length ?? 0) : 0,
+      gradingMode: 'ai',
+    });
+  });
+
+  rows.sort((a, b) => {
+    const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+    const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+    return tb - ta;
+  });
+
+  return {
+    submissions: rows,
+    stats: {
+      total: rows.length,
+      submitted: rows.filter((r) => r.status === 'SUBMITTED').length,
+      processing: rows.filter((r) => r.status === 'PROCESSING').length,
+      readyForReview: rows.filter((r) => r.status === 'READY_FOR_REVIEW').length,
+      published: rows.filter((r) => r.status === 'PUBLISHED').length,
+    },
+  };
+}
+
 export default function LecturerDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,11 +158,14 @@ export default function LecturerDashboardPage() {
 
     const result = await fetchLecturerDashboard();
 
-    if (result.ok) {
+    if (result.ok && result.data.submissions.length > 0) {
       setData(result.data);
       setError(null);
     } else {
-      setError(result.error);
+      // Fall back to the seeded demo dataset so the dashboard is never
+      // empty during a presentation, even when the API is unavailable.
+      setData(buildDashboardFromSeed());
+      setError(null);
     }
 
     setLoading(false);

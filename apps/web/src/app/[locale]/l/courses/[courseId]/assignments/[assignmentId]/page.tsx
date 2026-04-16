@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Eye, Zap, Send, FileText, CheckCircle2, Edit3 } from 'lucide-react';
-import { cn } from '../../../../../../../lib/utils';
 import { PageHeader } from '../../../../../../../components/ui/page-header';
 import { StatCard } from '../../../../../../../components/ui/stat-card';
 import { StatusBadge } from '../../../../../../../components/ui/status-badge';
 import { Button } from '../../../../../../../components/ui/button';
 import { DataTable, Column } from '../../../../../../../components/ui/data-table';
-import { EmptyState } from '../../../../../../../components/ui/empty-state';
 import { Badge } from '../../../../../../../components/ui/badge';
+import {
+  getAssignment,
+  getCourseOrFallback,
+} from '../../../../../../../lib/demoSeed';
 
 /* ── Types ── */
 
@@ -25,36 +27,108 @@ type Submission = {
   status: SubmissionStatus;
 };
 
-/* ── Mock Data ── */
+/* ─────────────────────────────────────────────
+   Roster — used to generate plausible per-assignment submissions
+   ───────────────────────────────────────────── */
 
-const assignmentMeta = {
-  title: 'Matrix Operations',
-  week: 5,
-  deadline: '2026-04-02T23:59:00',
-  totalStudents: 45,
-};
-
-const mockSubmissions: Submission[] = [
-  { id: 'sub1', studentName: 'Sarah Cohen', submittedAt: '2026-03-30T14:22:00', aiScore: 92, status: 'published' },
-  { id: 'sub2', studentName: 'David Levy', submittedAt: '2026-03-30T16:05:00', aiScore: 78, status: 'review' },
-  { id: 'sub3', studentName: 'Maya Green', submittedAt: '2026-03-30T20:45:00', aiScore: 85, status: 'review' },
-  { id: 'sub4', studentName: 'Tom Shapira', submittedAt: '2026-03-31T08:12:00', aiScore: 64, status: 'pending' },
-  { id: 'sub5', studentName: 'Noa Miller', submittedAt: '2026-03-31T10:30:00', aiScore: 91, status: 'published' },
-  { id: 'sub6', studentName: 'Eli Rosen', submittedAt: '2026-03-31T15:58:00', aiScore: 55, status: 'pending' },
-  { id: 'sub7', studentName: 'Yael Adler', submittedAt: '2026-04-01T18:20:00', aiScore: null, status: 'pending' },
-  { id: 'sub8', studentName: 'Oren Ben-David', submittedAt: '2026-04-01T21:00:00', aiScore: 88, status: 'review' },
+const ROSTER: { id: string; name: string }[] = [
+  { id: 'st1', name: 'Sarah Cohen' },
+  { id: 'st2', name: 'David Levy' },
+  { id: 'st3', name: 'Maya Green' },
+  { id: 'st4', name: 'Tom Shapira' },
+  { id: 'st5', name: 'Noa Miller' },
+  { id: 'st6', name: 'Eli Rosen' },
+  { id: 'st7', name: 'Yael Adler' },
+  { id: 'st8', name: 'Oren Ben-David' },
+  { id: 'st9', name: 'Liam Esika' },
+  { id: 'st10', name: 'Hila Mizrahi' },
+  { id: 'st11', name: 'Jonathan Vardi' },
+  { id: 'st12', name: 'Tamar Zilber' },
 ];
+
+function deterministicSubmissions(
+  assignmentId: string,
+  status: 'OPEN' | 'SUBMITTED' | 'CLOSED' | 'WAITING_FOR_REVIEW' | 'PROCESSING' | 'READY_FOR_REVIEW' | 'PUBLISHED',
+  deadline: string,
+): Submission[] {
+  const submitRate =
+    status === 'OPEN'
+      ? 0.3
+      : status === 'SUBMITTED'
+        ? 0.6
+        : status === 'CLOSED'
+          ? 0.65
+          : status === 'WAITING_FOR_REVIEW' || status === 'PROCESSING'
+            ? 0.85
+            : 0.92;
+
+  const cutoff = Math.round(ROSTER.length * submitRate);
+  const baseDeadline = new Date(deadline).getTime();
+
+  return ROSTER.slice(0, cutoff).map((s, i) => {
+    // Deterministic pseudo-random based on assignment id + roster index.
+    const hash = (assignmentId.charCodeAt(0) + i * 17) % 100;
+    const offsetMs = (hash - 50) * 60_000 * 30; // ±25h around the deadline
+    const submittedAt = new Date(baseDeadline + offsetMs).toISOString();
+
+    let aiScore: number | null;
+    let cellStatus: SubmissionStatus;
+    if (status === 'OPEN' || status === 'SUBMITTED') {
+      aiScore = null;
+      cellStatus = 'pending';
+    } else if (status === 'PROCESSING' || status === 'WAITING_FOR_REVIEW') {
+      aiScore = i < cutoff / 2 ? 60 + (hash % 40) : null;
+      cellStatus = 'pending';
+    } else if (status === 'READY_FOR_REVIEW') {
+      aiScore = 60 + (hash % 40);
+      cellStatus = 'review';
+    } else {
+      // PUBLISHED
+      aiScore = 60 + (hash % 40);
+      cellStatus = i < cutoff * 0.7 ? 'published' : 'review';
+    }
+
+    return {
+      id: `${assignmentId}-${s.id}`,
+      studentName: s.name,
+      submittedAt,
+      aiScore,
+      status: cellStatus,
+    };
+  });
+}
 
 /* ── Component ── */
 
 export default function AssignmentOverviewPage() {
   const params = useParams();
+  const locale = (params?.locale as string) ?? 'en';
   const courseId = params.courseId as string;
   const assignmentId = params.assignmentId as string;
+  const lecturerPrefix = `/${locale}/l`;
 
-  const totalSubmissions = mockSubmissions.length;
-  const gradedCount = mockSubmissions.filter((s) => s.status === 'review' || s.status === 'published').length;
-  const publishedCount = mockSubmissions.filter((s) => s.status === 'published').length;
+  const assignment = getAssignment(assignmentId);
+  const course = getCourseOrFallback(courseId);
+
+  const submissions = useMemo(
+    () =>
+      assignment ? deterministicSubmissions(assignment.id, assignment.status, assignment.deadline) : [],
+    [assignment],
+  );
+
+  const enrolled = course.studentCount;
+  const totalSubmissions = submissions.length;
+  const gradedCount = submissions.filter((s) => s.status === 'review' || s.status === 'published').length;
+  const publishedCount = submissions.filter((s) => s.status === 'published').length;
+  const formattedDeadline = assignment
+    ? new Date(assignment.deadline).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : '\u2014';
 
   const columns: Column<Submission & Record<string, unknown>>[] = [
     {
@@ -132,28 +206,36 @@ export default function AssignmentOverviewPage() {
   return (
     <div className="space-y-12">
       <PageHeader
-        backHref={`/l/courses/${courseId}`}
-        title={assignmentMeta.title}
-        subtitle={`Week ${assignmentMeta.week} · Due Apr 2`}
+        backHref={`${lecturerPrefix}/courses/${courseId}`}
+        title={assignment?.title ?? 'Assignment'}
+        subtitle={
+          assignment
+            ? `${course.title} \u00b7 Week ${assignment.weekNumber} \u00b7 Due ${formattedDeadline}`
+            : course.title
+        }
+        eyebrow={course.code}
+        icon={<FileText />}
+        gradient
       />
 
       {/* Stats */}
-      <div className="grid gap-5 sm:grid-cols-3">
-        <StatCard label="Submitted" value={`${totalSubmissions}/${assignmentMeta.totalStudents}`} accent="#0d9488" />
-        <StatCard label="Graded" value={gradedCount} accent="#16a34a" />
+      <div className="grid gap-5 sm:grid-cols-4">
+        <StatCard label="Enrolled" value={enrolled} accent="#0d9488" />
+        <StatCard label="Submitted" value={`${totalSubmissions}/${enrolled}`} accent="#0891b2" />
+        <StatCard label="Graded by AI" value={gradedCount} accent="#16a34a" />
         <StatCard label="Published" value={publishedCount} accent="#9333ea" />
       </div>
 
       {/* Actions */}
       <div className="flex flex-wrap items-center gap-3">
-        <Button size="md" icon={<Zap />}>Grade All</Button>
-        <Button variant="secondary" size="md" icon={<Send />}>Publish All</Button>
+        <Button size="md" icon={<Zap />}>Re-run AI grading</Button>
+        <Button variant="secondary" size="md" icon={<Send />}>Publish reviewed</Button>
       </div>
 
       {/* Submissions Table */}
       <DataTable
         columns={columns}
-        data={mockSubmissions.map((s) => ({ ...s } as Submission & Record<string, unknown>))}
+        data={submissions.map((s) => ({ ...s } as Submission & Record<string, unknown>))}
         emptyMessage="No submissions yet"
         emptyIcon={<FileText />}
       />
