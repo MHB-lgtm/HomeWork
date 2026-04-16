@@ -64,36 +64,43 @@ export default function StudentDashboard() {
   const filtered = tab === 'all' ? assignments : assignments.filter((a) => a.status === tab);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Dashboard" subtitle="Welcome back" />
+    <div className="space-y-12">
+      <PageHeader
+        gradient
+        icon={<BookOpen />}
+        eyebrow="Student Dashboard"
+        title="Welcome back 👋"
+        subtitle="Track assignments, deadlines, and your progress across all courses."
+      />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Active Courses" value="4" icon={<BookOpen />} />
-        <StatCard label="Due This Week" value="3" icon={<Clock />} />
-        <StatCard label="Submitted" value="12" icon={<CheckCircle2 />} />
+      <div className="grid grid-cols-2 gap-5 lg:grid-cols-4">
+        <StatCard label="Active Courses" value="4" icon={<BookOpen />} accent="#0d9488" />
+        <StatCard label="Due This Week" value="3" icon={<Clock />} accent="#f59e0b" />
+        <StatCard label="Submitted" value="12" icon={<CheckCircle2 />} accent="#16a34a" />
         <StatCard
           label="Avg Grade"
           value="87"
           icon={<TrendingUp />}
+          accent="#0891b2"
           trend={{ value: '+4pts', positive: true }}
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_340px]">
+      <div className="grid gap-7 xl:grid-cols-[1fr_360px]">
         {/* Assignments */}
         <Card padding="none" className="overflow-hidden">
-          <div className="flex items-center justify-between border-b border-(--border-light) px-4 py-3">
-            <h2 className="text-sm font-semibold text-(--text-primary)">Upcoming</h2>
-            <div className="flex gap-0.5 rounded-md bg-(--surface-secondary) p-0.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-(--border-light) px-7 py-6">
+            <h2 className="text-lg font-semibold text-(--text-primary)">Upcoming</h2>
+            <div className="flex gap-1 rounded-lg bg-(--surface-secondary) p-1">
               {(['all', 'open', 'submitted', 'graded'] as TabKey[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
                   className={cn(
-                    'rounded-sm px-2.5 py-1 text-xs font-medium capitalize transition-all',
+                    'rounded-md px-3.5 py-1.5 text-[13px] font-medium capitalize transition-all',
                     tab === t
-                      ? 'bg-(--surface) text-(--text-primary) shadow-(--shadow-xs)'
+                      ? 'bg-(--surface) text-(--text-primary) shadow-sm'
                       : 'text-(--text-tertiary) hover:text-(--text-secondary)'
                   )}
                 >
@@ -119,11 +126,11 @@ export default function StudentDashboard() {
                       ? `/s/courses/${a.courseId}/assignments/${a.id}/result`
                       : `/s/courses/${a.courseId}/assignments/${a.id}/workspace`
                   }
-                  className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-(--surface-hover)"
+                  className="flex items-center gap-4 px-7 py-6 transition-colors hover:bg-(--surface-hover)"
                 >
                   <div
                     className={cn(
-                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-xs font-semibold',
+                      'flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] text-[13px] font-semibold',
                       a.status === 'graded'
                         ? 'bg-(--success-subtle) text-(--success)'
                         : a.status === 'submitted'
@@ -135,16 +142,16 @@ export default function StudentDashboard() {
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-(--text-primary)">
+                    <p className="truncate text-[15px] font-medium text-(--text-primary)">
                       {a.title}
                     </p>
-                    <p className="truncate text-xs text-(--text-tertiary)">
+                    <p className="truncate text-[13px] text-(--text-tertiary) mt-0.5">
                       {a.courseName}
                     </p>
                   </div>
 
-                  <div className="hidden items-center gap-1 text-xs text-(--text-quaternary) sm:flex">
-                    <Calendar size={12} />
+                  <div className="hidden items-center gap-1.5 text-[13px] text-(--text-quaternary) sm:flex whitespace-nowrap">
+                    <Calendar size={14} />
                     {new Date(a.deadline).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -161,7 +168,7 @@ export default function StudentDashboard() {
                     size="sm"
                   />
 
-                  <ChevronRight size={14} className="text-(--text-quaternary)" />
+                  <ChevronRight size={16} className="text-(--text-quaternary) shrink-0 rtl:rotate-180" />
                 </Link>
               ))
             )}
@@ -172,20 +179,20 @@ export default function StudentDashboard() {
         <div className="space-y-6">
           {/* Grade Trend */}
           <Card padding="md">
-            <h3 className="mb-4 text-sm font-semibold text-(--text-primary)">Grade Trend</h3>
-            <div className="flex items-end gap-2" style={{ height: 100 }}>
+            <h3 className="mb-5 text-[16px] font-semibold text-(--text-primary)">Grade Trend</h3>
+            <div className="flex items-end gap-2" style={{ height: 128 }}>
               {gradeHistory.map((g, i) => {
-                const barHeight = (g.grade / 100) * 72;
+                const barHeight = (g.grade / 100) * 96;
                 return (
-                  <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                    <span className="text-[10px] font-medium text-(--text-primary)">
+                  <div key={i} className="flex flex-1 flex-col items-center gap-1.5">
+                    <span className="text-[12px] font-semibold text-(--text-primary) tabular-nums">
                       {g.grade}
                     </span>
                     <div
                       className="w-full rounded-t-sm bg-(--brand)"
                       style={{ height: `${barHeight}px` }}
                     />
-                    <span className="text-[10px] text-(--text-quaternary)">{g.week}</span>
+                    <span className="text-[11px] text-(--text-quaternary)">{g.week}</span>
                   </div>
                 );
               })}
@@ -194,24 +201,24 @@ export default function StudentDashboard() {
 
           {/* Focus Areas */}
           <Card padding="md">
-            <div className="mb-4 flex items-center gap-2">
-              <Target size={14} className="text-(--text-tertiary)" />
-              <h3 className="text-sm font-semibold text-(--text-primary)">Focus Areas</h3>
+            <div className="mb-5 flex items-center gap-2">
+              <Target size={16} className="text-(--text-tertiary)" />
+              <h3 className="text-[16px] font-semibold text-(--text-primary)">Focus Areas</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {focusAreas.map((t, i) => (
                 <div key={i}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-(--text-secondary)">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[13px] font-medium text-(--text-secondary) truncate">
                       {t.topic}
                     </span>
-                    <span className="text-xs font-medium text-(--text-primary)">
+                    <span className="text-[13px] font-semibold text-(--text-primary) tabular-nums shrink-0">
                       {t.score}%
                     </span>
                   </div>
-                  <div className="mt-1.5 h-1 w-full rounded-full bg-(--surface-tertiary)">
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-(--surface-tertiary) overflow-hidden">
                     <div
-                      className="h-1 rounded-full bg-(--brand)"
+                      className="h-full rounded-full bg-(--brand)"
                       style={{ width: `${t.score}%` }}
                     />
                   </div>

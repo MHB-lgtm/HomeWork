@@ -194,32 +194,21 @@ export default function ResultsPage() {
   }, [courseFilter, sortBy]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12">
       {/* Header */}
-      <PageHeader title="Results" subtitle="Your graded assignments" />
+      <PageHeader title="Results" subtitle="Your graded assignments across all courses." />
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Average Grade"
-          value={82}
-          icon={<BarChart3 />}
-        />
-        <StatCard
-          label="Best Grade"
-          value={95}
-          icon={<Trophy />}
-        />
-        <StatCard
-          label="Total Graded"
-          value={8}
-          icon={<GraduationCap />}
-        />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <StatCard label="Average Grade" value={82} icon={<BarChart3 />} accent="#0d9488" />
+        <StatCard label="Best Grade" value={95} icon={<Trophy />} accent="#16a34a" />
+        <StatCard label="Total Graded" value={8} icon={<GraduationCap />} accent="#0891b2" />
         <StatCard
           label="Trend"
           value="+4.2"
           trend={{ value: '+4.2', positive: true }}
           icon={<TrendingUp />}
+          accent="#9333ea"
         />
       </div>
 
@@ -246,38 +235,28 @@ export default function ResultsPage() {
           title="No results found"
           description="Try changing the course filter to see your graded assignments."
           action={
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setCourseFilter('all')}
-            >
+            <Button variant="secondary" size="sm" onClick={() => setCourseFilter('all')}>
               Clear filter
             </Button>
           }
         />
       ) : (
-        <div className="grid gap-2">
+        <div className="grid gap-4">
           {filtered.map((r) => {
             const colors = scoreColor(r.score);
 
             return (
-              <Link
-                key={r.id}
-                href={`/s/courses/${r.courseId}/assignments/${r.assignmentId}/result`}
-              >
-                <Card
-                  hover
-                  className="flex items-center gap-4 p-4 cursor-pointer group"
-                >
+              <Link key={r.id} href={`/s/courses/${r.courseId}/assignments/${r.assignmentId}/result`}>
+                <Card hover className="flex items-center gap-5 px-6 py-5 cursor-pointer group">
                   {/* Left: info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-(--text-tertiary)">
+                    <p className="text-xs font-medium tracking-[0.12em] uppercase text-(--text-tertiary)">
                       {r.courseName}
                     </p>
-                    <p className="text-sm font-medium text-(--text-primary) truncate mt-0.5">
+                    <p className="mt-1.5 text-base font-medium text-(--text-primary) truncate">
                       {r.assignmentTitle}
                     </p>
-                    <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex items-center gap-2 mt-3">
                       <Badge variant="default" size="sm">
                         Week {r.weekNumber}
                       </Badge>
@@ -285,26 +264,26 @@ export default function ResultsPage() {
                   </div>
 
                   {/* Right: score + date */}
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-xs text-(--text-tertiary)">
+                  <div className="flex items-center gap-4 shrink-0">
+                    <div className="text-end hidden sm:block">
+                      <p className="text-sm text-(--text-tertiary) whitespace-nowrap">
                         {formatDate(r.gradedAt)}
                       </p>
                     </div>
 
                     <div
                       className={cn(
-                        'flex items-center justify-center rounded-full border-2 font-semibold text-sm',
+                        'flex items-center justify-center rounded-full border-2 font-bold text-base tabular-nums',
                         colors.border,
                         colors.text,
                         colors.bg,
                       )}
-                      style={{ width: 44, height: 44 }}
+                      style={{ width: 52, height: 52 }}
                     >
                       {r.score}
                     </div>
 
-                    <ChevronRight className="h-4 w-4 text-(--text-quaternary) opacity-0 group-hover:opacity-100 transition-opacity duration-150 hidden sm:block" />
+                    <ChevronRight className="h-5 w-5 text-(--text-quaternary) opacity-0 group-hover:opacity-100 transition-opacity duration-150 hidden sm:block rtl:rotate-180" />
                   </div>
                 </Card>
               </Link>

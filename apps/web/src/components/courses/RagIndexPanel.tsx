@@ -34,7 +34,7 @@ export function RagIndexPanel({
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-slate-900">RAG Index</CardTitle>
@@ -50,7 +50,7 @@ export function RagIndexPanel({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {error && (
           <Alert variant="destructive">
             <AlertTitle>Index error</AlertTitle>
@@ -65,8 +65,8 @@ export function RagIndexPanel({
             Index not built yet for {courseId}.
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-5 text-sm text-slate-600 sm:grid-cols-2">
               <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Built at</p>
                 <p className="text-sm font-semibold text-slate-900">{formatDate(manifest.builtAt)}</p>

@@ -118,7 +118,7 @@ export function RagTestPanel({ courseId, hasIndexHint }: RagTestPanelProps) {
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-slate-900">Test RAG</CardTitle>
@@ -152,7 +152,7 @@ export function RagTestPanel({ courseId, hasIndexHint }: RagTestPanelProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         {hasIndexHint && !loading && !error && (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-2 text-sm text-slate-600">
             Index not built yet. Use the RAG Index panel to rebuild before testing.
@@ -178,7 +178,7 @@ export function RagTestPanel({ courseId, hasIndexHint }: RagTestPanelProps) {
         )}
 
         {mode === 'query' ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="rag-query" className="text-sm font-medium text-slate-700">
                 Query
@@ -217,7 +217,7 @@ export function RagTestPanel({ courseId, hasIndexHint }: RagTestPanelProps) {
             </div>
 
             {queryHits.length > 0 && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {queryHits.map((hit) => (
                   <div
                     key={`${hit.chunkId}-${hit.lectureId}`}
@@ -241,7 +241,7 @@ export function RagTestPanel({ courseId, hasIndexHint }: RagTestPanelProps) {
             )}
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="rag-issue" className="text-sm font-medium text-slate-700">
                 Issue text
@@ -280,7 +280,7 @@ export function RagTestPanel({ courseId, hasIndexHint }: RagTestPanelProps) {
             </div>
 
             {pointers.length > 0 && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {pointers.map((pointer) => {
                   const startSec = pointer.anchor?.startSec;
                   const timeLabel = typeof startSec === 'number' ? formatSeconds(startSec) : null;

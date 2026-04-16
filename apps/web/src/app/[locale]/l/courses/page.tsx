@@ -28,52 +28,56 @@ const mockCourses: Course[] = [
 
 export default function LecturerCoursesPage() {
   return (
-    <div className="space-y-8">
-      <PageHeader title="Courses">
-        <Link href="/l/courses/create">
-          <Button variant="primary" size="sm" icon={<Plus />}>
-            New Course
-          </Button>
-        </Link>
-      </PageHeader>
+    <div className="space-y-12">
+      <PageHeader
+        title="Courses"
+        subtitle="Manage your courses, assignments, and exams."
+        actions={
+          <Link href="/l/courses/create">
+            <Button variant="primary" size="md" icon={<Plus />}>
+              New Course
+            </Button>
+          </Link>
+        }
+      />
 
       {/* Course grid */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
         {mockCourses.map((course) => {
           const progress = Math.round((course.currentWeek / course.totalWeeks) * 100);
 
           return (
             <Link key={course.id} href={`/l/courses/${course.id}`} className="block">
-              <Card hover className="p-5 h-full">
-                <div className="flex items-start justify-between gap-2">
+              <Card hover className="p-7 h-full">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-(--text-primary) truncate">
+                    <p className="text-lg font-semibold text-(--text-primary) truncate leading-snug">
                       {course.name}
                     </p>
-                    <p className="mt-0.5 text-xs text-(--text-tertiary)">{course.code}</p>
+                    <p className="mt-1.5 text-sm text-(--text-tertiary)">{course.code}</p>
                   </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-(--text-quaternary) mt-0.5" />
+                  <ChevronRight className="h-5 w-5 shrink-0 text-(--text-quaternary) mt-1 rtl:rotate-180" />
                 </div>
 
                 {/* Stats row */}
-                <div className="mt-4 flex items-center gap-4 text-xs text-(--text-tertiary)">
-                  <span className="flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" />
+                <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-(--text-tertiary)">
+                  <span className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
                     {course.students} students
                   </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" />
+                  <span className="flex items-center gap-2">
+                    <Clock className="h-4 w-4" />
                     Week {course.currentWeek}
                   </span>
                 </div>
 
                 {/* Progress */}
-                <div className="mt-4">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
+                <div className="mt-6">
+                  <div className="mb-2.5 flex items-center justify-between text-sm">
                     <span className="text-(--text-tertiary)">{course.assignments} assignments</span>
-                    <span className="font-medium tabular-nums text-(--text-secondary)">{progress}%</span>
+                    <span className="font-semibold tabular-nums text-(--text-secondary)">{progress}%</span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
                     <div
                       className="h-full rounded-full bg-(--brand) transition-all"
                       style={{ width: `${progress}%` }}

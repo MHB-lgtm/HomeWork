@@ -117,32 +117,25 @@ export default function LecturerDashboardPage() {
 
   return (
     <PageTransition>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-(--brand)/10 bg-linear-to-br from-(--brand-subtle) via-white to-(--info-subtle)/30 p-6 shadow-(--shadow-sm)">
-          <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-(--brand)/5 blur-2xl" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles size={14} className="text-(--brand)" />
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--brand)">Lecturer Dashboard</p>
-              </div>
-              <h1 className="text-2xl font-bold tracking-tight text-(--text-primary)">Submission Queue</h1>
-              <p className="mt-1 text-sm text-(--text-secondary) max-w-md">
-                Monitor all student submissions, track grading progress, and manage reviews from one place.
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />}
+      <div className="space-y-12">
+        {/* Header — gradient hero per spec §8.3 */}
+        <PageHeader
+          gradient
+          icon={<ClipboardCheck />}
+          eyebrow={<><Sparkles size={12} /> Lecturer Dashboard</>}
+          title="Submission Queue"
+          subtitle="Monitor all student submissions, track grading progress, and manage reviews from one place."
+          actions={
+            <button
               onClick={() => loadData(true)}
               disabled={refreshing}
+              className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm px-5 py-2.5 text-sm font-medium text-white hover:bg-white/30 transition disabled:opacity-60"
             >
+              <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
               Refresh
-            </Button>
-          </div>
-        </div>
+            </button>
+          }
+        />
 
         {error && (
           <Alert variant="error">
@@ -152,61 +145,61 @@ export default function LecturerDashboardPage() {
         )}
 
         {/* Stats Row */}
-        <StaggerGroup className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <StaggerGroup className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
           <StaggerItem>
-            <StatCard label="Total" value={loading ? '...' : stats.total} icon={<Inbox />} />
+            <StatCard label="Total" value={loading ? '...' : stats.total} icon={<Inbox />} accent="#0d9488" />
           </StaggerItem>
           <StaggerItem>
-            <StatCard label="Submitted" value={loading ? '...' : stats.submitted} icon={<Send />} />
+            <StatCard label="Submitted" value={loading ? '...' : stats.submitted} icon={<Send />} accent="#0891b2" />
           </StaggerItem>
           <StaggerItem>
-            <StatCard label="Processing" value={loading ? '...' : stats.processing} icon={<Loader2 />} />
+            <StatCard label="Processing" value={loading ? '...' : stats.processing} icon={<Loader2 />} accent="#f59e0b" />
           </StaggerItem>
           <StaggerItem>
-            <StatCard label="Ready" value={loading ? '...' : stats.readyForReview} icon={<ClipboardCheck />} />
+            <StatCard label="Ready" value={loading ? '...' : stats.readyForReview} icon={<ClipboardCheck />} accent="#16a34a" />
           </StaggerItem>
           <StaggerItem>
-            <StatCard label="Published" value={loading ? '...' : stats.published} icon={<CheckCircle2 />} />
+            <StatCard label="Published" value={loading ? '...' : stats.published} icon={<CheckCircle2 />} accent="#9333ea" />
           </StaggerItem>
         </StaggerGroup>
 
-        {/* Filters */}
+        {/* Search + Filters card */}
         <FadeIn delay={0.1}>
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Status filter pills */}
-            <div className="flex items-center gap-1 rounded-[var(--radius-md)] border border-(--border) bg-(--surface) p-1 shadow-(--shadow-xs)">
-              {STATUS_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setStatusFilter(opt.value)}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-[11px] font-semibold transition-all duration-200',
-                    statusFilter === opt.value
-                      ? 'bg-(--brand) text-white shadow-(--shadow-brand)'
-                      : 'text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--surface-hover)'
-                  )}
-                >
-                  {opt.label}
-                  {opt.value !== 'ALL' && data && (
-                    <span className="ml-1 opacity-70">
-                      {opt.value === 'SUBMITTED' ? stats.submitted
-                        : opt.value === 'PROCESSING' ? stats.processing
-                        : opt.value === 'READY_FOR_REVIEW' ? stats.readyForReview
-                        : stats.published}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div className="flex-1 min-w-50 max-w-xs">
+          <div className="rounded-2xl border border-(--border) bg-(--surface) px-7 py-8 shadow-sm space-y-6">
+            <div className="max-w-lg">
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search submissions..."
-                icon={<Search size={14} />}
+                placeholder="Search submissions, students, courses..."
+                icon={<Search />}
               />
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              {STATUS_OPTIONS.map((opt) => {
+                const active = statusFilter === opt.value;
+                const count = opt.value === 'SUBMITTED' ? stats.submitted
+                  : opt.value === 'PROCESSING' ? stats.processing
+                  : opt.value === 'READY_FOR_REVIEW' ? stats.readyForReview
+                  : opt.value === 'PUBLISHED' ? stats.published
+                  : null;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setStatusFilter(opt.value)}
+                    className={cn(
+                      'px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap',
+                      active
+                        ? 'bg-(--brand-subtle) text-(--brand-hover)'
+                        : 'bg-(--surface-secondary) text-(--text-secondary) hover:bg-(--surface-tertiary)'
+                    )}
+                  >
+                    {opt.label}
+                    {count !== null && data && (
+                      <span className="ms-2 opacity-70 tabular-nums">{count}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </FadeIn>
@@ -230,15 +223,15 @@ export default function LecturerDashboardPage() {
           ) : (
             <div className="overflow-hidden rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) shadow-(--shadow-xs)">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-200 text-sm">
+                <table className="w-full min-w-220 text-sm">
                   <thead>
                     <tr className="border-b border-(--border) bg-linear-to-b from-(--surface-secondary)/70 to-(--surface-secondary) sticky top-0 z-10">
-                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Submission</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Course</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Submitted</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Status</th>
-                      <th className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Score</th>
-                      <th className="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Actions</th>
+                      <th className="px-6 py-4 text-start text-[12px] font-bold uppercase tracking-[0.1em] text-(--text-tertiary)">Submission</th>
+                      <th className="px-6 py-4 text-start text-[12px] font-bold uppercase tracking-[0.1em] text-(--text-tertiary)">Course</th>
+                      <th className="px-6 py-4 text-start text-[12px] font-bold uppercase tracking-[0.1em] text-(--text-tertiary)">Submitted</th>
+                      <th className="px-6 py-4 text-start text-[12px] font-bold uppercase tracking-[0.1em] text-(--text-tertiary)">Status</th>
+                      <th className="px-6 py-4 text-start text-[12px] font-bold uppercase tracking-[0.1em] text-(--text-tertiary)">Score</th>
+                      <th className="px-5 py-3.5 text-end text-[12px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -273,60 +266,60 @@ function SubmissionTableRow({ row }: { row: SubmissionRow }) {
   return (
     <tr className="border-b border-(--border-light) last:border-0 transition-colors duration-200 hover:bg-(--surface-hover) group">
       {/* Submission name */}
-      <td className="px-4 py-3.5">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-(--text-primary) truncate max-w-60">
+      <td className="px-6 py-6">
+        <div className="min-w-0 max-w-80">
+          <p className="text-[14px] font-medium text-(--text-primary) truncate">
             {row.displayName || row.assignmentTitle || 'Untitled'}
           </p>
           {row.annotationCount > 0 && (
-            <p className="text-[11px] text-(--text-tertiary) mt-0.5">{row.annotationCount} annotations</p>
+            <p className="text-[12px] text-(--text-tertiary) mt-0.5">{row.annotationCount} annotations</p>
           )}
         </div>
       </td>
 
       {/* Course */}
-      <td className="px-4 py-3.5">
-        <span className="text-sm text-(--text-secondary) truncate max-w-40 block">
+      <td className="px-6 py-6">
+        <span className="text-[14px] text-(--text-secondary) truncate max-w-48 block">
           {row.courseName || '-'}
         </span>
       </td>
 
       {/* Submitted date */}
-      <td className="px-4 py-3.5">
-        <span className="text-sm text-(--text-secondary) whitespace-nowrap">
+      <td className="px-6 py-6">
+        <span className="text-[14px] text-(--text-secondary) whitespace-nowrap">
           {formatDate(row.submittedAt)}
         </span>
       </td>
 
       {/* Status */}
-      <td className="px-4 py-3.5">
-        <div className="flex items-center gap-1.5">
+      <td className="px-6 py-6">
+        <div className="flex items-center gap-2">
           <StatusBadge status={statusToKey(row.status)} label={statusLabel(row.status)} size="sm" />
-          {isProcessing && <Loader2 size={12} className="animate-spin text-(--info)" />}
+          {isProcessing && <Loader2 size={14} className="animate-spin text-(--info)" />}
         </div>
       </td>
 
       {/* Score */}
-      <td className="px-4 py-3.5">
+      <td className="px-6 py-6">
         {row.score !== null && row.maxScore !== null ? (
           <Badge variant="brand" size="sm">{row.score}/{row.maxScore}</Badge>
         ) : (
-          <span className="text-sm text-(--text-quaternary)">-</span>
+          <span className="text-[14px] text-(--text-quaternary)">-</span>
         )}
       </td>
 
       {/* Actions */}
-      <td className="px-4 py-3.5 text-right">
-        <div className="flex items-center justify-end gap-1.5 opacity-70 group-hover:opacity-100 transition-opacity">
+      <td className="px-6 py-6 text-end">
+        <div className="flex items-center justify-end gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity">
           {canReview ? (
             <Link href={`/reviews/${row.jobId}`}>
-              <Button size="sm" icon={<ArrowRight size={12} />}>
+              <Button size="sm" icon={<ArrowRight size={14} className="rtl:rotate-180" />}>
                 Review
               </Button>
             </Link>
           ) : (
             <Link href={`/reviews/${row.jobId}`}>
-              <Button size="sm" variant="secondary" icon={<Eye size={12} />} disabled={row.status === 'SUBMITTED'}>
+              <Button size="sm" variant="secondary" icon={<Eye size={14} />} disabled={row.status === 'SUBMITTED'}>
                 View
               </Button>
             </Link>

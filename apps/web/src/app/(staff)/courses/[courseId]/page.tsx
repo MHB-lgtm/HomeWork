@@ -1,4 +1,4 @@
-import CourseDetailsPageClient from '@/app/[locale]/courses/[courseId]/page';
+import CourseDetailsPageClient from '@/app/[locale]/courses/[courseId]/page-client';
 import { requireActiveCourseRolePageAccess } from '@/lib/server/session';
 
 type StaffCourseDetailsPageProps = {

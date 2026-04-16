@@ -103,23 +103,17 @@ export function StatusBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full font-semibold status-transition',
-        'border',
+        'inline-flex items-center gap-1.5 rounded-full font-semibold whitespace-nowrap border-transparent',
         config.bg,
         config.text,
-        size === 'sm' ? 'px-2 py-0.5 text-[10px] leading-4 border-transparent' : 'px-2.5 py-1 text-[11px] leading-4 border-transparent',
+        size === 'sm' ? 'px-2.5 py-0.5 text-xs leading-5' : 'px-3 py-1 text-sm leading-5',
         className
       )}
       aria-label={`Status ${displayLabel}`}
       {...props}
     >
       <span
-        className={cn(
-          'shrink-0 rounded-full animate-pulse',
-          config.dot,
-          'h-1.5 w-1.5'
-        )}
-        style={{ animationDuration: normalizedKey === 'active' || normalizedKey === 'pending' ? '2s' : '0s' }}
+        className={cn('shrink-0 rounded-full h-1.5 w-1.5', config.dot)}
       />
       {displayLabel}
     </span>

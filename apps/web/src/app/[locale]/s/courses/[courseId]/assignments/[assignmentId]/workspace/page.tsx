@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  PenTool, Type, Eraser, Undo2, ChevronLeft,
-  Bold, Italic, Underline, List, ListOrdered,
+  PenTool, Type, Eraser, Undo2, ChevronLeft, ChevronRight,
+  ChevronDown, ChevronUp, Bold, Italic, Underline, List, ListOrdered,
   PanelRightOpen, Trash2, Check, X,
 } from 'lucide-react';
 import { cn } from '../../../../../../../../lib/utils';
@@ -49,16 +49,83 @@ interface Stroke {
   opacity: number;
 }
 
+interface QuestionPart {
+  label: string;
+  text: string;
+}
+
+interface Question {
+  id: string;
+  number: number;
+  intro?: string;
+  parts?: QuestionPart[];
+}
+
 /* ─────────────────────────────────────────────
    Constants
    ───────────────────────────────────────────── */
 
 const MOCK_ASSIGNMENT = {
-  title: 'Matrix Operations \u2014 Week 5',
-  course: 'Linear Algebra',
-  deadline: 'Apr 2, 2026 23:59',
-  instructions: `Solve the following matrix problems. Show all work and intermediate steps.\n\nProblem 1: Given matrices A and B, compute A \u00d7 B.\n\nA = [[2, 1, 3], [4, -1, 0], [1, 5, 2]]\nB = [[1, 0], [2, 3], [-1, 4]]\n\nProblem 2: Determine if the matrix C is invertible. If so, find the inverse.\n\nC = [[1, 2], [3, 4]]\n\nProblem 3: Using the results above, explain the relationship between matrix multiplication and invertibility.\n\nSubmission Guidelines:\n- Show all intermediate steps\n- Clearly label each problem\n- You may type or draw your work\n- Due: April 2, 2026 at 11:59 PM`,
+  title: 'Homework 2',
+  course: 'Calculus II \u2014 Spring 2025-26',
+  deadline: 'Apr 30, 2026 23:59',
 };
+
+const QUESTIONS: Question[] = [
+  {
+    id: 'q1',
+    number: 1,
+    intro:
+      "Define each of the following terms. Give a full and complete mathematical definition. If your definition includes a secondary term that was defined in the course, you must define it as well! You do not have to define any term that appears prior to the words 'define the term'. You are not required to re-define terms that were already defined.\n\nLet (a\u2099) be a sequence of real numbers.",
+    parts: [
+      { label: '(a)', text: 'Define the term: the sequence (a\u2099) is not bounded from below and not bounded from above, without using any negation word.' },
+      { label: '(b)', text: 'Define the term: lim n\u2192\u221E a\u2099 \u2260 \u221E, without using any negation word.' },
+      { label: '(c)', text: 'Define the term: we have lim n\u2192\u221E a\u2099 = \u22121.' },
+      { label: '(d)', text: 'Define the term: the sequence (a\u2099) is strictly monotone.' },
+    ],
+  },
+  {
+    id: 'q2',
+    number: 2,
+    intro: 'Let (a\u2099) be a sequence of real numbers.\n\nProve each of the following statements. In items (a) and (b) prove using only the definitions.',
+    parts: [
+      { label: '(a)', text: 'For every k \u2208 \u2115, the sequence (a\u2099\u208A\u2096) is convergent if and only if (a\u2099) is convergent, and in that case,\n\n        lim n\u2192\u221E a\u2099\u208A\u2096 = lim n\u2192\u221E a\u2099.' },
+      { label: '(b)', text: 'If (a\u2099) is increasing, then (a\u2099) converges in the extended sense and\n\n        lim n\u2192\u221E a\u2099 = sup { a\u2099 : n \u2208 \u2115 }.' },
+      { label: '(c)', text: 'Suppose that (a\u2099) is bounded and consider the sequence (b\u2096) defined by\n\n        b\u2096 = inf { a\u2099 : n \u2265 k }    \u2200k \u2208 \u2115.\n\nProve that (b\u2096) is convergent.\n\nHint: prove that (b\u2096) is increasing and bounded from above.' },
+    ],
+  },
+  {
+    id: 'q3',
+    number: 3,
+    parts: [
+      { label: '(a)', text: 'Let a \u2208 \u211D and let f be a function that is defined on [a, \u221E). Assume that lim x\u2192\u221E f(x) = \u221E.\n\nProve that for every sequence (x\u2099) such that lim n\u2192\u221E x\u2099 = \u221E, we have lim n\u2192\u221E f(x\u2099) = \u221E.' },
+      { label: '(b)', text: 'Compute the following limit:\n\n        lim n\u2192\u221E [ n + n\u00B2 ln n \u2212 n\u00B2 ln(n+1) ]' },
+    ],
+  },
+  {
+    id: 'q4',
+    number: 4,
+    intro: 'Compute the following limit as a function of 0 < \u03B1 < 1:\n\n        lim n\u2192\u221E [ (n+1)\u00B2\u1D45 \u2212 (n\u00B2+1)\u1D45 ]',
+  },
+  {
+    id: 'q5',
+    number: 5,
+    parts: [
+      { label: '(a)', text: 'Consider the sequence (a\u2099) defined by the recursive formula\n\n        a\u2099\u208A\u2081 = a\u2099 + 1/a\u2099    \u2200n \u2208 \u2115\n        a\u2081 = 1\n\nProve that lim n\u2192\u221E a\u2099 = \u221E.' },
+      { label: '(b)', text: 'i.  Let 0 \u2264 \u03B1 \u2264 2. Prove that \u03B1 \u2264 \u221A(2\u03B1) \u2264 2.\n\nii. Let (a\u2099) be the sequence of real numbers defined by the recursive formula\n\n        a\u2099\u208A\u2081 = \u221A(2a\u2099)    \u2200n \u2208 \u2115\n        a\u2081 = \u221A2\n\n    Prove that the sequence (a\u2099) is convergent.\n\niii. Prove that \u221A(2\u221A(2\u221A(2\u221A2\u2026))) = 2, that is, prove that lim n\u2192\u221E a\u2099 = 2.' },
+    ],
+  },
+  {
+    id: 'q6',
+    number: 6,
+    intro: 'Let 0 < \u03B2 < \u03B1 and let (a\u2099) and (b\u2099) be two sequences defined by the recursive formulas\n\n        a\u2099\u208A\u2081 = (a\u2099 + b\u2099) / 2,    b\u2099\u208A\u2081 = 2a\u2099b\u2099 / (a\u2099 + b\u2099),    \u2200n \u2208 \u2115\n        a\u2081 = \u03B1,    b\u2081 = \u03B2',
+    parts: [
+      { label: '(a)', text: 'Prove that (a\u2099) and (b\u2099) are well-defined, and prove that a\u2099\u208A\u2081 \u2265 b\u2099\u208A\u2081 for every n \u2208 \u2115.' },
+      { label: '(b)', text: 'Prove that there exists an L \u2208 \u211D such that lim n\u2192\u221E a\u2099 = lim n\u2192\u221E b\u2099 = L.' },
+      { label: '(c)', text: 'Prove that a\u2099b\u2099 = a\u2081b\u2081 for every n \u2208 \u2115 and find the value of L.' },
+    ],
+  },
+];
 
 const COLORS = ['#111111', '#3B82F6', '#EF4444', '#10B981', '#8B5CF6', '#F59E0B'];
 const STROKE_SIZES = [2, 4, 8];
@@ -202,15 +269,19 @@ function LexicalTextEditor({ onDirty }: { onDirty: () => void }) {
 }
 
 /* ─────────────────────────────────────────────
-   Instructions Panel
+   Questions Panel
    ───────────────────────────────────────────── */
 
-function InstructionsPanel({
+function QuestionsPanel({
   open,
   onClose,
+  activeQuestionId,
+  onSelectQuestion,
 }: {
   open: boolean;
   onClose: () => void;
+  activeQuestionId: string;
+  onSelectQuestion: (id: string) => void;
 }) {
   if (!open) return null;
 
@@ -231,7 +302,7 @@ function InstructionsPanel({
         )}
       >
         <div className="flex items-center justify-between border-b border-(--border) px-4 py-3">
-          <h3 className="text-sm font-semibold text-(--text-primary)">Instructions</h3>
+          <h3 className="text-sm font-semibold text-(--text-primary)">All questions</h3>
           <button
             onClick={onClose}
             className="h-7 w-7 inline-flex items-center justify-center rounded-md text-(--text-tertiary) hover:bg-(--surface-hover) transition-colors"
@@ -245,24 +316,109 @@ function InstructionsPanel({
           <div className="rounded-lg bg-(--brand-subtle) px-3 py-2 mb-4">
             <p className="text-xs font-medium text-(--brand)">{MOCK_ASSIGNMENT.course}</p>
             <p className="text-sm font-semibold text-(--text-primary) mt-0.5">{MOCK_ASSIGNMENT.title}</p>
+            <p className="text-xs text-(--text-tertiary) mt-1">Due {MOCK_ASSIGNMENT.deadline}</p>
           </div>
 
-          <div className="text-sm text-(--text-secondary) leading-relaxed space-y-2">
-            {MOCK_ASSIGNMENT.instructions.split('\n').map((line, i) => {
-              if (line.trim() === '') return <div key={i} className="h-2" />;
-              if (line.startsWith('- ')) {
-                return (
-                  <li key={i} className="ml-4 list-disc text-sm">
-                    {line.replace('- ', '')}
-                  </li>
-                );
-              }
-              return <p key={i}>{line}</p>;
+          <ol className="space-y-1.5">
+            {QUESTIONS.map((q) => {
+              const isActive = q.id === activeQuestionId;
+              const partsCount = q.parts?.length ?? 0;
+              return (
+                <li key={q.id}>
+                  <button
+                    onClick={() => {
+                      onSelectQuestion(q.id);
+                      onClose();
+                    }}
+                    className={cn(
+                      'w-full text-left rounded-lg px-3 py-2 transition-colors border',
+                      isActive
+                        ? 'bg-(--brand-subtle) border-(--brand) text-(--text-primary)'
+                        : 'bg-(--surface) border-(--border) hover:bg-(--surface-hover) text-(--text-secondary)'
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">Question {q.number}</span>
+                      {partsCount > 0 && (
+                        <span className="text-[10px] uppercase tracking-wide text-(--text-quaternary)">
+                          {partsCount} part{partsCount === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </div>
+                    {q.intro && (
+                      <p className="mt-0.5 text-xs text-(--text-tertiary) line-clamp-2">
+                        {q.intro.split('\n')[0]}
+                      </p>
+                    )}
+                  </button>
+                </li>
+              );
             })}
-          </div>
+          </ol>
         </div>
       </aside>
     </>
+  );
+}
+
+/* ─────────────────────────────────────────────
+   Active Question Card
+   ───────────────────────────────────────────── */
+
+function QuestionCard({
+  question,
+  expanded,
+  onToggle,
+}: {
+  question: Question;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <section className="shrink-0 border-b border-(--border) bg-(--surface-secondary)">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-8 py-3 text-left hover:bg-(--surface-hover) transition-colors"
+        aria-expanded={expanded}
+      >
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-(--brand) px-2 text-xs font-semibold text-white">
+            Q{question.number}
+          </span>
+          <span className="text-sm font-semibold text-(--text-primary)">
+            Question {question.number} of {QUESTIONS.length}
+          </span>
+        </div>
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md text-(--text-tertiary)">
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </span>
+      </button>
+
+      {expanded && (
+        <div className="px-8 pb-4 pt-1">
+          {question.intro && (
+            <p className="whitespace-pre-wrap font-sans text-[13.5px] leading-relaxed text-(--text-secondary)">
+              {question.intro}
+            </p>
+          )}
+          {question.parts && question.parts.length > 0 && (
+            <ol className="mt-3 space-y-2.5">
+              {question.parts.map((p) => (
+                <li key={p.label} className="flex gap-3">
+                  <span className="shrink-0 text-[13.5px] font-semibold text-(--text-primary) leading-relaxed">
+                    {p.label}
+                  </span>
+                  <p className="whitespace-pre-wrap font-sans text-[13.5px] leading-relaxed text-(--text-secondary)">
+                    {p.text}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -337,6 +493,17 @@ export default function WorkspacePage() {
   const [showSaved, setShowSaved] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [activeQuestionId, setActiveQuestionId] = useState<string>(QUESTIONS[0].id);
+  const [questionExpanded, setQuestionExpanded] = useState(true);
+
+  const activeQuestionIndex = QUESTIONS.findIndex((q) => q.id === activeQuestionId);
+  const activeQuestion = QUESTIONS[activeQuestionIndex] ?? QUESTIONS[0];
+
+  const goToQuestion = useCallback((delta: number) => {
+    const next = activeQuestionIndex + delta;
+    if (next < 0 || next >= QUESTIONS.length) return;
+    setActiveQuestionId(QUESTIONS[next].id);
+  }, [activeQuestionIndex]);
 
   // Drawing state
   const [drawTool, setDrawTool] = useState<DrawTool>('pen');
@@ -559,9 +726,14 @@ export default function WorkspacePage() {
         </button>
 
         {/* Title */}
-        <span className="text-sm font-medium text-(--text-primary) truncate">
-          {MOCK_ASSIGNMENT.title}
-        </span>
+        <div className="flex flex-col min-w-0">
+          <span className="text-sm font-medium text-(--text-primary) truncate leading-tight">
+            {MOCK_ASSIGNMENT.title}
+          </span>
+          <span className="text-[11px] text-(--text-tertiary) truncate leading-tight">
+            {MOCK_ASSIGNMENT.course}
+          </span>
+        </div>
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -580,11 +752,12 @@ export default function WorkspacePage() {
           )}
         </div>
 
-        {/* Instructions toggle */}
+        {/* Questions panel toggle */}
         <button
           onClick={() => setInstructionsOpen(!instructionsOpen)}
           className="h-7 w-7 inline-flex items-center justify-center rounded-md text-(--text-tertiary) hover:bg-(--surface-hover) transition-colors mr-1"
-          aria-label="Toggle instructions"
+          aria-label="Toggle question list"
+          title="All questions"
         >
           <PanelRightOpen size={16} />
         </button>
@@ -703,9 +876,66 @@ export default function WorkspacePage() {
         )}
       </div>
 
+      {/* ── Question selector strip (h-10) ── */}
+      <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-(--border) bg-(--surface) px-3">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-(--text-quaternary) mr-1">
+          Questions
+        </span>
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {QUESTIONS.map((q) => {
+            const isActive = q.id === activeQuestionId;
+            return (
+              <button
+                key={q.id}
+                onClick={() => setActiveQuestionId(q.id)}
+                className={cn(
+                  'h-7 px-2.5 inline-flex items-center justify-center rounded-md text-xs font-semibold transition-colors shrink-0',
+                  isActive
+                    ? 'bg-(--brand) text-white shadow-(--shadow-sm)'
+                    : 'bg-(--surface-secondary) text-(--text-secondary) hover:bg-(--surface-hover) hover:text-(--text-primary)'
+                )}
+                aria-pressed={isActive}
+                aria-label={`Question ${q.number}`}
+              >
+                Q{q.number}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex-1" />
+
+        <span className="text-[11px] text-(--text-tertiary) hidden sm:inline">
+          {activeQuestionIndex + 1} / {QUESTIONS.length}
+        </span>
+        <button
+          onClick={() => goToQuestion(-1)}
+          disabled={activeQuestionIndex === 0}
+          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-(--text-tertiary) hover:bg-(--surface-hover) transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="Previous question"
+        >
+          <ChevronLeft size={14} />
+        </button>
+        <button
+          onClick={() => goToQuestion(1)}
+          disabled={activeQuestionIndex === QUESTIONS.length - 1}
+          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-(--text-tertiary) hover:bg-(--surface-hover) transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label="Next question"
+        >
+          <ChevronRight size={14} />
+        </button>
+      </div>
+
       {/* ── Workspace area ── */}
       <div className="flex flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col">
+          {/* Active question card */}
+          <QuestionCard
+            question={activeQuestion}
+            expanded={questionExpanded}
+            onToggle={() => setQuestionExpanded((v) => !v)}
+          />
+
           {mode === 'text' ? (
             <LexicalTextEditor onDirty={markDirty} />
           ) : (
@@ -725,10 +955,12 @@ export default function WorkspacePage() {
           )}
         </div>
 
-        {/* Instructions panel (slide-in from right) */}
-        <InstructionsPanel
+        {/* Questions panel (slide-in from right) */}
+        <QuestionsPanel
           open={instructionsOpen}
           onClose={() => setInstructionsOpen(false)}
+          activeQuestionId={activeQuestionId}
+          onSelectQuestion={setActiveQuestionId}
         />
       </div>
 

@@ -1,4 +1,4 @@
-import CoursesPageClient from '@/app/[locale]/courses/page';
+import CoursesPageClient from '@/app/[locale]/courses/page-client';
 import { requireStaffPageAccess } from '@/lib/server/session';
 
 export default async function StaffCoursesPage() {

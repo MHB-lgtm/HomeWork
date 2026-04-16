@@ -249,8 +249,8 @@ export default function RubricsPage() {
 
   return (
     <ImmersiveShell>
-      <div className="mx-auto w-full max-w-6xl space-y-8">
-      <section className="flex w-full flex-col items-center gap-4 text-center">
+      <div className="mx-auto w-full max-w-6xl space-y-10">
+      <section className="flex w-full flex-col items-center gap-5 text-center">
         <h1 className="font-heading text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">Rubrics</h1>
         <p className="mx-auto max-w-2xl text-base text-slate-700 md:text-xl">
           Define consistent grading criteria and guidance per question.
@@ -279,12 +279,12 @@ export default function RubricsPage() {
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid gap-8 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Panel className="rounded-[2rem] border border-slate-200 bg-white/90 shadow-xl shadow-slate-200/40">
           <PanelHeader>
             <PanelTitle>Rubric target</PanelTitle>
           </PanelHeader>
-          <PanelContent className="space-y-5">
+          <PanelContent className="space-y-6">
             <div className="space-y-2">
               <label htmlFor="examId" className="text-sm font-medium text-slate-800">
                 Exam
@@ -356,7 +356,7 @@ export default function RubricsPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <Button onClick={handleLoad} disabled={isLoading || isSaving} variant="outline">
                 {isLoading ? 'Loading...' : 'Load'}
               </Button>
@@ -394,7 +394,7 @@ export default function RubricsPage() {
                 <CardSkeleton lines={3} />
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {!hasTargetSelection ? (
                   <EmptyState
                     title="Select exam and question"
@@ -415,11 +415,11 @@ export default function RubricsPage() {
                     <article
                       key={criterion.id}
                       className={cn(
-                        'rounded-xl border bg-white p-4 shadow-sm transition-colors hover:border-slate-300',
+                        'rounded-xl border bg-white p-5 shadow-sm transition-colors hover:border-slate-300',
                         errors.length > 0 ? 'border-red-200 bg-red-50/40' : 'border-slate-200'
                       )}
                     >
-                      <div className="mb-3 flex items-center justify-between gap-2">
+                      <div className="mb-5 flex items-center justify-between gap-3">
                         <h3 className="font-heading text-sm font-semibold text-slate-900">Criterion {index + 1}</h3>
                         <Button
                           onClick={() => handleRemoveCriterion(criterion.id)}
@@ -431,7 +431,7 @@ export default function RubricsPage() {
                         </Button>
                       </div>
 
-                      <div className="grid gap-4 lg:grid-cols-[2fr_1fr_1fr]">
+                      <div className="grid gap-5 lg:grid-cols-[2fr_1fr_1fr]">
                         <div className="space-y-2">
                           <label className="text-xs font-semibold tracking-wide text-slate-600 uppercase">Label *</label>
                           <Input

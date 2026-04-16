@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Eye, Zap, Send, FileText } from 'lucide-react';
+import { Eye, Zap, Send, FileText, CheckCircle2, Edit3 } from 'lucide-react';
 import { cn } from '../../../../../../../lib/utils';
 import { PageHeader } from '../../../../../../../components/ui/page-header';
 import { StatCard } from '../../../../../../../components/ui/stat-card';
@@ -62,7 +62,7 @@ export default function AssignmentOverviewPage() {
       label: 'Student',
       render: (row) => (
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--surface-secondary) text-xs font-semibold text-(--text-secondary)">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-(--surface-secondary) text-[13px] font-semibold text-(--text-secondary)">
             {(row.studentName as string).split(' ').map((n: string) => n[0]).join('')}
           </div>
           <span className="font-medium text-(--text-primary)">{row.studentName as string}</span>
@@ -71,9 +71,9 @@ export default function AssignmentOverviewPage() {
     },
     {
       key: 'submittedAt',
-      label: 'Submitted At',
+      label: 'Submitted',
       render: (row) => (
-        <span className="text-(--text-tertiary)">
+        <span className="text-(--text-tertiary) whitespace-nowrap">
           {new Date(row.submittedAt as string).toLocaleString(undefined, {
             month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
           })}
@@ -85,7 +85,7 @@ export default function AssignmentOverviewPage() {
       label: 'AI Score',
       render: (row) => {
         const score = row.aiScore as number | null;
-        if (score === null) return <span className="text-xs text-(--text-quaternary)">--</span>;
+        if (score === null) return <span className="text-[13px] text-(--text-quaternary)">--</span>;
         const variant = score >= 80 ? 'success' : score >= 60 ? 'warning' : 'error';
         return <Badge variant={variant} size="sm">{score}</Badge>;
       },
@@ -98,23 +98,39 @@ export default function AssignmentOverviewPage() {
     {
       key: 'action',
       label: 'Action',
-      render: (row) => (
-        <Link
-          href={`/l/courses/${courseId}/assignments/${assignmentId}/review`}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium',
-            'text-(--text-secondary) transition-colors hover:bg-(--surface-hover)',
-          )}
-        >
-          <Eye className="h-3.5 w-3.5" />
-          Review
-        </Link>
-      ),
+      align: 'right',
+      render: (row) => {
+        const status = row.status as SubmissionStatus;
+        const id = row.id as string;
+        const reviewHref = `/reviews/${id}`;
+        return (
+          <div className="flex items-center justify-end gap-2">
+            {status === 'pending' ? (
+              <Link href={reviewHref}>
+                <Button size="sm" icon={<Eye className="h-3.5 w-3.5" />}>Review</Button>
+              </Link>
+            ) : status === 'review' ? (
+              <>
+                <Link href={reviewHref}>
+                  <Button size="sm" variant="secondary" icon={<Edit3 className="h-3.5 w-3.5" />}>Edit</Button>
+                </Link>
+                <Button size="sm" icon={<Send className="h-3.5 w-3.5" />}>Publish</Button>
+              </>
+            ) : (
+              <Link href={reviewHref}>
+                <Button size="sm" variant="ghost" icon={<CheckCircle2 className="h-3.5 w-3.5 text-(--success)" />}>
+                  View
+                </Button>
+              </Link>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-12">
       <PageHeader
         backHref={`/l/courses/${courseId}`}
         title={assignmentMeta.title}
@@ -122,16 +138,16 @@ export default function AssignmentOverviewPage() {
       />
 
       {/* Stats */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Submitted" value={`${totalSubmissions}/${assignmentMeta.totalStudents}`} />
-        <StatCard label="Graded" value={gradedCount} />
-        <StatCard label="Published" value={publishedCount} />
+      <div className="grid gap-5 sm:grid-cols-3">
+        <StatCard label="Submitted" value={`${totalSubmissions}/${assignmentMeta.totalStudents}`} accent="#0d9488" />
+        <StatCard label="Graded" value={gradedCount} accent="#16a34a" />
+        <StatCard label="Published" value={publishedCount} accent="#9333ea" />
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" icon={<Zap />}>Grade All</Button>
-        <Button variant="secondary" size="sm" icon={<Send />}>Publish All</Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button size="md" icon={<Zap />}>Grade All</Button>
+        <Button variant="secondary" size="md" icon={<Send />}>Publish All</Button>
       </div>
 
       {/* Submissions Table */}

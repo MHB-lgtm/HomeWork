@@ -17,19 +17,19 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const variants: Record<string, string> = {
       primary:
-        'bg-(--text-primary) text-white shadow-(--shadow-xs) hover:shadow-(--shadow-md) hover:-translate-y-px active:translate-y-0 active:shadow-(--shadow-xs)',
+        'bg-(--brand) text-white shadow-sm shadow-(--shadow-brand-glow) hover:bg-(--brand-hover) hover:shadow-md active:bg-(--brand-active)',
       secondary:
-        'bg-(--surface) border border-(--border) text-(--text-primary) shadow-(--shadow-xs) hover:bg-(--surface-hover) hover:border-(--border-hover) hover:shadow-(--shadow-sm) hover:-translate-y-px active:translate-y-0',
+        'bg-(--surface) border border-(--border) text-(--text-secondary) shadow-sm hover:border-(--text-primary) hover:text-(--text-primary) hover:shadow-md',
       ghost:
         'bg-transparent text-(--text-secondary) hover:bg-(--surface-hover) hover:text-(--text-primary)',
       danger:
-        'bg-(--error) text-white shadow-(--shadow-xs) hover:shadow-[0_4px_14px_-2px_rgba(239,68,68,0.3)] hover:-translate-y-px active:translate-y-0',
+        'bg-(--error) text-white shadow-sm hover:bg-red-700 hover:shadow-md',
     };
 
     const sizes: Record<string, string> = {
-      sm: 'h-8 px-3 text-xs gap-1.5 rounded-lg',
-      md: 'h-9 px-4 text-sm gap-2 rounded-[var(--radius-md)]',
-      lg: 'h-11 px-6 text-sm gap-2 rounded-[var(--radius-lg)]',
+      sm: 'h-9 px-4 text-sm gap-1.5 rounded-full',
+      md: 'h-11 px-5 text-sm gap-2 rounded-full',
+      lg: 'h-12 px-6 text-sm gap-2 rounded-full',
     };
 
     return (
@@ -37,7 +37,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || loading}
         className={cn(
-          'inline-flex items-center justify-center font-medium',
+          'inline-flex items-center justify-center font-semibold',
           'transition-all duration-(--duration) ease-(--ease)',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:ring-offset-2',
           'disabled:pointer-events-none disabled:opacity-50',

@@ -92,13 +92,13 @@ export default function ExamsPage() {
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12">
       <PageHeader title="Exams" subtitle="Upload exam templates for AI-powered grading." />
 
       {/* Upload Section */}
       <Card padding="lg">
-        <h2 className="mb-4 text-sm font-semibold text-(--text-primary)">Upload New Exam</h2>
-        <form onSubmit={handleCreate} className="space-y-4">
+        <h2 className="mb-6 text-lg font-semibold text-(--text-primary)">Upload New Exam</h2>
+        <form onSubmit={handleCreate} className="space-y-6">
           <Input
             label="Exam Title"
             value={title}
@@ -112,7 +112,7 @@ export default function ExamsPage() {
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              'flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-8 text-center transition-colors',
+              'flex cursor-pointer flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed px-8 py-14 text-center transition-colors',
               dragOver
                 ? 'border-(--brand) bg-(--brand-subtle)'
                 : 'border-(--border) hover:border-(--border-hover) hover:bg-(--surface-hover)',
@@ -125,8 +125,8 @@ export default function ExamsPage() {
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="sr-only"
             />
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-(--surface-secondary) text-(--text-tertiary)">
-              <Upload className="h-5 w-5" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-(--brand-subtle) text-(--brand)">
+              <Upload className="h-6 w-6" />
             </div>
             {file ? (
               <div className="flex items-center gap-2">
@@ -141,14 +141,14 @@ export default function ExamsPage() {
               </div>
             ) : (
               <>
-                <p className="text-sm text-(--text-secondary)">Drop file here or click to browse</p>
-                <p className="text-xs text-(--text-quaternary)">PDF, PNG, JPG</p>
+                <p className="text-base text-(--text-secondary)">Drop file here or click to browse</p>
+                <p className="text-xs font-medium tracking-[0.18em] uppercase text-(--text-quaternary)">PDF · PNG · JPG</p>
               </>
             )}
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" loading={creating} icon={<Upload />}>
+            <Button type="submit" loading={creating} icon={<Upload />} size="md">
               Upload
             </Button>
           </div>

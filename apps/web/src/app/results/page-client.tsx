@@ -68,8 +68,8 @@ export default function StudentResultsPageClient() {
   }, []);
 
   return (
-    <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-10 pt-10 md:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-8">
+    <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-14 pt-12 md:px-6 md:pb-16 md:pt-14">
+      <div className="mx-auto w-full max-w-5xl space-y-10">
         <header className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/90 px-6 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
           <div className="space-y-1">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -96,13 +96,13 @@ export default function StudentResultsPageClient() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-6 md:grid-cols-2">
             {results.map((result) => (
               <Card
                 key={result.assignmentId}
                 className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]"
               >
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <CardTitle className="text-lg font-semibold text-slate-900">
@@ -116,7 +116,7 @@ export default function StudentResultsPageClient() {
                     </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
                   <div className="space-y-1 text-sm text-slate-600">
                     <div>Submitted: {formatDate(result.submittedAt)}</div>
                     <div>Published: {formatDate(result.publishedAt)}</div>

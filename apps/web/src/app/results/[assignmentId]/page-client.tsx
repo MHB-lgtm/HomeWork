@@ -87,12 +87,12 @@ const renderBreakdown = (breakdownSnapshot: unknown) => {
             key={`${questionId}-${index}`}
             className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none"
           >
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-4">
               <CardTitle className="text-base font-semibold text-slate-900">
                 {questionId}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
               {summary ? <p className="text-sm text-slate-700">{summary}</p> : null}
               {findings.length > 0 ? (
                 <div className="space-y-2">
@@ -173,8 +173,8 @@ export default function StudentResultDetailsPageClient({
   const statusMessage = result ? getStatusMessage(result) : null;
 
   return (
-    <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-10 pt-10 md:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-8">
+    <ImmersiveShell showTopNav={false} contentClassName="px-4 pb-14 pt-12 md:px-6 md:pb-16 md:pt-14">
+      <div className="mx-auto w-full max-w-5xl space-y-10">
         <header className="flex items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/90 px-6 py-4 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
           <div className="space-y-1">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-slate-500">
@@ -208,7 +208,7 @@ export default function StudentResultDetailsPageClient({
         ) : null}
 
         <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
-          <CardHeader className="pb-3">
+          <CardHeader className="pb-5">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-1">
                 <CardTitle className="text-lg font-semibold text-slate-900">
@@ -264,7 +264,7 @@ export default function StudentResultDetailsPageClient({
                 ) : (
                   <div className="space-y-6">
                     <Card className="rounded-2xl border-slate-200/80 bg-slate-50/70 shadow-none">
-                      <CardHeader className="pb-2">
+                      <CardHeader className="pb-4">
                         <CardTitle className="text-base font-semibold text-slate-900">
                           Published summary
                         </CardTitle>

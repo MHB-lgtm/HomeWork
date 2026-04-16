@@ -125,14 +125,14 @@ export function CourseMembershipPanel({ courseId }: CourseMembershipPanelProps) 
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-5">
         <CardTitle className="text-lg font-semibold text-slate-900">Course Memberships</CardTitle>
         <p className="text-sm text-slate-600">
           Provision course admins, lecturers, and students for this course.
         </p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <form onSubmit={handleSubmit} className="grid gap-3 md:grid-cols-2">
+      <CardContent className="space-y-6">
+        <form onSubmit={handleSubmit} className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2">
             <label htmlFor="membership-email" className="text-sm font-medium text-slate-700">
               Email
@@ -197,7 +197,7 @@ export function CourseMembershipPanel({ courseId }: CourseMembershipPanelProps) 
             </select>
           </div>
 
-          <div className="md:col-span-2 flex justify-end">
+          <div className="md:col-span-2 flex justify-end pt-1">
             <Button type="submit" disabled={saving}>
               {saving ? 'Saving...' : 'Save membership'}
             </Button>

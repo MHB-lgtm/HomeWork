@@ -114,7 +114,7 @@ export default function ExamsPage() {
     } catch { setCopiedExamId(null); }
   };
 
-  const columns: Column<ExamSummary>[] = [
+  const columns: Column<ExamSummary & Record<string, unknown>>[] = [
     {
       key: 'title',
       label: 'Title',
@@ -147,7 +147,7 @@ export default function ExamsPage() {
 
   return (
     <PageTransition>
-      <div className="space-y-6">
+      <div className="space-y-10">
         <PageHeader
           title="Exams"
           description="Upload and manage exam templates for AI-powered grading."
@@ -162,7 +162,7 @@ export default function ExamsPage() {
           </Alert>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
           {/* Upload Form */}
           <FadeIn>
             <FormSection title="Upload exam" description="Add a new exam template for grading.">
@@ -211,7 +211,7 @@ export default function ExamsPage() {
           <FadeIn delay={0.1}>
             <DataTable
               columns={columns}
-              data={exams as unknown as Record<string, unknown>[]}
+              data={exams.map((exam) => ({ ...exam } as ExamSummary & Record<string, unknown>))}
               loading={isLoading}
               emptyMessage="No exams yet"
               emptyIcon={<FileText />}

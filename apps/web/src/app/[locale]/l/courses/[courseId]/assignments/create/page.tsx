@@ -60,7 +60,7 @@ export default function CreateAssignmentPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-10">
       <PageHeader
         backHref={`/l/courses/${courseId}`}
         title="Create Assignment"
@@ -68,7 +68,7 @@ export default function CreateAssignmentPage() {
       />
 
       <form onSubmit={handleSave}>
-        <Card padding="lg" className="space-y-6">
+        <Card padding="lg" className="space-y-7">
           {/* Title */}
           <Input
             label="Title"
@@ -79,7 +79,7 @@ export default function CreateAssignmentPage() {
           />
 
           {/* Week + Max Points */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             <div className="w-full">
               <label className="mb-1.5 block text-sm font-medium text-(--text-primary)">
                 Week Number
@@ -110,7 +110,7 @@ export default function CreateAssignmentPage() {
           </div>
 
           {/* Opens + Deadline */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             <Input
               label="Opens"
               type="date"

@@ -47,22 +47,22 @@ function deadlineUrgency(dateStr: string): 'error' | 'warning' | 'default' {
 
 export default function StudentCoursesPage() {
   return (
-    <div className="space-y-8">
-      <PageHeader title="My Courses" />
+    <div className="space-y-12">
+      <PageHeader title="My Courses" subtitle="Your enrolled courses for the current semester." />
 
       {/* Course grid */}
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         {courses.map((course) => {
           const progress = Math.round((course.completedAssignments / course.totalAssignments) * 100);
           const urgency = deadlineUrgency(course.nextDeadline);
 
           return (
             <Link key={course.id} href={`/s/courses/${course.id}`} className="block">
-              <Card hover className="p-5 h-full">
+              <Card hover className="px-7 py-8 h-full">
                 {/* Title + semester */}
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-(--text-primary) truncate">
+                    <p className="text-lg font-semibold text-(--text-primary) truncate leading-snug">
                       {course.name}
                     </p>
                   </div>
@@ -70,14 +70,14 @@ export default function StudentCoursesPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="mt-4">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
+                <div className="mt-7">
+                  <div className="mb-2.5 flex items-center justify-between text-sm">
                     <span className="text-(--text-tertiary)">
                       {course.completedAssignments}/{course.totalAssignments} completed
                     </span>
-                    <span className="font-medium tabular-nums text-(--text-secondary)">{progress}%</span>
+                    <span className="font-semibold tabular-nums text-(--text-secondary)">{progress}%</span>
                   </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
                     <div
                       className="h-full rounded-full bg-(--brand) transition-all"
                       style={{ width: `${progress}%` }}
@@ -86,20 +86,20 @@ export default function StudentCoursesPage() {
                 </div>
 
                 {/* Next deadline */}
-                <div className="mt-4 flex items-center justify-between rounded-lg bg-(--surface-secondary) px-3 py-2.5">
+                <div className="mt-7 flex items-center justify-between rounded-xl bg-(--surface-secondary) px-5 py-4">
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-(--text-quaternary)">
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-(--text-quaternary)">
                       Next due
                     </p>
-                    <p className="mt-0.5 truncate text-sm font-medium text-(--text-primary)">
+                    <p className="mt-1.5 truncate text-sm font-medium text-(--text-primary)">
                       {course.nextAssignment}
                     </p>
                   </div>
-                  <div className="ml-3 flex items-center gap-1.5">
-                    <Calendar className="h-3 w-3 text-(--text-quaternary)" />
+                  <div className="ms-4 flex items-center gap-1.5 shrink-0">
+                    <Calendar className="h-4 w-4 text-(--text-quaternary)" />
                     <span
                       className={cn(
-                        'text-xs font-medium tabular-nums',
+                        'text-sm font-semibold tabular-nums',
                         urgency === 'error' && 'text-(--error)',
                         urgency === 'warning' && 'text-(--warning)',
                         urgency === 'default' && 'text-(--text-tertiary)',

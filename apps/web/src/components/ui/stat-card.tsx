@@ -7,6 +7,7 @@ type StatCardProps = React.HTMLAttributes<HTMLDivElement> & {
   value: string | number;
   trend?: { value: string; positive: boolean };
   icon?: React.ReactNode;
+  accent?: string;
 };
 
 export function StatCard({
@@ -15,49 +16,60 @@ export function StatCard({
   value,
   trend,
   icon,
+  accent,
   ...props
 }: StatCardProps) {
+  const accentColor = accent ?? 'var(--brand)';
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-[var(--radius-lg)] border border-(--border) bg-linear-to-b from-white to-[#FAFBFC] p-5 shadow-(--shadow-xs)',
-        'transition-all duration-(--duration-slow) ease-(--ease)',
-        'hover:shadow-(--shadow-md) hover:border-(--border-hover) hover:-translate-y-0.5',
+        'group relative overflow-hidden rounded-2xl border border-(--border) bg-(--surface) px-6 py-8 text-center shadow-sm',
+        'transition-all duration-(--duration) ease-(--ease)',
+        'hover:shadow-md hover:-translate-y-0.5',
+        'min-w-0',
         className
       )}
       {...props}
     >
-      <div className="absolute inset-x-0 top-0 h-[2px] bg-linear-to-r from-transparent via-(--brand-subtle) to-transparent opacity-0 transition-opacity duration-(--duration-slow) group-hover:opacity-100" />
+      {/* Accent stripe top */}
+      <div
+        className="absolute top-0 inset-x-0 h-[3px]"
+        style={{ background: accentColor }}
+      />
 
-      <div className="flex items-start justify-between">
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-(--text-tertiary)">
-            {label}
-          </p>
-          <p className="text-2xl font-bold tracking-tight text-(--text-primary)">
-            {value}
-          </p>
-        </div>
-        {icon && (
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-md)] bg-(--brand-subtle) text-(--brand) transition-colors duration-(--duration) group-hover:bg-(--brand) group-hover:text-white [&>svg]:h-[18px] [&>svg]:w-[18px]">
-            {icon}
-          </span>
-        )}
+      {icon && (
+        <span
+          className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl [&>svg]:h-5 [&>svg]:w-5"
+          style={{
+            background: `color-mix(in srgb, ${accentColor} 12%, transparent)`,
+            color: accentColor,
+          }}
+        >
+          {icon}
+        </span>
+      )}
+
+      <div className="text-3xl sm:text-4xl font-bold tabular-nums tracking-tight text-(--text-primary) leading-none">
+        {value}
       </div>
+      <div className="mt-4 text-xs font-medium tracking-[0.18em] uppercase text-(--text-tertiary) truncate">
+        {label}
+      </div>
+
       {trend && (
-        <div className="mt-3 flex items-center gap-1.5">
+        <div className="mt-5 flex items-center justify-center gap-1.5">
           <span
             className={cn(
-              'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold',
+              'inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold',
               trend.positive
                 ? 'bg-(--success-subtle) text-(--success)'
                 : 'bg-(--error-subtle) text-(--error)'
             )}
           >
             {trend.positive ? (
-              <ArrowUp className="h-3 w-3" />
+              <ArrowUp className="h-3.5 w-3.5" />
             ) : (
-              <ArrowDown className="h-3 w-3" />
+              <ArrowDown className="h-3.5 w-3.5" />
             )}
             {trend.value}
           </span>

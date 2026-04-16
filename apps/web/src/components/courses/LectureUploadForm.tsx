@@ -99,12 +99,12 @@ export function LectureUploadForm({ courseId, onUploaded }: LectureUploadFormPro
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-5">
         <CardTitle className="text-lg font-semibold text-slate-900">Upload Lecture</CardTitle>
         <p className="text-sm text-slate-600">Add text, markdown, or transcript files to this course.</p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <CardContent className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <label htmlFor="lecture-title" className="text-sm font-medium text-slate-700">
               Lecture title

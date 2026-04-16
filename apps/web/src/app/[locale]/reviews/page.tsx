@@ -103,14 +103,14 @@ export default function ReviewsListPage() {
 
   return (
     <PageTransition>
-      <div className="space-y-6">
+      <div className="space-y-10">
         <PageHeader
           title="Reviews"
           description="Monitor review progress, rename jobs, and view detailed feedback."
         />
 
         {/* Stats */}
-        <StaggerGroup className="grid gap-4 sm:grid-cols-3">
+        <StaggerGroup className="grid gap-6 sm:grid-cols-3">
           <StaggerItem>
             <StatCard label="Total Reviews" value={loading ? '...' : reviews.length} icon={<ClipboardCheck />} />
           </StaggerItem>
@@ -131,7 +131,7 @@ export default function ReviewsListPage() {
 
         {/* Filters + Search */}
         <FadeIn delay={0.1}>
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-(--border) bg-(--surface) px-5 py-4 shadow-(--shadow-xs)">
             <div className="flex items-center gap-1 rounded-lg border border-(--border) bg-(--surface) p-1">
               {(['ALL', 'PUBLISHED', 'UNPUBLISHED'] as const).map((f) => (
                 <button
@@ -161,7 +161,7 @@ export default function ReviewsListPage() {
         {/* Review Cards */}
         <FadeIn delay={0.15}>
           {loading ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Card key={i} className="p-5">
                   <div className="space-y-3">
@@ -179,14 +179,14 @@ export default function ReviewsListPage() {
               description={filter === 'ALL' ? 'Start a grading job to see it here.' : `No ${filter.toLowerCase()} reviews match.`}
             />
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               {filtered.map((review) => {
                 const examName = review.examId ? examNamesById[review.examId] || 'Exam' : 'Exam not linked';
                 const reviewTitle = review.displayName?.trim() || `${examName} review`;
 
                 return (
                   <HoverCard key={review.jobId} className="rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-xs)">
-                    <div className="p-5 space-y-3">
+                    <div className="space-y-5 p-6">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <h3 className="truncate text-sm font-semibold text-(--text-primary)">{reviewTitle}</h3>

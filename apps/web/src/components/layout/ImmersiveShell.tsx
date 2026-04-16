@@ -59,7 +59,7 @@ export function ImmersiveShell({
 
       <div
         className={cn(
-          'mx-auto flex min-h-screen w-full flex-col px-4 pb-8 pt-36 md:px-6 md:pb-10 md:pt-40',
+          'immersive-shell-content mx-auto flex min-h-screen w-full flex-col px-4 pb-12 pt-36 md:px-6 md:pb-16 md:pt-40',
           contentClassName
         )}
       >

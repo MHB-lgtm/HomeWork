@@ -247,12 +247,12 @@ export default function ResultPage() {
         <Badge variant="default">{data.courseName}</Badge>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 md:px-6 py-8 space-y-8">
+      <main className="mx-auto max-w-3xl px-5 md:px-8 py-12 md:py-16 space-y-12">
         {/* ── Hero: Score Ring ── */}
         <section className="flex flex-col items-center text-center animate-in">
-          <div className="flex items-center gap-6 mb-4">
+          <div className="flex items-center gap-8 mb-6">
             {/* Score circle */}
-            <div className="relative shrink-0" style={{ width: 120, height: 120 }}>
+            <div className="relative shrink-0" style={{ width: 140, height: 140 }}>
               <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
                 <circle
                   cx="60" cy="60" r={ringRadius}
@@ -274,7 +274,7 @@ export default function ResultPage() {
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span
-                  className="text-3xl font-bold tracking-tight"
+                  className="text-4xl font-bold tracking-tight tabular-nums"
                   style={{ color: scoreColor }}
                 >
                   {pct}
@@ -285,16 +285,16 @@ export default function ResultPage() {
             {/* Grade letter badge */}
             <Badge
               variant={getGradeBadgeVariant(gradeLetter)}
-              className="text-lg font-bold px-3 py-1"
+              className="text-xl font-bold px-4 py-2"
             >
               {gradeLetter}
             </Badge>
           </div>
 
-          <h1 className="text-lg font-semibold text-(--text-primary) mb-1">
+          <h1 className="text-2xl font-bold text-(--text-primary) mb-2 tracking-tight">
             {data.assignmentTitle}
           </h1>
-          <p className="text-xs text-(--text-tertiary)">
+          <p className="text-sm text-(--text-tertiary)">
             Graded on{' '}
             {new Date(data.gradedAt).toLocaleDateString('en-US', {
               month: 'short',
@@ -306,20 +306,20 @@ export default function ResultPage() {
 
         {/* ── Summary Card ── */}
         <Card padding="lg">
-          <p className="text-sm text-(--text-secondary) leading-relaxed mb-5">
+          <p className="text-base text-(--text-secondary) leading-relaxed mb-8">
             {data.overallFeedback}
           </p>
 
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-5">
             {/* Strengths */}
-            <div className="rounded-lg bg-(--success-subtle) p-4">
-              <h3 className="text-xs font-semibold text-(--success) uppercase tracking-wider mb-3">
+            <div className="rounded-xl bg-(--success-subtle) px-5 py-6">
+              <h3 className="text-xs font-semibold text-(--success) uppercase tracking-[0.18em] mb-4">
                 Strengths
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {data.overallStrengths.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-(--text-secondary)">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-(--success) shrink-0" />
+                  <li key={i} className="flex items-start gap-3 text-sm text-(--text-secondary) leading-relaxed">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-(--success) shrink-0" />
                     {s}
                   </li>
                 ))}
@@ -327,14 +327,14 @@ export default function ResultPage() {
             </div>
 
             {/* Areas to Improve */}
-            <div className="rounded-lg bg-(--warning-subtle) p-4">
-              <h3 className="text-xs font-semibold text-(--warning) uppercase tracking-wider mb-3">
+            <div className="rounded-xl bg-(--warning-subtle) px-5 py-6">
+              <h3 className="text-xs font-semibold text-(--warning) uppercase tracking-[0.18em] mb-4">
                 Areas to Improve
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 {data.overallImprovements.map((s, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-(--text-secondary)">
-                    <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-(--warning) shrink-0" />
+                  <li key={i} className="flex items-start gap-3 text-sm text-(--text-secondary) leading-relaxed">
+                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-(--warning) shrink-0" />
                     {s}
                   </li>
                 ))}
@@ -345,19 +345,19 @@ export default function ResultPage() {
 
         {/* ── Score Breakdown: Horizontal Bars ── */}
         <Card padding="lg">
-          <h2 className="text-sm font-semibold text-(--text-primary) mb-4">
+          <h2 className="text-lg font-semibold text-(--text-primary) mb-6">
             Score Breakdown
           </h2>
-          <div className="space-y-3">
+          <div className="space-y-5">
             {data.questions.map((q) => {
               const qPct = Math.round((q.earnedPoints / q.maxPoints) * 100);
               return (
-                <div key={q.id} className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-(--text-secondary)">
+                <div key={q.id} className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-(--text-secondary) truncate">
                       Q{q.id}. {q.title}
                     </span>
-                    <span className="text-sm font-medium text-(--text-primary)">
+                    <span className="text-sm font-semibold tabular-nums text-(--text-primary) shrink-0">
                       {q.earnedPoints}/{q.maxPoints}
                     </span>
                   </div>

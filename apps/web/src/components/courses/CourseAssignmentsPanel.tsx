@@ -193,14 +193,14 @@ export function CourseAssignmentsPanel({ courseId }: CourseAssignmentsPanelProps
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-5">
         <CardTitle className="text-lg font-semibold text-slate-900">Assignments</CardTitle>
         <p className="text-sm text-slate-600">
           Upload an assignment PDF and set the student submission window. Submissions use the same exam-style grading pipeline.
         </p>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <form onSubmit={handleCreate} className="grid gap-3 md:grid-cols-2">
+      <CardContent className="space-y-6">
+        <form onSubmit={handleCreate} className="grid gap-5 md:grid-cols-2">
           <div className="space-y-2 md:col-span-2">
             <label htmlFor="assignment-title" className="text-sm font-medium text-slate-700">
               Title
@@ -272,7 +272,7 @@ export function CourseAssignmentsPanel({ courseId }: CourseAssignmentsPanelProps
             />
           </div>
 
-          <div className="md:col-span-2 flex justify-end">
+          <div className="md:col-span-2 flex justify-end pt-1">
             <Button type="submit" disabled={saving}>
               {saving ? 'Saving...' : 'Create assignment'}
             </Button>

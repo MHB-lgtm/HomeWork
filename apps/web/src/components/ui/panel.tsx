@@ -19,7 +19,7 @@ Panel.displayName = 'Panel';
 export interface PanelHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const PanelHeader = React.forwardRef<HTMLDivElement, PanelHeaderProps>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('border-b border-(--border-light) bg-linear-to-b from-(--surface) to-(--surface-secondary)/30 px-5 py-4', className)} {...props} />
+  <div ref={ref} className={cn('border-b border-(--border-light) bg-linear-to-b from-(--surface) to-(--surface-secondary)/30 px-6 py-5', className)} {...props} />
 ));
 PanelHeader.displayName = 'PanelHeader';
 
@@ -40,7 +40,7 @@ PanelDescription.displayName = 'PanelDescription';
 export interface PanelContentProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 const PanelContent = React.forwardRef<HTMLDivElement, PanelContentProps>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('px-5 py-5', className)} {...props} />
+  <div ref={ref} className={cn('px-6 py-6', className)} {...props} />
 ));
 PanelContent.displayName = 'PanelContent';
 

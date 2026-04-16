@@ -58,7 +58,7 @@ export function CoursesTable({ courses, isLoading = false, onRefresh }: CoursesT
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <CardTitle className="text-lg font-semibold text-slate-900">Courses</CardTitle>
@@ -74,7 +74,7 @@ export function CoursesTable({ courses, isLoading = false, onRefresh }: CoursesT
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-5">
         {isLoading ? (
           <div className="text-sm text-slate-600">Loading courses...</div>
         ) : sortedCourses.length === 0 ? (

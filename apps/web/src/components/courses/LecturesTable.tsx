@@ -57,11 +57,11 @@ export function LecturesTable({ lectures, loading = false, error }: LecturesTabl
 
   return (
     <Card className="rounded-3xl border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-5">
         <CardTitle className="text-lg font-semibold text-slate-900">Lectures</CardTitle>
         <p className="text-sm text-slate-600">Uploaded lecture files and transcript sources.</p>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-5">
         {error ? (
           <Alert variant="destructive">
             <AlertTitle>Could not load lectures</AlertTitle>

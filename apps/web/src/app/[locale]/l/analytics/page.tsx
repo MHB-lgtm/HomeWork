@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-12">
       <PageHeader title="Analytics" subtitle="Insights into student performance and grading trends.">
         <select
           value={selectedCourse}
@@ -75,30 +75,30 @@ export default function AnalyticsPage() {
       </PageHeader>
 
       {/* Stat Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="Class Average" value={78} trend={{ value: '+3.2', positive: true }} />
-        <StatCard label="Submissions Rate" value="89%" />
-        <StatCard label="Improvement" value="+3.2" trend={{ value: '+3.2', positive: true }} />
+      <div className="grid gap-5 sm:grid-cols-3">
+        <StatCard label="Class Average" value={78} trend={{ value: '+3.2', positive: true }} accent="#0d9488" />
+        <StatCard label="Submissions Rate" value="89%" accent="#0891b2" />
+        <StatCard label="Improvement" value="+3.2" trend={{ value: '+3.2', positive: true }} accent="#16a34a" />
       </div>
 
       {/* Charts Row */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-7 lg:grid-cols-2">
         {/* Grade Distribution */}
         <Card padding="lg">
-          <div className="mb-5 flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-(--text-tertiary)" />
-            <h3 className="text-sm font-semibold text-(--text-primary)">Grade Distribution</h3>
+          <div className="mb-7 flex items-center gap-2.5">
+            <BarChart3 className="h-5 w-5 text-(--brand)" />
+            <h3 className="text-lg font-semibold text-(--text-primary)">Grade Distribution</h3>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-5">
             {gradeDistribution.map((g, i) => (
               <div key={g.range}>
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-(--text-secondary)">{g.range}</span>
-                  <span className="text-(--text-quaternary)">{g.count} ({g.pct}%)</span>
+                  <span className="text-(--text-quaternary) tabular-nums">{g.count} ({g.pct}%)</span>
                 </div>
-                <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
+                <div className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-(--surface-secondary)">
                   <div
-                    className="h-full rounded-full bg-(--text-primary) transition-all duration-500"
+                    className="h-full rounded-full bg-(--brand) transition-all duration-500"
                     style={{ width: `${Math.max(g.pct, 3)}%`, opacity: 1 - (i * 0.15) }}
                   />
                 </div>
@@ -109,19 +109,19 @@ export default function AnalyticsPage() {
 
         {/* Weekly Trend */}
         <Card padding="lg">
-          <div className="mb-5 flex items-center gap-2">
-            <Target className="h-4 w-4 text-(--text-tertiary)" />
-            <h3 className="text-sm font-semibold text-(--text-primary)">Weekly Average Trend</h3>
+          <div className="mb-7 flex items-center gap-2.5">
+            <Target className="h-5 w-5 text-(--brand)" />
+            <h3 className="text-lg font-semibold text-(--text-primary)">Weekly Average Trend</h3>
           </div>
-          <div className="flex items-end gap-4" style={{ height: 180 }}>
+          <div className="flex items-end gap-4" style={{ height: 200 }}>
             {weeklyAverages.map((w) => (
-              <div key={w.week} className="flex flex-1 flex-col items-center gap-2">
-                <span className="text-xs font-semibold text-(--text-primary)">{w.avg}</span>
+              <div key={w.week} className="flex flex-1 flex-col items-center gap-2.5">
+                <span className="text-sm font-semibold tabular-nums text-(--text-primary)">{w.avg}</span>
                 <div
-                  className="w-full rounded-t-lg bg-(--text-primary) transition-all duration-500"
-                  style={{ height: `${(w.avg / 100) * 100}%`, opacity: 0.8 }}
+                  className="w-full rounded-t-lg bg-(--brand) transition-all duration-500"
+                  style={{ height: `${(w.avg / 100) * 100}%` }}
                 />
-                <span className="text-xs text-(--text-quaternary)">W{w.week}</span>
+                <span className="text-xs font-medium text-(--text-quaternary)">W{w.week}</span>
               </div>
             ))}
           </div>
@@ -129,29 +129,29 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Bottom Row */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-7 lg:grid-cols-2">
         {/* Weakest Topics */}
         <Card padding="lg">
-          <div className="mb-5 flex items-center gap-2">
-            <TrendingDown className="h-4 w-4 text-(--error)" />
-            <h3 className="text-sm font-semibold text-(--text-primary)">Weakest Topics</h3>
+          <div className="mb-7 flex items-center gap-2.5">
+            <TrendingDown className="h-5 w-5 text-(--error)" />
+            <h3 className="text-lg font-semibold text-(--text-primary)">Weakest Topics</h3>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-5">
             {weakTopics.map((t) => (
-              <div key={t.topic} className="flex items-center gap-3">
+              <div key={t.topic} className="flex items-center gap-4">
                 <Badge
                   variant={t.score < 60 ? 'error' : t.score < 70 ? 'warning' : 'default'}
                   size="sm"
-                  className="w-10 justify-center"
+                  className="w-11 justify-center tabular-nums"
                 >
                   {t.score}
                 </Badge>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-(--text-primary)">{t.topic}</p>
-                  <p className="text-xs text-(--text-tertiary)">{t.course}</p>
+                  <p className="mt-0.5 text-xs text-(--text-tertiary)">{t.course}</p>
                 </div>
-                <div className="hidden sm:block">
-                  <div className="h-1.5 w-20 overflow-hidden rounded-full bg-(--surface-secondary)">
+                <div className="hidden sm:block shrink-0">
+                  <div className="h-2 w-24 overflow-hidden rounded-full bg-(--surface-secondary)">
                     <div
                       className={cn(
                         'h-full rounded-full',
@@ -168,32 +168,29 @@ export default function AnalyticsPage() {
 
         {/* Students at Risk */}
         <Card padding="lg">
-          <div className="mb-5 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-(--warning)" />
-            <h3 className="text-sm font-semibold text-(--text-primary)">Students at Risk</h3>
+          <div className="mb-7 flex items-center gap-2.5">
+            <AlertTriangle className="h-5 w-5 text-(--warning)" />
+            <h3 className="text-lg font-semibold text-(--text-primary)">Students at Risk</h3>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {studentsAtRisk.map((s) => (
               <div
                 key={s.name}
-                className="flex items-center gap-3 rounded-lg border border-(--border-light) p-3"
+                className="flex items-center gap-4 rounded-xl border border-(--border-light) bg-(--surface-secondary)/30 px-5 py-4"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--surface-secondary) text-xs font-semibold text-(--text-secondary)">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--surface-secondary) text-sm font-semibold text-(--text-secondary)">
                   {s.name.split(' ').map((n) => n[0]).join('')}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-(--text-primary)">{s.name}</p>
-                  <p className="text-xs text-(--text-tertiary)">{s.course}</p>
+                  <p className="mt-0.5 text-xs text-(--text-tertiary)">{s.course}</p>
                 </div>
-                <div className="text-right">
-                  <Badge
-                    variant={s.avgScore < 60 ? 'error' : 'warning'}
-                    size="sm"
-                  >
+                <div className="text-end shrink-0">
+                  <Badge variant={s.avgScore < 60 ? 'error' : 'warning'} size="sm" className="tabular-nums">
                     {s.avgScore}
                   </Badge>
                   <p className={cn(
-                    'mt-0.5 text-[11px] font-medium',
+                    'mt-1 text-[11px] font-medium',
                     s.trend === 'declining' ? 'text-(--error)' :
                     s.trend === 'improving' ? 'text-(--success)' :
                     'text-(--text-quaternary)',

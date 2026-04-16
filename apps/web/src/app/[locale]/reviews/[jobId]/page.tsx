@@ -678,7 +678,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
   if (loading) {
     return (
-      <div className="-mx-4 -my-6 md:-mx-6 lg:-mx-8 lg:-my-8 flex flex-col h-[calc(100vh-var(--topbar-height))]">
+      <div className="-mx-5 -my-12 flex h-[calc(100vh-var(--topbar-height))] flex-col sm:-mx-7 sm:-my-14 lg:-mx-10 lg:-my-16">
         <div className="shrink-0 border-b border-(--border) bg-(--surface) px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="skeleton-line h-9 w-9 rounded-lg" />
@@ -688,8 +688,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
             </div>
           </div>
         </div>
-        <div className="flex-1 overflow-hidden p-4 md:p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+        <div className="flex-1 overflow-hidden p-5 md:p-6">
+          <div className="grid h-full grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2 rounded-lg border border-(--border) bg-(--surface) p-6">
               <div className="skeleton-line h-full w-full rounded-lg" />
             </div>
@@ -720,10 +720,10 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   }
 
   return (
-    <div className="-mx-4 -my-6 md:-mx-6 lg:-mx-8 lg:-my-8 flex flex-col h-[calc(100vh-var(--topbar-height))]">
+    <div className="-mx-5 -my-12 flex h-[calc(100vh-var(--topbar-height))] flex-col sm:-mx-7 sm:-my-14 lg:-mx-10 lg:-my-16">
       {/* ─── Sticky Toolbar ─── */}
       <div className="shrink-0 border-b border-(--border) bg-(--surface)/90 backdrop-blur-md">
-        <div className="px-4 py-3 md:px-6">
+        <div className="px-5 py-4 md:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Left: Back + Title */}
             <div className="flex items-center gap-3 min-w-0">
@@ -811,7 +811,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
       {/* ─── Score Summary ─── */}
       {(rubricEvaluation || publication) && (
-        <div className="shrink-0 px-3 pt-3 md:px-4 md:pt-4">
+        <div className="shrink-0 px-4 pt-4 md:px-6 md:pt-5">
           <ReviewScoreSummary
             aiScore={aiTotalScore}
             lecturerScore={lecturerTotalScore}
@@ -826,7 +826,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
 
       {/* ─── Processing Banner ─── */}
       {isProcessing && (
-        <div className="shrink-0 mx-3 mt-3 md:mx-4 md:mt-4 rounded-lg border border-(--info)/20 bg-(--info-subtle) px-4 py-3 flex items-center gap-3">
+        <div className="mx-4 mt-4 flex shrink-0 items-center gap-3 rounded-lg border border-(--info)/20 bg-(--info-subtle) px-4 py-3 md:mx-6 md:mt-5">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-(--info) border-t-transparent" />
           <div>
             <p className="text-sm font-medium text-(--text-primary)">Review is being processed</p>
@@ -836,8 +836,8 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       )}
 
       {/* ─── Split Content ─── */}
-      <div className="flex-1 overflow-hidden p-3 md:p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4 h-full">
+      <div className="flex-1 overflow-hidden p-4 md:p-6">
+        <div className="grid h-full grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-6">
           {/* ─── Left: Submission Viewer ─── */}
           <div className="lg:col-span-2 h-full flex flex-col overflow-hidden rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-sm)">
             <div className="shrink-0 border-b border-(--border-light) px-4 py-2.5 bg-linear-to-r from-(--surface-secondary)/60 to-(--surface)">
@@ -848,7 +848,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 <Badge variant="outline" size="sm">{submissionMimeType === 'application/pdf' ? 'PDF' : 'IMG'}</Badge>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 bg-(--surface-secondary)/20">
+            <div className="flex-1 overflow-y-auto bg-(--surface-secondary)/20 p-5">
                 {submissionMimeType === 'application/pdf' ? (
                   <div className="space-y-4">
                     <PDFViewer
@@ -926,7 +926,6 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 )}
               </div>
             </div>
-          </div>
 
           {/* ─── Right: Analysis Panel ─── */}
           <div className="h-full flex flex-col overflow-hidden rounded-xl border border-(--border) bg-(--surface) shadow-(--shadow-sm)">

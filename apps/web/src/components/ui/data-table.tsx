@@ -24,9 +24,9 @@ type DataTableProps<T> = {
 };
 
 const alignClass: Record<string, string> = {
-  left: 'text-left',
+  left: 'text-start',
   center: 'text-center',
-  right: 'text-right',
+  right: 'text-end',
 };
 
 export function DataTable<T extends Record<string, unknown>>({
@@ -46,14 +46,14 @@ export function DataTable<T extends Record<string, unknown>>({
       )}
     >
       <div className="overflow-x-auto">
-        <table className="w-full min-w-150 text-sm">
+        <table className="w-full min-w-150 text-[14px]">
           <thead>
             <tr className="border-b border-(--border) bg-linear-to-b from-(--surface-secondary)/70 to-(--surface-secondary)">
               {columns.map((col) => (
                 <th
                   key={col.key}
                   className={cn(
-                    'px-4 py-3 text-[11px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)',
+                    'px-6 py-4 text-[12px] font-bold uppercase tracking-[0.08em] text-(--text-tertiary)',
                     alignClass[col.align || 'left']
                   )}
                   style={col.width ? { width: col.width } : undefined}
@@ -89,7 +89,7 @@ export function DataTable<T extends Record<string, unknown>>({
                       <td
                         key={col.key}
                         className={cn(
-                          'px-4 py-3.5 text-(--text-primary)',
+                          'px-6 py-6 text-(--text-primary) align-middle',
                           alignClass[col.align || 'left']
                         )}
                       >

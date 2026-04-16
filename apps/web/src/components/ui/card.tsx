@@ -2,16 +2,17 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  padding?: 'none' | 'sm' | 'md' | 'lg';
+  padding?: 'none' | 'sm' | 'md' | 'lg' | 'xl';
   hover?: boolean;
   elevated?: boolean;
 }
 
 const paddingMap: Record<string, string> = {
   none: '',
-  sm: 'p-4',
-  md: 'p-5',
-  lg: 'p-6',
+  sm: 'px-5 py-6',
+  md: 'px-6 py-8',
+  lg: 'px-8 py-10',
+  xl: 'px-10 py-12',
 };
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
@@ -19,9 +20,10 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
     <div
       ref={ref}
       className={cn(
-        'rounded-[var(--radius-lg)] border border-(--border) bg-(--surface) shadow-(--shadow-xs)',
-        elevated && 'shadow-(--shadow-sm) bg-gradient-to-b from-white to-[#FAFBFC]',
-        hover && 'transition-all duration-(--duration-slow) ease-(--ease) hover:shadow-(--shadow-card-hover) hover:border-(--border-hover) hover:-translate-y-0.5',
+        'rounded-2xl border border-(--border) bg-(--surface) shadow-sm',
+        'transition-all duration-200 ease-(--ease)',
+        elevated && 'shadow-md',
+        hover && 'hover:shadow-md hover:-translate-y-0.5',
         padding && paddingMap[padding],
         className
       )}
@@ -37,7 +39,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, CardHeaderProps>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('flex flex-col space-y-1.5 p-6 pb-4', className)}
+      className={cn('flex flex-col space-y-2 px-6 pb-5 pt-6', className)}
       {...props}
     />
   )
@@ -51,7 +53,7 @@ const CardTitle = React.forwardRef<HTMLHeadingElement, CardTitleProps>(
     <h3
       ref={ref}
       className={cn(
-        'text-[15px] font-semibold leading-tight tracking-tight text-(--text-primary)',
+        'text-lg font-bold leading-snug tracking-tight text-(--text-primary)',
         className
       )}
       {...props}
@@ -64,7 +66,7 @@ export interface CardContentProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const CardContent = React.forwardRef<HTMLDivElement, CardContentProps>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />
+    <div ref={ref} className={cn('px-6 pb-6 pt-0', className)} {...props} />
   )
 );
 CardContent.displayName = 'CardContent';

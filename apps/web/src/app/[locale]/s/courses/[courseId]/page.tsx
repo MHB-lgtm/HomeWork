@@ -155,7 +155,7 @@ export default function StudentCourseDetailPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-12">
       <PageHeader
         backHref="/s/courses"
         title={course.name}
@@ -163,26 +163,29 @@ export default function StudentCourseDetailPage() {
       />
 
       {/* Progress overview */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
         <StatCard
           label="Completed"
           value={`${course.completedAssignments}/${course.totalAssignments}`}
           icon={<CheckCircle2 />}
+          accent="#0d9488"
         />
         <StatCard
           label="Average Grade"
           value={course.averageGrade}
           icon={<FileText />}
+          accent="#16a34a"
         />
         <StatCard
           label="Progress"
           value={`${Math.round((course.completedAssignments / course.totalAssignments) * 100)}%`}
+          accent="#0891b2"
           className="col-span-2 sm:col-span-1"
         />
       </div>
 
       {/* Weekly sections */}
-      <div className="space-y-3">
+      <div className="space-y-5">
         {course.weeks.map((week) => {
           const isExpanded = expandedWeeks.has(week.number);
           const allLocked = week.assignments.every((a) => a.status === 'locked');
@@ -196,11 +199,11 @@ export default function StudentCourseDetailPage() {
               {/* Week header */}
               <button
                 onClick={() => toggleWeek(week.number)}
-                className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-(--surface-hover)"
+                className="flex w-full items-center gap-4 px-7 py-5 text-start transition-colors hover:bg-(--surface-hover)"
               >
                 <span
                   className={cn(
-                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-semibold',
+                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold',
                     allLocked
                       ? 'bg-(--surface-secondary) text-(--text-quaternary)'
                       : 'bg-(--brand-subtle) text-(--brand)',
@@ -209,13 +212,13 @@ export default function StudentCourseDetailPage() {
                   {week.number}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-(--text-primary)">Week {week.number}</p>
-                  <p className="text-xs text-(--text-tertiary)">{week.title}</p>
+                  <p className="text-base font-medium text-(--text-primary)">Week {week.number}</p>
+                  <p className="mt-0.5 text-sm text-(--text-tertiary)">{week.title}</p>
                 </div>
                 {isExpanded ? (
-                  <ChevronDown className="h-4 w-4 text-(--text-quaternary)" />
+                  <ChevronDown className="h-5 w-5 text-(--text-quaternary)" />
                 ) : (
-                  <ChevronRight className="h-4 w-4 text-(--text-quaternary)" />
+                  <ChevronRight className="h-5 w-5 text-(--text-quaternary) rtl:rotate-180" />
                 )}
               </button>
 
@@ -232,7 +235,7 @@ export default function StudentCourseDetailPage() {
                     const row = (
                       <div
                         className={cn(
-                          'flex items-center gap-3 px-5 py-3 transition-colors',
+                          'flex items-center gap-4 px-7 py-5 transition-colors',
                           href && 'hover:bg-(--surface-hover) cursor-pointer',
                           !href && 'cursor-default',
                         )}
@@ -246,8 +249,8 @@ export default function StudentCourseDetailPage() {
                         </div>
 
                         {/* Deadline */}
-                        <span className="hidden items-center gap-1 text-xs text-(--text-quaternary) sm:flex">
-                          <Calendar className="h-3 w-3" />
+                        <span className="hidden items-center gap-1.5 text-sm text-(--text-quaternary) sm:flex whitespace-nowrap">
+                          <Calendar className="h-3.5 w-3.5" />
                           {deadlineFormatted}
                         </span>
 
@@ -262,7 +265,7 @@ export default function StudentCourseDetailPage() {
                         <StatusBadge status={statusToBadge[assignment.status]} size="sm" />
 
                         {/* Chevron for clickable rows */}
-                        {href && <ChevronRight className="h-3.5 w-3.5 text-(--text-quaternary)" />}
+                        {href && <ChevronRight className="h-4 w-4 text-(--text-quaternary) rtl:rotate-180" />}
                       </div>
                     );
 

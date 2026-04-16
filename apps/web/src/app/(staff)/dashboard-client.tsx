@@ -51,7 +51,7 @@ export default function StaffDashboardClient() {
 
   return (
     <PageTransition>
-      <div className="space-y-8">
+      <div className="space-y-10">
         {/* Welcome header with brand accent */}
         <div className="relative overflow-hidden rounded-[var(--radius-xl)] border border-(--brand)/10 bg-linear-to-br from-(--brand-subtle) via-white to-(--info-subtle)/30 p-6 shadow-(--shadow-sm)">
           <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-(--brand)/5 blur-2xl" />
@@ -69,7 +69,7 @@ export default function StaffDashboardClient() {
         </div>
 
         {/* KPI Stats */}
-        <StaggerGroup className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StaggerGroup className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <StaggerItem>
             <StatCard label="Courses" value={loading ? '...' : courses.length} icon={<BookOpen />} />
           </StaggerItem>
@@ -92,7 +92,7 @@ export default function StaffDashboardClient() {
           </StaggerItem>
         </StaggerGroup>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
           {/* Recent Reviews */}
           <FadeIn delay={0.15}>
             <Card elevated>
@@ -132,7 +132,7 @@ export default function StaffDashboardClient() {
                     }
                   />
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {reviews.slice(0, 5).map((review, i) => (
                       <Link
                         key={review.jobId}
@@ -161,9 +161,9 @@ export default function StaffDashboardClient() {
           </FadeIn>
 
           {/* Right column: Quick Actions + Active alert */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             <FadeIn delay={0.25}>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <p className="px-1 text-[11px] font-bold uppercase tracking-[0.12em] text-(--text-tertiary)">Quick Actions</p>
                 <QuickActionCard
                   href="/courses"
