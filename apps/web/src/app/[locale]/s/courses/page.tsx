@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { ChevronRight, Calendar } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import { PageHeader } from '../../../../components/ui/page-header';
@@ -46,8 +47,12 @@ function deadlineUrgency(dateStr: string): 'error' | 'warning' | 'default' {
 }
 
 export default function StudentCoursesPage() {
+  const params = useParams();
+  const locale = params.locale as string;
+  const studentPrefix = `/${locale}/s`;
+
   return (
-    <div className="space-y-12">
+    <div className="system-page-stack space-y-12">
       <PageHeader title="My Courses" subtitle="Your enrolled courses for the current semester." />
 
       {/* Course grid */}
@@ -57,8 +62,8 @@ export default function StudentCoursesPage() {
           const urgency = deadlineUrgency(course.nextDeadline);
 
           return (
-            <Link key={course.id} href={`/s/courses/${course.id}`} className="block">
-              <Card hover className="px-7 py-8 h-full">
+            <Link key={course.id} href={`${studentPrefix}/courses/${course.id}`} className="block h-full">
+              <Card hover className="flex h-full flex-col px-8 py-9">
                 {/* Title + semester */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -70,7 +75,7 @@ export default function StudentCoursesPage() {
                 </div>
 
                 {/* Progress bar */}
-                <div className="mt-7">
+                <div className="mt-8">
                   <div className="mb-2.5 flex items-center justify-between text-sm">
                     <span className="text-(--text-tertiary)">
                       {course.completedAssignments}/{course.totalAssignments} completed
@@ -86,7 +91,7 @@ export default function StudentCoursesPage() {
                 </div>
 
                 {/* Next deadline */}
-                <div className="mt-7 flex items-center justify-between rounded-xl bg-(--surface-secondary) px-5 py-4">
+                <div className="mt-auto flex items-center justify-between rounded-2xl bg-(--surface-secondary) px-5 py-5 pt-6">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium uppercase tracking-[0.18em] text-(--text-quaternary)">
                       Next due

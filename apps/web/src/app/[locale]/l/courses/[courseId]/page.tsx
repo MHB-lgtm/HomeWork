@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
@@ -132,8 +132,17 @@ function gradeVariant(grade: number | null): 'success' | 'warning' | 'error' | '
 
 export default function CourseDetailPage() {
   const params = useParams();
+  const locale = params.locale as string;
   const courseId = params.courseId as string;
+  const lecturerPrefix = `/${locale}/l`;
   const [activeTab, setActiveTab] = useState<Tab>('assignments');
+  const assignmentsByWeek = useMemo(() => {
+    const grouped = new Map<number, Assignment[]>();
+    mockAssignments.forEach((assignment) => {
+      grouped.set(assignment.week, [...(grouped.get(assignment.week) ?? []), assignment]);
+    });
+    return [...grouped.entries()].sort(([left], [right]) => left - right);
+  }, []);
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'assignments', label: 'Assignments', icon: <FileText className="h-4 w-4" /> },
@@ -189,63 +198,105 @@ export default function CourseDetailPage() {
   ];
 
   return (
-    <div className="space-y-12">
+    <div className="system-page-stack space-y-12">
       <PageHeader
-        backHref="/l/courses"
+        backHref={`${lecturerPrefix}/courses`}
         title={courseMeta.name}
         subtitle={`${courseMeta.code} · ${courseMeta.semester}`}
+        eyebrow="Course command center"
+        icon={<BookOpen />}
+        gradient
       />
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-(--border) overflow-x-auto">
+      <div className="rounded-2xl border border-(--border) bg-(--surface) p-2 shadow-sm">
+        <div className="flex gap-1 overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
             className={cn(
-              'inline-flex items-center gap-2 px-6 py-5 text-sm font-medium transition-colors whitespace-nowrap',
-              'border-b-2 -mb-px',
+              'inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all whitespace-nowrap',
               activeTab === t.key
-                ? 'border-(--brand) text-(--text-primary)'
-                : 'border-transparent text-(--text-tertiary) hover:text-(--text-secondary) hover:border-(--border)',
+                ? 'bg-(--brand-subtle) text-(--brand-hover)'
+                : 'text-(--text-tertiary) hover:bg-(--surface-hover) hover:text-(--text-secondary)',
             )}
           >
             {t.icon}
             {t.label}
           </button>
         ))}
+        </div>
       </div>
 
       {/* ── Assignments Tab ── */}
       {activeTab === 'assignments' && (
-        <div className="space-y-7">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-(--text-primary)">
-              {mockAssignments.length} assignments
-            </h2>
-            <Link href={`/l/courses/${courseId}/assignments/create`}>
+        <div className="system-section-stack space-y-7">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-2">
+              <p className="label-micro">Weekly workload</p>
+              <h2 className="text-2xl font-bold tracking-tight text-(--text-primary)">
+                Assignments by week
+              </h2>
+              <p className="max-w-2xl text-sm leading-relaxed text-(--text-tertiary)">
+                Review release windows, submissions, grading progress, and publishing status in a clearer weekly rhythm.
+              </p>
+            </div>
+            <Link href={`${lecturerPrefix}/courses/${courseId}/assignments/create`}>
               <Button size="sm" icon={<Plus />}>Create Assignment</Button>
             </Link>
           </div>
 
-          <Card padding="none">
-            <div className="divide-y divide-(--border-light)">
-              {mockAssignments.map((a) => {
+          <div className="grid gap-6 xl:grid-cols-2">
+            {assignmentsByWeek.map(([week, assignments]) => {
+              const totalSubmissions = assignments.reduce((sum, assignment) => sum + assignment.submissions, 0);
+              const totalStudents = assignments.reduce((sum, assignment) => sum + assignment.totalStudents, 0);
+              const submittedPct = totalStudents > 0 ? Math.round((totalSubmissions / totalStudents) * 100) : 0;
+
+              return (
+                <Card key={week} padding="none" className="overflow-hidden rounded-3xl">
+                  <div className="flex items-start gap-5 border-b border-(--border-light) px-7 py-7">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-(--brand-subtle) text-base font-bold text-(--brand)">
+                      W{week}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-3">
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--text-quaternary)">
+                          Week {week}
+                        </p>
+                        <h3 className="text-lg font-bold text-(--text-primary)">
+                          {assignments.length === 1 ? 'Assignment window' : `${assignments.length} assignment windows`}
+                        </h3>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs font-semibold text-(--text-tertiary)">
+                          <span>Submissions</span>
+                          <span className="tabular-nums">{submittedPct}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-(--surface-secondary)">
+                          <div className="h-full rounded-full bg-(--brand)" style={{ width: `${submittedPct}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 bg-(--surface-secondary)/35 px-5 py-5">
+                    {assignments.map((a) => {
                 const status = assignmentStatus(a);
                 return (
                   <Link
                     key={a.id}
-                    href={`/l/courses/${courseId}/assignments/${a.id}`}
+                    href={`${lecturerPrefix}/courses/${courseId}/assignments/${a.id}`}
                     className={cn(
-                      'flex items-center gap-5 px-7 py-6',
-                      'transition-colors hover:bg-(--surface-hover)',
+                      'flex items-center gap-4 rounded-2xl border border-(--border-light) bg-(--surface) px-5 py-5 shadow-sm',
+                      'transition-all hover:border-(--border-hover) hover:shadow-md',
                     )}
                   >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-(--brand-subtle) text-sm font-semibold text-(--brand)">
-                      W{a.week}
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-(--brand-50) text-(--brand)">
+                      <FileText className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-base font-medium text-(--text-primary)">
+                      <p className="truncate text-sm font-semibold text-(--text-primary)">
                         {a.title}
                       </p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] text-(--text-tertiary)">
@@ -269,9 +320,12 @@ export default function CourseDetailPage() {
                     <ChevronRight className="h-4 w-4 shrink-0 text-(--text-quaternary) rtl:rotate-180" />
                   </Link>
                 );
-              })}
-            </div>
-          </Card>
+                    })}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -307,7 +361,7 @@ export default function CourseDetailPage() {
             <h2 className="text-[15px] font-semibold text-(--text-primary)">
               {mockExams.length} exams
             </h2>
-            <Link href={`/l/courses/${courseId}/exams/create`}>
+            <Link href={`${lecturerPrefix}/courses/${courseId}/exams/create`}>
               <Button size="sm" icon={<Plus />}>Schedule Exam</Button>
             </Link>
           </div>
@@ -382,18 +436,18 @@ export default function CourseDetailPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       {e.status === 'published' ? (
-                        <Link href={`/l/courses/${courseId}/exams/${e.id}`}>
+                        <Link href={`${lecturerPrefix}/courses/${courseId}/exams/${e.id}`}>
                           <Button size="sm" variant="secondary" icon={<Eye className="h-3.5 w-3.5" />}>View</Button>
                         </Link>
                       ) : e.status === 'in-review' ? (
                         <>
-                          <Link href={`/l/courses/${courseId}/exams/${e.id}`}>
+                          <Link href={`${lecturerPrefix}/courses/${courseId}/exams/${e.id}`}>
                             <Button size="sm" variant="secondary">Review</Button>
                           </Link>
                           <Button size="sm" icon={<Send className="h-3.5 w-3.5" />}>Publish</Button>
                         </>
                       ) : (
-                        <Link href={`/l/courses/${courseId}/exams/${e.id}`}>
+                        <Link href={`${lecturerPrefix}/courses/${courseId}/exams/${e.id}`}>
                           <Button size="sm" variant="secondary" icon={<Eye className="h-3.5 w-3.5" />}>Manage</Button>
                         </Link>
                       )}

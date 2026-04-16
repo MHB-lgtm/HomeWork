@@ -2,20 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AccountMenu } from '../auth/AccountMenu';
 import { cn } from '../../lib/utils';
+import type { Course } from '@hg/shared-schemas';
+import { listCourses } from '../../lib/coursesClient';
 import {
   LayoutDashboard,
   BookOpen,
   FileText,
   ClipboardCheck,
   PenTool,
-  Inbox,
   BarChart3,
   Menu,
   X,
   ChevronRight,
+  ChevronDown,
   GraduationCap,
   Sparkles,
 } from 'lucide-react';
@@ -25,20 +27,45 @@ type NavItem = {
   label: string;
   icon: React.ReactNode;
   matches: (p: string) => boolean;
+  group?: 'courses';
+};
+
+type CourseNavItem = {
+  id: string;
+  title: string;
+  href: string;
+  meta?: string;
 };
 
 const staffNavItems: NavItem[] = [
   { href: '/', label: 'Dashboard', icon: <LayoutDashboard size={18} />, matches: (p) => p === '/' },
-  { href: '/courses', label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.startsWith('/courses') },
+  { href: '/courses', label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.startsWith('/courses'), group: 'courses' },
   { href: '/exams', label: 'Exams', icon: <FileText size={18} />, matches: (p) => p.startsWith('/exams') },
   { href: '/reviews', label: 'Reviews', icon: <ClipboardCheck size={18} />, matches: (p) => p.startsWith('/reviews') },
   { href: '/rubrics', label: 'Rubrics', icon: <PenTool size={18} />, matches: (p) => p.startsWith('/rubrics') },
 ];
 
+function buildLecturerCourses(localePrefix: string): CourseNavItem[] {
+  return [
+    { id: 'c1', title: 'Linear Algebra', meta: 'MATH 2210', href: `${localePrefix}/l/courses/c1` },
+    { id: 'c2', title: 'Calculus II', meta: 'MATH 1220', href: `${localePrefix}/l/courses/c2` },
+    { id: 'c3', title: 'Introduction to Physics', meta: 'PHYS 1010', href: `${localePrefix}/l/courses/c3` },
+  ];
+}
+
+function buildStudentCourses(localePrefix: string): CourseNavItem[] {
+  return [
+    { id: 'c1', title: 'Linear Algebra', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c1` },
+    { id: 'c2', title: 'Calculus II', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c2` },
+    { id: 'c3', title: 'Introduction to Physics', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c3` },
+    { id: 'c4', title: 'Discrete Mathematics', meta: 'Spring 2026', href: `${localePrefix}/s/courses/c4` },
+  ];
+}
+
 function buildLecturerNavItems(localePrefix: string): NavItem[] {
   return [
     { href: `${localePrefix}/l/dashboard`, label: 'Dashboard', icon: <LayoutDashboard size={18} />, matches: (p) => p.includes('/l/dashboard') },
-    { href: `${localePrefix}/l/courses`, label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.includes('/l/courses') },
+    { href: `${localePrefix}/l/courses`, label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.includes('/l/courses'), group: 'courses' },
     { href: `${localePrefix}/l/exams`, label: 'Exams', icon: <FileText size={18} />, matches: (p) => p.includes('/l/exams') },
     { href: `${localePrefix}/l/analytics`, label: 'Analytics', icon: <BarChart3 size={18} />, matches: (p) => p.includes('/l/analytics') },
   ];
@@ -47,7 +74,7 @@ function buildLecturerNavItems(localePrefix: string): NavItem[] {
 function buildStudentNavItems(localePrefix: string): NavItem[] {
   return [
     { href: `${localePrefix}/s/dashboard`, label: 'Dashboard', icon: <LayoutDashboard size={18} />, matches: (p) => p.includes('/s/dashboard') },
-    { href: `${localePrefix}/s/courses`, label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.includes('/s/courses') },
+    { href: `${localePrefix}/s/courses`, label: 'Courses', icon: <BookOpen size={18} />, matches: (p) => p.includes('/s/courses'), group: 'courses' },
     { href: `${localePrefix}/s/results`, label: 'Results', icon: <BarChart3 size={18} />, matches: (p) => p.includes('/s/results') },
   ];
 }
@@ -117,22 +144,130 @@ function SidebarNav({
   collapsed,
   onNav,
   items,
+  courses,
+  coursesOpen,
+  onToggleCourses,
+  onExpandSidebar,
 }: {
   pathname: string;
   collapsed: boolean;
   onNav?: () => void;
   items: NavItem[];
+  courses: CourseNavItem[];
+  coursesOpen: boolean;
+  onToggleCourses: () => void;
+  onExpandSidebar?: () => void;
 }) {
   return (
-    <nav className="flex-1 overflow-y-auto px-4 pt-6 pb-2" aria-label="Main navigation">
+    <nav className={cn('flex-1 overflow-y-auto pb-4', collapsed ? 'px-3 pt-5' : 'px-4 pt-6')} aria-label="Main navigation">
       {!collapsed && (
         <p className="mb-3 px-3 text-xs font-medium uppercase tracking-[0.18em] text-(--text-tertiary)">
           Navigation
         </p>
       )}
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {items.map((item) => {
           const active = item.matches(pathname);
+          if (item.group === 'courses') {
+            const hasActiveCourse = courses.some((course) => pathname === course.href || pathname.startsWith(`${course.href}/`));
+            return (
+              <div key={item.href} className="space-y-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (collapsed) {
+                      onExpandSidebar?.();
+                    }
+                    onToggleCourses();
+                  }}
+                  aria-expanded={coursesOpen}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'group relative flex w-full items-center rounded-xl text-sm font-medium',
+                    'transition-all duration-(--duration) ease-(--ease)',
+                    collapsed ? 'justify-center px-2 py-3' : 'gap-3 px-3 py-2.5',
+                    active || hasActiveCourse
+                      ? 'bg-(--brand-subtle) text-(--brand-hover)'
+                      : 'text-(--text-secondary) hover:bg-(--surface-hover) hover:text-(--text-primary)'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'shrink-0 transition-all duration-(--duration) [&>svg]:h-5 [&>svg]:w-5',
+                      active || hasActiveCourse ? 'text-(--brand)' : 'text-(--text-tertiary) group-hover:text-(--brand)'
+                    )}
+                  >
+                    {item.icon}
+                  </span>
+                  {!collapsed && (
+                    <>
+                      <span className="min-w-0 flex-1 truncate text-start">{item.label}</span>
+                      {coursesOpen ? (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-(--text-quaternary)" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0 text-(--text-quaternary) rtl:rotate-180" />
+                      )}
+                    </>
+                  )}
+                </button>
+
+                {!collapsed && coursesOpen && (
+                  <div className="ms-4 space-y-1 border-s border-(--border-light) ps-3">
+                    <Link
+                      href={item.href}
+                      onClick={onNav}
+                      className={cn(
+                        'flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors',
+                        pathname === item.href
+                          ? 'bg-(--surface-secondary) text-(--text-primary)'
+                          : 'text-(--text-tertiary) hover:bg-(--surface-hover) hover:text-(--text-primary)'
+                      )}
+                    >
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-45" />
+                      <span className="truncate">All courses</span>
+                    </Link>
+                    {courses.map((course) => {
+                      const courseActive = pathname === course.href || pathname.startsWith(`${course.href}/`);
+                      return (
+                        <Link
+                          key={course.id}
+                          href={course.href}
+                          onClick={onNav}
+                          aria-current={courseActive ? 'page' : undefined}
+                          className={cn(
+                            'group/course flex min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-start transition-all',
+                            courseActive
+                              ? 'bg-(--brand-50) text-(--brand-hover) shadow-[inset_2px_0_0_var(--brand)] rtl:shadow-[inset_-2px_0_0_var(--brand)]'
+                              : 'text-(--text-secondary) hover:bg-(--surface-hover) hover:text-(--text-primary)'
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold',
+                              courseActive
+                                ? 'bg-(--brand-subtle) text-(--brand)'
+                                : 'bg-(--surface-secondary) text-(--text-tertiary) group-hover/course:text-(--brand)'
+                            )}
+                          >
+                            {course.title.slice(0, 1)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-semibold leading-tight">{course.title}</span>
+                            {course.meta && (
+                              <span className="mt-0.5 block truncate text-[11px] font-medium text-(--text-quaternary)">
+                                {course.meta}
+                              </span>
+                            )}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.href}
@@ -142,7 +277,7 @@ function SidebarNav({
               className={cn(
                 'group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium',
                 'transition-all duration-(--duration) ease-(--ease)',
-                collapsed && 'justify-center px-2',
+                collapsed && 'justify-center rounded-xl px-2 py-3',
                 active
                   ? 'bg-(--brand-subtle) text-(--brand-hover)'
                   : 'text-(--text-secondary) hover:bg-(--surface-hover) hover:text-(--text-primary)'
@@ -163,29 +298,56 @@ function SidebarNav({
   );
 }
 
-function detectNavContext(pathname: string): { items: NavItem[]; brandLabel: string } {
+function detectNavContext(pathname: string): { items: NavItem[]; brandLabel: string; courses: CourseNavItem[]; canLoadCourses: boolean } {
   // Locale-based lecturer routes: /en/l/..., /he/l/...
   const lecturerMatch = pathname.match(/^\/([a-z]{2})\/l\//);
   if (lecturerMatch) {
-    return { items: buildLecturerNavItems(`/${lecturerMatch[1]}`), brandLabel: 'Lecturer' };
+    const localePrefix = `/${lecturerMatch[1]}`;
+    return {
+      items: buildLecturerNavItems(localePrefix),
+      brandLabel: 'Lecturer',
+      courses: buildLecturerCourses(localePrefix),
+      canLoadCourses: false,
+    };
   }
 
   // Locale-based student routes: /en/s/..., /he/s/...
   const studentMatch = pathname.match(/^\/([a-z]{2})\/s\//);
   if (studentMatch) {
-    return { items: buildStudentNavItems(`/${studentMatch[1]}`), brandLabel: 'Student' };
+    const localePrefix = `/${studentMatch[1]}`;
+    return {
+      items: buildStudentNavItems(localePrefix),
+      brandLabel: 'Student',
+      courses: buildStudentCourses(localePrefix),
+      canLoadCourses: false,
+    };
   }
 
   // Default: staff routes
-  return { items: staffNavItems, brandLabel: 'Staff' };
+  return { items: staffNavItems, brandLabel: 'Staff', courses: [], canLoadCourses: true };
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || '/';
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [coursesOpen, setCoursesOpen] = useState(false);
+  const [loadedCourses, setLoadedCourses] = useState<CourseNavItem[]>([]);
 
   useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem('hg_sidebar_collapsed');
+    if (stored === 'true') setCollapsed(true);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem('hg_sidebar_collapsed', String(collapsed));
+  }, [collapsed]);
+
+  useEffect(() => {
+    if (pathname.includes('/courses')) setCoursesOpen(true);
+  }, [pathname]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -206,7 +368,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
   if (isLocaleLanding) return <>{children}</>;
 
-  const { items: navItems, brandLabel } = detectNavContext(pathname);
+  const navContext = useMemo(() => detectNavContext(pathname), [pathname]);
+  const { items: navItems, brandLabel } = navContext;
+
+  useEffect(() => {
+    if (!navContext.canLoadCourses) {
+      setLoadedCourses([]);
+      return;
+    }
+
+    let cancelled = false;
+    listCourses()
+      .then((courses) => {
+        if (cancelled) return;
+        setLoadedCourses(
+          courses.map((course: Course) => ({
+            id: course.courseId,
+            title: course.title,
+            href: `/courses/${course.courseId}`,
+            meta: course.courseId,
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setLoadedCourses([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navContext.canLoadCourses]);
+
+  const sidebarCourses = navContext.canLoadCourses ? loadedCourses : navContext.courses;
   const breadcrumbs = getBreadcrumbs(pathname);
   const pageTitle = getPageTitle(pathname);
 
@@ -241,7 +434,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* Navigation */}
-          <SidebarNav pathname={pathname} collapsed={collapsed} items={navItems} />
+          <SidebarNav
+            pathname={pathname}
+            collapsed={collapsed}
+            items={navItems}
+            courses={sidebarCourses}
+            coursesOpen={coursesOpen}
+            onToggleCourses={() => setCoursesOpen((open) => !open)}
+            onExpandSidebar={() => setCollapsed(false)}
+          />
 
           {/* Bottom section */}
           <div className="border-t border-(--border-light) p-3">
@@ -342,7 +543,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <X size={18} />
                 </button>
               </div>
-              <SidebarNav pathname={pathname} collapsed={false} onNav={() => setMobileOpen(false)} items={navItems} />
+          <SidebarNav
+            pathname={pathname}
+            collapsed={false}
+            onNav={() => setMobileOpen(false)}
+            items={navItems}
+            courses={sidebarCourses}
+            coursesOpen={coursesOpen}
+            onToggleCourses={() => setCoursesOpen((open) => !open)}
+          />
             </div>
           </aside>
         </div>

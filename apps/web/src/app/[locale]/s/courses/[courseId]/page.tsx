@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ChevronDown, ChevronRight, Clock,
   CheckCircle2, Lock, Send, FileText, Calendar,
+  BookOpen, Target,
 } from 'lucide-react';
 import { cn } from '../../../../../lib/utils';
 import { PageHeader } from '../../../../../components/ui/page-header';
@@ -126,8 +127,10 @@ function gradeColor(grade: number): string {
 
 export default function StudentCourseDetailPage() {
   const params = useParams();
+  const locale = params.locale as string;
   const courseId = params.courseId as string;
   const course = getCourse(courseId);
+  const studentPrefix = `/${locale}/s`;
 
   const [expandedWeeks, setExpandedWeeks] = useState<Set<number>>(() => {
     const open = new Set<number>();
@@ -150,20 +153,23 @@ export default function StudentCourseDetailPage() {
 
   function getHref(a: Assignment): string | null {
     if (a.status === 'locked') return null;
-    if (a.status === 'graded') return `/s/courses/${courseId}/assignments/${a.id}/result`;
-    return `/s/courses/${courseId}/assignments/${a.id}/workspace`;
+    if (a.status === 'graded') return `${studentPrefix}/courses/${courseId}/assignments/${a.id}/result`;
+    return `${studentPrefix}/courses/${courseId}/assignments/${a.id}/workspace`;
   }
 
   return (
-    <div className="space-y-12">
+    <div className="system-page-stack space-y-12">
       <PageHeader
-        backHref="/s/courses"
+        backHref={`${studentPrefix}/courses`}
         title={course.name}
         subtitle={`${course.lecturer} \u00B7 ${course.semester}`}
+        eyebrow="Course workspace"
+        icon={<BookOpen />}
+        gradient
       />
 
       {/* Progress overview */}
-      <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-6 sm:grid-cols-3">
         <StatCard
           label="Completed"
           value={`${course.completedAssignments}/${course.totalAssignments}`}
@@ -185,25 +191,42 @@ export default function StudentCourseDetailPage() {
       </div>
 
       {/* Weekly sections */}
-      <div className="space-y-5">
+      <section className="system-section-stack space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-2">
+            <p className="label-micro">Weekly path</p>
+            <h2 className="text-2xl font-bold tracking-tight text-(--text-primary)">Course weeks</h2>
+            <p className="max-w-2xl text-sm leading-relaxed text-(--text-tertiary)">
+              Move through each week, review graded work, and jump back into open assignments without scanning a dense table.
+            </p>
+          </div>
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-(--border) bg-(--surface) px-4 py-2 text-sm font-semibold text-(--text-secondary)">
+            <Target className="h-4 w-4 text-(--brand)" />
+            {Math.round((course.completedAssignments / course.totalAssignments) * 100)}% complete
+          </div>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-2">
         {course.weeks.map((week) => {
           const isExpanded = expandedWeeks.has(week.number);
           const allLocked = week.assignments.every((a) => a.status === 'locked');
+          const gradedCount = week.assignments.filter((a) => a.status === 'graded').length;
+          const openCount = week.assignments.filter((a) => a.status === 'open' || a.status === 'submitted').length;
 
           return (
             <Card
               key={week.number}
               padding="none"
-              className={cn('overflow-hidden', allLocked && 'opacity-50')}
+              className={cn('overflow-hidden rounded-3xl', allLocked && 'opacity-60')}
             >
               {/* Week header */}
               <button
                 onClick={() => toggleWeek(week.number)}
-                className="flex w-full items-center gap-4 px-7 py-5 text-start transition-colors hover:bg-(--surface-hover)"
+                className="flex w-full items-start gap-5 px-7 py-7 text-start transition-colors hover:bg-(--surface-hover)"
               >
                 <span
                   className={cn(
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-semibold',
+                    'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-base font-bold',
                     allLocked
                       ? 'bg-(--surface-secondary) text-(--text-quaternary)'
                       : 'bg-(--brand-subtle) text-(--brand)',
@@ -211,9 +234,28 @@ export default function StudentCourseDetailPage() {
                 >
                   {week.number}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-base font-medium text-(--text-primary)">Week {week.number}</p>
-                  <p className="mt-0.5 text-sm text-(--text-tertiary)">{week.title}</p>
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--text-quaternary)">
+                      Week {week.number}
+                    </p>
+                    <p className="text-lg font-bold leading-snug text-(--text-primary)">{week.title}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-(--surface-secondary) px-3 py-1 text-xs font-semibold text-(--text-secondary)">
+                      {week.assignments.length} assignments
+                    </span>
+                    {gradedCount > 0 && (
+                      <span className="rounded-full bg-(--success-subtle) px-3 py-1 text-xs font-semibold text-(--success)">
+                        {gradedCount} graded
+                      </span>
+                    )}
+                    {openCount > 0 && (
+                      <span className="rounded-full bg-(--brand-subtle) px-3 py-1 text-xs font-semibold text-(--brand)">
+                        {openCount} active
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {isExpanded ? (
                   <ChevronDown className="h-5 w-5 text-(--text-quaternary)" />
@@ -224,7 +266,8 @@ export default function StudentCourseDetailPage() {
 
               {/* Assignments */}
               {isExpanded && (
-                <div className="border-t border-(--border-light) divide-y divide-(--border-light)">
+                <div className="border-t border-(--border-light) bg-(--surface-secondary)/35 px-5 py-5">
+                  <div className="grid gap-4">
                   {week.assignments.map((assignment) => {
                     const href = getHref(assignment);
                     const deadlineFormatted = new Date(assignment.deadline).toLocaleDateString('en-US', {
@@ -235,28 +278,35 @@ export default function StudentCourseDetailPage() {
                     const row = (
                       <div
                         className={cn(
-                          'flex items-center gap-4 px-7 py-5 transition-colors',
-                          href && 'hover:bg-(--surface-hover) cursor-pointer',
+                          'flex items-center gap-4 rounded-2xl border border-(--border-light) bg-(--surface) px-5 py-5 shadow-sm transition-all',
+                          href && 'hover:border-(--border-hover) hover:shadow-md cursor-pointer',
                           !href && 'cursor-default',
                         )}
                       >
-                        <FileText className={cn('h-4 w-4 shrink-0', assignment.status === 'locked' ? 'text-(--text-quaternary)' : 'text-(--text-tertiary)')} />
+                        <span
+                          className={cn(
+                            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                            assignment.status === 'locked'
+                              ? 'bg-(--surface-secondary) text-(--text-quaternary)'
+                              : 'bg-(--brand-50) text-(--brand)'
+                          )}
+                        >
+                          {assignment.status === 'locked' ? <Lock className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                        </span>
 
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 space-y-1">
                           <p className={cn('text-sm font-medium', assignment.status === 'locked' ? 'text-(--text-quaternary)' : 'text-(--text-primary)')}>
                             {assignment.title}
                           </p>
+                          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-(--text-tertiary)">
+                            <Calendar className="h-3.5 w-3.5" />
+                            Due {deadlineFormatted}
+                          </span>
                         </div>
 
                         {/* Deadline */}
-                        <span className="hidden items-center gap-1.5 text-sm text-(--text-quaternary) sm:flex whitespace-nowrap">
-                          <Calendar className="h-3.5 w-3.5" />
-                          {deadlineFormatted}
-                        </span>
-
-                        {/* Grade */}
                         {assignment.status === 'graded' && assignment.grade != null && (
-                          <span className={cn('text-sm font-semibold tabular-nums', gradeColor(assignment.grade))}>
+                          <span className={cn('hidden text-sm font-semibold tabular-nums sm:inline', gradeColor(assignment.grade))}>
                             {assignment.grade}/{assignment.maxGrade}
                           </span>
                         )}
@@ -274,12 +324,14 @@ export default function StudentCourseDetailPage() {
                     }
                     return <div key={assignment.id}>{row}</div>;
                   })}
+                  </div>
                 </div>
               )}
             </Card>
           );
         })}
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

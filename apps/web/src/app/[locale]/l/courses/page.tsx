@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { Users, Clock, Plus, ChevronRight } from 'lucide-react';
 import { cn } from '../../../../lib/utils';
 import { PageHeader } from '../../../../components/ui/page-header';
@@ -27,13 +28,17 @@ const mockCourses: Course[] = [
 ];
 
 export default function LecturerCoursesPage() {
+  const params = useParams();
+  const locale = params.locale as string;
+  const lecturerPrefix = `/${locale}/l`;
+
   return (
-    <div className="space-y-12">
+    <div className="system-page-stack space-y-12">
       <PageHeader
         title="Courses"
         subtitle="Manage your courses, assignments, and exams."
         actions={
-          <Link href="/l/courses/create">
+          <Link href={`${lecturerPrefix}/courses/create`}>
             <Button variant="primary" size="md" icon={<Plus />}>
               New Course
             </Button>
@@ -47,8 +52,8 @@ export default function LecturerCoursesPage() {
           const progress = Math.round((course.currentWeek / course.totalWeeks) * 100);
 
           return (
-            <Link key={course.id} href={`/l/courses/${course.id}`} className="block">
-              <Card hover className="p-7 h-full">
+            <Link key={course.id} href={`${lecturerPrefix}/courses/${course.id}`} className="block h-full">
+              <Card hover className="flex h-full flex-col p-8">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-lg font-semibold text-(--text-primary) truncate leading-snug">
@@ -60,7 +65,7 @@ export default function LecturerCoursesPage() {
                 </div>
 
                 {/* Stats row */}
-                <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-(--text-tertiary)">
+                <div className="mt-7 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-(--text-tertiary)">
                   <span className="flex items-center gap-2">
                     <Users className="h-4 w-4" />
                     {course.students} students
@@ -72,7 +77,7 @@ export default function LecturerCoursesPage() {
                 </div>
 
                 {/* Progress */}
-                <div className="mt-6">
+                <div className="mt-auto pt-8">
                   <div className="mb-2.5 flex items-center justify-between text-sm">
                     <span className="text-(--text-tertiary)">{course.assignments} assignments</span>
                     <span className="font-semibold tabular-nums text-(--text-secondary)">{progress}%</span>

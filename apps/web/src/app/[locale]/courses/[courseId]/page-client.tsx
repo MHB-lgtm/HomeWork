@@ -97,11 +97,14 @@ export default function CourseDetailsPage({ params, canManageMemberships = false
 
   return (
     <PageTransition>
-      <div className="space-y-10">
+      <div className="system-page-stack space-y-12">
         <PageHeader
           title={isLoading ? 'Loading...' : course?.title || 'Course'}
           description="Manage lectures, assignments, and content indexing."
           backHref="/courses"
+          eyebrow="Course workspace"
+          icon={<BookOpen />}
+          gradient
           actions={course && <Badge variant="brand">{course.courseId}</Badge>}
         />
 
@@ -129,10 +132,10 @@ export default function CourseDetailsPage({ params, canManageMemberships = false
 
         {/* Lecture Upload + Table */}
         <FadeIn delay={0.1}>
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] gap-8">
+          <section className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] xl:gap-10">
             <LectureUploadForm courseId={courseId} onUploaded={refreshLectures} />
             <LecturesTable lectures={lectures} loading={isLoadingLectures} error={lecturesError} />
-          </div>
+          </section>
         </FadeIn>
 
         {/* Assignments */}
