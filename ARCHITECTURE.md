@@ -1,19 +1,20 @@
 # Homework Grader Architecture
 
-Last updated: 2026-03-31
+Last updated: 2026-04-16
 Status: canonical current-state architecture document
 Scope: implemented repo structure, completed milestones, approved next direction, and deferred decisions
 
 ## 1. Repo overview
 
-Homework Grader is a pnpm monorepo for a grading system that is now DB-first for live application state, while local files under `HG_DATA_DIR` remain for asset bytes and explicit offline/archive tooling, with:
+Homework Grader is a pnpm monorepo for a grading system that is now DB-first for live application state. On `feat/supabase-runtime-cutover`, the repo is cutover-ready for shared Supabase Postgres + private Supabase Storage, while local files under `HG_DATA_DIR` remain only for temp/derived data, local fallback, and explicit offline/archive tooling, with:
 
 - a committed Postgres-backed review and publication slice on the current branch, including a lecturer-facing publication lens inside `/reviews`,
 - a completed Wave 1 migration that makes exam metadata, rubric storage, exam-index metadata, course metadata, and lecture metadata DB-first in `apps/web` while preserving filesystem compatibility exports for unchanged consumers,
 - a completed Wave 2 migration that makes jobs, reviews, and worker health DB-first in live runtime while leaving rollback export and archive-only legacy files outside the live request path,
 - a completed Wave 3 migration that makes live exam-index reads, course RAG, and study-pointer retrieval DB-first while leaving filesystem artifacts as compatibility or debug-only leftovers,
 - a completed Wave 4A cleanup that removes live compatibility writes and narrows `HG_DATA_DIR` to asset-byte paths plus explicit offline/archive tooling,
-- a completed Wave 4B cleanup that removes live app/runtime imports of the archived local-store packages and declares final Postgres cutover for live application state.
+- a completed Wave 4B cleanup that removes live app/runtime imports of the archived local-store packages and declares final Postgres cutover for live application state,
+- a Supabase runtime cutover branch that adds object-storage-backed asset IO, worker materialization, and a one-time DB/asset cutover toolchain without changing public URLs or auth semantics.
 
 Today the repo contains:
 
@@ -344,19 +345,18 @@ Current route/shell/design-system unification addition:
 
 ### 3.2 Current persistence model
 
-The primary persistence model is now DB-first for live application state. Filesystem usage remains for asset bytes, archive-only legacy files, rollback tooling, and explicit offline compatibility/debug materialization under `HG_DATA_DIR`.
+The primary persistence model is now DB-first for live application state. On `feat/supabase-runtime-cutover`, persistent runtime asset bytes are cutover-ready to move from local disk into private Supabase Storage. Filesystem usage remains for worker temp/derived files, local fallback, archive-only legacy files, rollback tooling, and explicit offline compatibility/debug materialization under `HG_DATA_DIR`.
 
-Key persisted areas:
+Current persisted areas:
 
+- Postgres tables as the authority for runtime state,
+- Supabase Storage as the intended authority for persistent runtime asset bytes when Supabase envs are configured,
 - `jobs/` for archive-only pre-cutover legacy job records,
 - `reviews/` for archive-only pre-cutover legacy `ReviewRecord` JSON documents,
-- `exams/` for exam packages and archive/debug `examIndex.json`,
-- `rubrics/` for archive/debug rubric JSON files,
-- `courses/` for archive/debug course and lecture metadata plus archive/debug RAG files,
-- `uploads/` for copied submissions and derived PDFs,
+- `exams/`, `rubrics/`, `courses/`, and `uploads/` only for local fallback, worker temp/derived outputs, archive/debug leftovers, and compatibility tooling,
 - `worker/heartbeat.json` as an archive-only legacy artifact.
 
-There is now a committed Prisma schema, Postgres persistence package, and active PostgreSQL runtime use for reviews/publication, Wave 1 authoring surfaces, completed Wave 2 job/worker runtime, completed Wave 3 derived-runtime systems, and completed Waves 4A-4B cleanup. The remaining file-backed areas are archive-only legacy artifacts, explicit offline compatibility/debug tooling, rollback tooling, and asset bytes.
+There is now a committed Prisma schema, Postgres persistence package, and active PostgreSQL runtime use for reviews/publication, Wave 1 authoring surfaces, completed Wave 2 job/worker runtime, completed Wave 3 derived-runtime systems, completed Waves 4A-4B cleanup, and a Supabase cutover-ready asset/storage layer. The remaining file-backed areas are archive-only legacy artifacts, explicit offline compatibility/debug tooling, rollback tooling, worker temp/derived outputs, and local fallback for asset bytes before the one-time Supabase cutover is executed.
 
 ### 3.3 Current runtime boundaries
 
@@ -366,7 +366,7 @@ Committed runtime boundaries are now:
 - `apps/worker` uses Postgres runtime stores for queue claims, leases, heartbeat, exam-index reads, and study-pointer retrieval,
 - archived local-store packages remain in-repo but are no longer part of live app/runtime imports,
 - `packages/domain-workflow` is not yet the main runtime dependency of route handlers or worker flows,
-- file path semantics still exist in runtime code for asset bytes and debug/archive tooling, even though the domain package now defines storage-neutral contracts.
+- file path semantics still exist inside worker/localization code after job claim, but `@hg/postgres-store` now provides a storage adapter that materializes cloud-backed assets into local temp paths before those flows run.
 
 ### 3.4 Current auth and authorization state
 
@@ -464,7 +464,7 @@ Important current-state clarification:
 
 The following runtime concerns are still intentionally file-backed today:
 
-- uploaded submissions and derived files,
+- worker temp/derived files such as extracted mini-PDFs,
 - archive-only pre-cutover `jobs/` and `reviews/` records,
 - archive-only `worker/heartbeat.json`,
 - explicit offline compatibility/debug exam/course/lecture artifacts,
@@ -491,8 +491,8 @@ The following runtime surfaces still rely on file-backed details:
 
 The following code paths may still touch filesystem state, but not as authoritative JSON runtime sources:
 
-- asset-streaming web routes such as submission/raw asset handlers
-- `apps/worker/src/core/*` paths that read submission or exam asset bytes from stored local files
+- worker temp/derived outputs such as extracted mini-PDFs
+- `apps/worker/src/core/*` paths that still consume local file paths after the storage adapter materializes cloud-backed assets into local temp/cache paths
 
 ## 7. Persistence boundaries today
 

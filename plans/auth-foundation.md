@@ -1,7 +1,7 @@
 # Auth Foundation
 
 Status: foundation milestone closed; superseded by `plans/auth-membership-authorization-execution-plan.md`
-Last updated: 2026-03-31
+Last updated: 2026-04-16
 
 ## 1. Purpose
 
@@ -51,6 +51,10 @@ Today the repo has:
   - `WorkspaceShell` as the shared live shell and navigation owner
   - stable public URLs with unified page ownership and shared `PageHeader` / `StatusBadge` presentation
   - `AccountMenu` reduced to account/session actions only
+- the current workspace now also contains the Supabase runtime cutover path:
+  - no auth/session semantic change
+  - shared backend mode remains local `web` / `worker` against one shared DB/storage backend
+  - persistent runtime asset bytes can now move to private Supabase Storage while Auth.js remains unchanged
 
 Still not implemented:
 

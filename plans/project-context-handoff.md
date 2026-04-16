@@ -1,11 +1,11 @@
 # Project Context Handoff
 
-Last updated: 2026-03-31
+Last updated: 2026-04-16
 Purpose: high-signal handoff for a fresh engineer or fresh model
 
 ## 1. Project description
 
-Homework Grader is a pnpm monorepo for a grading system that now runs as a DB-first live runtime with local files retained for asset bytes and explicit offline/archive tooling.
+Homework Grader is a pnpm monorepo for a grading system that now runs as a DB-first live runtime. On `feat/supabase-runtime-cutover`, the repo is cutover-ready for shared Supabase Postgres + private Supabase Storage, while local files are retained only for temp/derived data, local fallback, and explicit offline/archive tooling.
 
 The repo now has:
 
@@ -87,7 +87,7 @@ Completed:
 
 Current branch context:
 
-- branch: `feat/postgres-runtime-slice-1`
+- branch: `feat/supabase-runtime-cutover`
 - the Postgres runtime review and publication slices are already committed on this branch
 - the current workspace also contains completed Wave 1 exam/rubric/exam-index/course/lecture migration work
 - the current workspace also contains completed Wave 2 job/worker/runtime cutover work
@@ -99,6 +99,12 @@ Current branch context:
 - the current workspace now also contains closed Auth M3A assignment and student-submission foundation work
 - the current workspace now also contains closed Auth M3B student published-result and own-data read surfaces
 - the current workspace now also contains the closed post-`M3B` ops phase with lifecycle alignment and assignment-first lecturer operational reads
+- the current workspace now also contains the Supabase runtime cutover path:
+  - runtime asset storage adapter in `@hg/postgres-store`
+  - object-storage-backed reads and writes for new runtime assets when Supabase envs are configured
+  - worker-side materialization of cloud-backed assets into local temp paths
+  - `pnpm --filter @hg/postgres-store cutover:supabase`
+  - `plans/supabase-runtime-cutover-runbook.md`
 - do not assume the local master cutover plan is tracked without checking `git status`
 
 ## 4. What is already implemented
@@ -229,14 +235,11 @@ Current branch context:
 
 The repo is now DB-first in live runtime.
 
-Main persisted areas under `HG_DATA_DIR`:
+Main persisted areas under `HG_DATA_DIR` after the cutover branch wiring:
 
 - `jobs/` for archive-only pre-cutover legacy records
 - `reviews/` for archive-only pre-cutover legacy records
-- `exams/`
-- `rubrics/`
-- `courses/`
-- `uploads/`
+- `exams/`, `rubrics/`, `courses/`, and `uploads/` only for local fallback, worker temp/derived outputs, archive/debug leftovers, and compatibility tooling
 - `worker/heartbeat.json` as an archive-only legacy artifact
 
 Current DB-first exceptions in the workspace:
@@ -261,7 +264,7 @@ Current DB-first exceptions in the workspace:
 Runtime code still depends directly on:
 
 - `@hg/postgres-store`
-- selected asset-oriented local file reads in web and worker code paths
+- the runtime asset storage adapter in `@hg/postgres-store`, which can use local-file fallback or Supabase object storage depending on env configuration
 
 Archived/offline code remains available in:
 
@@ -367,6 +370,7 @@ Read these first for current branch understanding:
 - `plans/postgres-wave-3-execution-plan.md`
 - `plans/postgres-wave-4a-execution-plan.md`
 - `plans/postgres-wave-4b-execution-plan.md`
+- `plans/supabase-runtime-cutover-runbook.md`
 - `packages/domain-workflow/src/**`
 - `packages/domain-workflow/test/**`
 - `packages/shared-schemas/src/**`
@@ -389,7 +393,7 @@ Read these first for current branch understanding:
 
 Current branch:
 
-- `feat/postgres-runtime-slice-1`
+- `feat/supabase-runtime-cutover`
 
 Relevant recent commits:
 
@@ -420,12 +424,13 @@ Canonical docs to read first:
 - plans/postgres-wave-4b-execution-plan.md
 
 Current runtime shape:
-- live runtime is DB-first plus file-backed compatibility/archive artifacts under HG_DATA_DIR
+- live runtime is DB-first and cutover-ready for shared Supabase Postgres + private Supabase Storage
+- `HG_DATA_DIR` is now intended only for worker temp/derived files, local fallback, compatibility/archive leftovers, and offline tooling
 - apps/web is DB-first for review/publication seams, Wave 1 authoring/content surfaces, Wave 2 jobs/health, and Wave 3 exam-index/RAG routes
 - apps/web now also owns an Auth.js session boundary with private-by-default access plus course-scoped staff authorization on `/courses` and `/api/courses/**`
 - apps/worker claims new jobs from Postgres, writes new review state to Postgres, and reads exam-index/study-pointer derived state from Postgres
 - @hg/domain-workflow exists and is tested, but broad runtime adoption is still deferred
-- current branch has committed Postgres-backed review and publication slices
+- current branch inherits the committed Postgres-backed review/publication and ops/student-flow slices and adds the Supabase runtime cutover path
 - imported reviews can publish through POST /api/reviews/[jobId]/publish
 - imported review detail can expose context.publication
 - imported review list rows can expose publication summary
@@ -434,12 +439,12 @@ Current runtime shape:
 - POST /api/jobs, worker queue/lease lifecycle, worker heartbeat, and review runtime are now DB-first in Wave 2
 - GET/PUT /api/exams/[examId]/index, course RAG routes, and worker study pointers are now DB-first in Wave 3
 - apps/web and apps/worker no longer import @hg/local-job-store or @hg/local-course-store for live runtime after Wave 4B
-- HG_DATA_DIR files under exams/**, rubrics/**, examIndex.json, and courses/** remain compatibility outputs or debug/archive leftovers only
+- HG_DATA_DIR files under exams/**, rubrics/**, examIndex.json, courses/**, and uploads/** now act as local fallback, worker temp/derived storage, or debug/archive leftovers only
 - leftover jobs/, reviews/, and worker/heartbeat.json are archive-only and not part of live runtime
 - rollback export to legacy queue files exists only as offline tooling for drills/rollback windows
 
 Current branch context:
-- branch: feat/postgres-runtime-slice-1
+- branch: feat/supabase-runtime-cutover
 - recent commits:
   - 5ffa1f9 feat(postgres): finalize wave 4b legacy runtime retirement
   - 13fe16b feat(postgres): finalize wave 2 with db-only jobs reviews and health runtime

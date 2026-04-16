@@ -1,7 +1,7 @@
 # Auth, Membership, and Authorization Execution Plan
 
 Status: current-state execution record with M1-M3B and the post-M3B ops phase closed
-Last updated: 2026-03-31
+Last updated: 2026-04-16
 
 ## 1. Executive Summary
 
@@ -73,6 +73,10 @@ Current status:
 - `/` now acts as the lecturer ops dashboard.
 - `/jobs/new` is now the home of the legacy create-job screen.
 - `/courses/[courseId]/assignments/[assignmentId]` and `/courses/[courseId]/assignments/[assignmentId]/submissions/[submissionId]` now exist as staff ops read surfaces.
+- On `feat/supabase-runtime-cutover`, the current workspace also adds a Supabase runtime cutover path with:
+  - object-storage-backed runtime asset reads and writes when Supabase envs are configured
+  - worker-side materialization of cloud-backed assets into local temp paths
+  - no auth/session or authorization boundary change
 
 ## 3. Recommended Identity Model
 

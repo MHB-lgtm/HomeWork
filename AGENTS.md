@@ -27,7 +27,10 @@
 
 ## Current architectural boundaries
 
-- The live runtime is now DB-first across completed Waves 1-4. Remaining filesystem usage under `HG_DATA_DIR` is limited to asset bytes, archive-only leftovers, rollback tooling, and explicit offline compatibility/debug tooling.
+- The live runtime is now DB-first across completed Waves 1-4. On `feat/supabase-runtime-cutover`, the repo is cutover-ready for shared Supabase Postgres + private Supabase Storage:
+  - Postgres remains the runtime state authority
+  - when `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_STORAGE_BUCKET` are configured, new persistent runtime assets are written to and read from object storage
+  - `HG_DATA_DIR` remains required only for worker temp/derived files, local-file fallback, archive-only leftovers, rollback tooling, and explicit offline compatibility/debug tooling
 - `apps/web` now owns the active Auth.js session boundary for the current internal product.
 - Current web runtime is private-by-default:
   - non-auth pages require authenticated users
@@ -80,6 +83,12 @@
   - `apps/web` and `apps/worker` no longer import `@hg/local-job-store` or `@hg/local-course-store` for live runtime
   - `apps/worker` now uses a worker-local `WorkerJobRecord` type instead of the archived `JobRecord` contract
   - the disabled legacy `job:create` entrypoint and unused file-backed web helpers have been removed from live packages
+- On `feat/supabase-runtime-cutover`, the current workspace also adds:
+  - a runtime asset storage adapter in `@hg/postgres-store` with `local-file` and `supabase-object-storage` backends
+  - object-storage-backed writes for new exam, assignment, lecture, and submission assets
+  - object-storage-backed reads for assignment prompts and review/job submission streaming routes
+  - worker-side asset materialization so grading/localization code still receives local temp paths even when persistent source-of-truth assets are cloud-backed
+  - `pnpm --filter @hg/postgres-store cutover:supabase` for one-time DB + asset cutover execution
 - The current workspace also completed `M3A`:
   - `Week`, `Assignment`, and `AssignmentMaterial` are now first-class Postgres runtime entities
   - `GET` / `POST /api/courses/[courseId]/assignments` and `PATCH /api/courses/[courseId]/assignments/[assignmentId]` now support narrow staff assignment authoring under course-scoped authorization
@@ -89,7 +98,7 @@
   - assignment-triggered jobs now run through the existing exam pipeline with exam index and question decomposition, not a separate document-only assignment grader
   - final closure smoke now covers assignment create, student submit, worker processing through the exam pipeline, review visibility, and publish with canonical student linkage
 - Exams, rubrics, exam-index state, course metadata, lecture metadata, course RAG state, jobs, worker heartbeat, and review runtime are now DB-authoritative.
-- Filesystem artifacts under `HG_DATA_DIR` remain archive-only leftovers, explicit offline compatibility/debug artifacts, rollback tooling, and asset storage only.
+- Filesystem artifacts under `HG_DATA_DIR` remain archive-only leftovers, explicit offline compatibility/debug artifacts, rollback tooling, worker temp/derived files, and local-file asset fallback only.
 - Wave 2 also includes offline rollback tooling via `pnpm --filter @hg/postgres-store rollback:export-jobs`, which exports `PENDING` / `RUNNING` DB jobs back into the legacy queue shape only for rollback drills.
 - `@hg/domain-workflow` exists and is tested, but broad runtime adoption is still deferred.
 - Keep auth/session concerns separate from grading domain logic.
