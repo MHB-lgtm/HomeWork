@@ -6,6 +6,7 @@ export type UserGlobalRoleValue = 'USER' | 'SUPER_ADMIN';
 export type UserStatusValue = 'ACTIVE' | 'DISABLED';
 export type CourseMembershipRoleValue = 'COURSE_ADMIN' | 'LECTURER' | 'STUDENT';
 export type CourseMembershipStatusValue = 'INVITED' | 'ACTIVE' | 'SUSPENDED' | 'REMOVED';
+export type StoredAssetStorageKindValue = 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
 export type OperationalSubmissionStatusValue =
   | 'SUBMITTED'
   | 'PROCESSING'
@@ -57,6 +58,11 @@ export interface RuntimeJobClaimRecord extends RuntimeJobStatusRecord {
   examId?: string | null;
   assignmentId?: string | null;
   questionId?: string | null;
+  examAsset?: RuntimeStoredAssetRecord | null;
+  promptAsset?: RuntimeStoredAssetRecord | null;
+  referenceSolutionAsset?: RuntimeStoredAssetRecord | null;
+  submissionAsset: RuntimeStoredAssetRecord;
+  questionAsset?: RuntimeStoredAssetRecord | null;
   examFilePath?: string | null;
   promptFilePath?: string | null;
   referenceSolutionFilePath?: string | null;
@@ -280,8 +286,16 @@ export interface LegacyReviewPublicationRecord {
 
 export interface LegacySubmissionAssetRecord {
   path: string;
+  storageKind: StoredAssetStorageKindValue;
+  logicalBucket: string;
   mimeType?: string | null;
+  originalName?: string | null;
+  assetKey?: string | null;
+  sizeBytes?: number | null;
+  metadata?: unknown | null;
 }
+
+export interface RuntimeStoredAssetRecord extends LegacySubmissionAssetRecord {}
 
 export interface LegacyReviewDetailRecord {
   review: import('@hg/shared-schemas').ReviewRecord;

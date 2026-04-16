@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+import { readStoredAssetBytes } from '@hg/postgres-store';
 import { resolveReviewSubmissionAsset } from '@/lib/server/reviewDetail';
 import { requireStaffApiAccess } from '@/lib/server/session';
 
@@ -35,7 +35,7 @@ export async function GET(
       );
     }
 
-    const ext = path.extname(asset.path).toLowerCase();
+    const ext = path.extname(asset.originalName || asset.path).toLowerCase();
     const supportedExtensions = ['.png', '.jpg', '.jpeg'];
 
     if (!supportedExtensions.includes(ext)) {
@@ -47,18 +47,7 @@ export async function GET(
 
     const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
-    let fileBuffer: Buffer;
-    try {
-      fileBuffer = await fs.readFile(asset.path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return NextResponse.json(
-          { error: 'Submission file not found' },
-          { status: 404 }
-        );
-      }
-      throw error;
-    }
+    const fileBuffer = await readStoredAssetBytes(asset);
 
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {

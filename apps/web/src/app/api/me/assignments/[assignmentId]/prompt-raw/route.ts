@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+import { readStoredAssetBytes } from '@hg/postgres-store';
 import { getServerPersistence } from '@/lib/server/persistence';
 import { requireStudentAssignmentAccess } from '@/lib/server/session';
 
@@ -55,10 +55,10 @@ export async function GET(
       );
     }
 
-    const fileBuffer = await fs.readFile(asset.path);
+    const fileBuffer = await readStoredAssetBytes(asset);
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
-        'Content-Type': asset.mimeType || inferMimeType(asset.path),
+        'Content-Type': asset.mimeType || inferMimeType(asset.originalName || asset.path),
         'Cache-Control': 'no-store',
         ...(asset.originalName ? { 'Content-Disposition': `inline; filename="${asset.originalName}"` } : {}),
       },

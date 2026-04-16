@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+import { readStoredAssetBytes } from '@hg/postgres-store';
 import { getServerPersistence } from '@/lib/server/persistence';
 import { requireStaffApiAccess } from '@/lib/server/session';
 
@@ -57,9 +57,7 @@ export async function GET(
     }
 
     const runtimeSubmission = await persistence.jobs.getJobSubmissionAsset(jobId);
-    const submissionPath = runtimeSubmission?.path ?? null;
-    const submissionMimeType = runtimeSubmission?.mimeType ?? null;
-    if (!submissionPath) {
+    if (!runtimeSubmission) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
@@ -69,7 +67,9 @@ export async function GET(
     // Determine MIME type: prefer job.inputs.submissionMimeType, else infer from extension
     let mimeType: string;
     try {
-      mimeType = submissionMimeType || inferMimeType(submissionPath);
+      mimeType =
+        runtimeSubmission.mimeType ||
+        inferMimeType(runtimeSubmission.originalName || runtimeSubmission.path);
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : 'Unsupported file type' },
@@ -77,19 +77,7 @@ export async function GET(
       );
     }
 
-    // Read file
-    let fileBuffer: Buffer;
-    try {
-      fileBuffer = await fs.readFile(submissionPath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return NextResponse.json(
-          { error: 'Submission file not found' },
-          { status: 404 }
-        );
-      }
-      throw error;
-    }
+    const fileBuffer = await readStoredAssetBytes(runtimeSubmission);
 
     // Return file with appropriate headers
     return new NextResponse(new Uint8Array(fileBuffer), {

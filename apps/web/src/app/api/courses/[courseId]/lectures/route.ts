@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   PostgresCourseNotFoundError,
   PostgresUnsupportedLectureTypeError,
+  isSupabaseObjectStorageEnabled,
 } from '@hg/postgres-store';
 import * as path from 'path';
 import { getServerPersistence } from '../../../../../lib/server/persistence';
@@ -68,9 +69,13 @@ export async function POST(
 
   try {
     const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
+    if (!dataDir && !isSupabaseObjectStorageEnabled()) {
       return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+        {
+          ok: false,
+          error: 'HG_DATA_DIR or Supabase object storage configuration is required',
+          code: 'ASSET_STORAGE_MISSING',
+        },
         { status: 500 }
       );
     }
@@ -96,7 +101,7 @@ export async function POST(
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const { lecture } = await persistence.lectures.createLecture({
-      dataDir: path.resolve(dataDir),
+      dataDir: dataDir ? path.resolve(dataDir) : undefined,
       courseId: params.courseId,
       title,
       originalName: file.name,

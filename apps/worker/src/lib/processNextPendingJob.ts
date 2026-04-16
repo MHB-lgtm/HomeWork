@@ -4,6 +4,7 @@ import type {
   LegacyReviewContextRecord,
   RuntimeJobClaimRecord,
 } from '@hg/postgres-store';
+import { materializeStoredAssetToLocalPath as materializeAsset } from '@hg/postgres-store';
 import type { ReviewRecord } from '@hg/shared-schemas';
 import { gradeSubmission } from '../core/gradeSubmission';
 import { generalEvaluatePerQuestion } from '../core/generalEvaluatePerQuestion';
@@ -56,6 +57,93 @@ const toWorkerJobRecord = (job: RuntimeJobClaimRecord): WorkerJobRecord => ({
   errorMessage: job.errorMessage ?? undefined,
 });
 
+const buildMaterializedAssetPath = (
+  jobId: string,
+  assetRole: string,
+  originalName?: string | null
+): string | null => {
+  const dataDir = process.env.HG_DATA_DIR;
+  if (!dataDir) {
+    return null;
+  }
+
+  const resolvedDataDir = path.resolve(dataDir);
+  return path.join(
+    resolvedDataDir,
+    'runtime-materialized',
+    'jobs',
+    jobId,
+    assetRole,
+    originalName || `${assetRole}.bin`
+  );
+};
+
+const materializeClaimedJob = async (
+  job: RuntimeJobClaimRecord
+): Promise<RuntimeJobClaimRecord> => {
+  const resolvedDataDir = process.env.HG_DATA_DIR
+    ? path.resolve(process.env.HG_DATA_DIR)
+    : undefined;
+
+  const examFilePath = job.examAsset
+    ? await materializeAsset(job.examAsset, {
+        dataDir: resolvedDataDir,
+        preferredPath: buildMaterializedAssetPath(
+          job.jobId,
+          'exam',
+          job.examAsset.originalName
+        ),
+      })
+    : job.examFilePath ?? null;
+  const promptFilePath = job.promptAsset
+    ? await materializeAsset(job.promptAsset, {
+        dataDir: resolvedDataDir,
+        preferredPath: buildMaterializedAssetPath(
+          job.jobId,
+          'prompt',
+          job.promptAsset.originalName
+        ),
+      })
+    : job.promptFilePath ?? null;
+  const referenceSolutionFilePath = job.referenceSolutionAsset
+    ? await materializeAsset(job.referenceSolutionAsset, {
+        dataDir: resolvedDataDir,
+        preferredPath: buildMaterializedAssetPath(
+          job.jobId,
+          'reference-solution',
+          job.referenceSolutionAsset.originalName
+        ),
+      })
+    : job.referenceSolutionFilePath ?? null;
+  const submissionFilePath = await materializeAsset(job.submissionAsset, {
+    dataDir: resolvedDataDir,
+    preferredPath: buildMaterializedAssetPath(
+      job.jobId,
+      'submission',
+      job.submissionAsset.originalName
+    ),
+  });
+  const questionFilePath = job.questionAsset
+    ? await materializeAsset(job.questionAsset, {
+        dataDir: resolvedDataDir,
+        preferredPath: buildMaterializedAssetPath(
+          job.jobId,
+          'question',
+          job.questionAsset.originalName
+        ),
+      })
+    : job.questionFilePath ?? null;
+
+  return {
+    ...job,
+    examFilePath,
+    promptFilePath,
+    referenceSolutionFilePath,
+    submissionFilePath,
+    questionFilePath,
+  };
+};
+
 const createEmptyReviewRecord = (jobId: string, createdAt: string): ReviewRecord => ({
   version: '1.0.0',
   jobId,
@@ -103,7 +191,8 @@ export async function processNextPendingJob(
     return { processed: false };
   }
 
-  const job = toWorkerJobRecord(claimedJob);
+  const materializedJob = await materializeClaimedJob(claimedJob);
+  const job = toWorkerJobRecord(materializedJob);
   const jobId = job.id;
   const jobKind = job.inputs.jobKind || 'EXAM';
   const gradingMode = job.inputs.gradingMode || 'RUBRIC';
@@ -222,7 +311,7 @@ export async function processNextPendingJob(
         updatedAt: new Date().toISOString(),
       },
       {
-        context: buildReviewContext(claimedJob, resultJson),
+        context: buildReviewContext(materializedJob, resultJson),
       }
     );
 

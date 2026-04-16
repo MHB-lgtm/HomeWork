@@ -13,11 +13,13 @@ export type {
   LegacyJobRecord,
   LegacyReviewPublicationRecord,
   PublishEligibilityValue,
+  StoredAssetStorageKindValue,
   OperationalSubmissionStatusValue,
   StaffDashboardAssignmentRowRecord,
   AssignmentSubmissionOpsRowRecord,
   AssignmentSubmissionOpsDetailRecord,
   StaffReviewPublicationSummaryRecord,
+  RuntimeStoredAssetRecord,
   StudentAssignmentRecord,
   StudentAssignmentResultRecord,
   StudentAssignmentStatusRecord,
@@ -101,3 +103,11 @@ export {
   materializeExamIndexCompatibility,
 } from './compat/file-materialization';
 export { exportRuntimeJobsToLegacyQueue } from './compat/rollback-export';
+export {
+  createRuntimeAssetStorage,
+  getRuntimeAssetStorage,
+  getRuntimeAssetStorageEnv,
+  isSupabaseObjectStorageEnabled,
+  materializeStoredAssetToLocalPath,
+  readStoredAssetBytes,
+} from './storage/runtime-asset-storage';

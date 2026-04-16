@@ -1,4 +1,3 @@
-import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { PrismaClient } from '@prisma/client';
 import {
@@ -20,7 +19,9 @@ import type {
   RuntimeJobClaimRecord,
   RuntimeJobStatusRecord,
   RuntimeReviewSummaryRecord,
+  RuntimeStoredAssetRecord,
 } from '../types';
+import { getRuntimeAssetStorage } from '../storage/runtime-asset-storage';
 import {
   asJsonValue,
   decimalToNumber,
@@ -65,7 +66,7 @@ type BinaryUpload = {
 };
 
 type CreateRuntimeJobArgs = {
-  dataDir: string;
+  dataDir?: string;
   courseId?: string | null;
   examId: string;
   questionId?: string | null;
@@ -73,13 +74,12 @@ type CreateRuntimeJobArgs = {
   gradingMode: 'RUBRIC' | 'GENERAL';
   gradingScope: 'QUESTION' | 'DOCUMENT';
   rubric?: RubricSpec | null;
-  examSourcePath: string;
   submission: BinaryUpload;
   question?: BinaryUpload | null;
 };
 
 type CreateAssignmentSubmissionJobArgs = {
-  dataDir: string;
+  dataDir?: string;
   assignmentId: string;
   studentUserId: string;
   submission: BinaryUpload;
@@ -94,29 +94,14 @@ const DEFAULT_VERSION_INFO = {
 const createJobId = (): string =>
   `job-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-const createUploadPath = (dataDir: string, jobId: string, originalName: string, prefix: string) => {
+const createUploadPath = (jobId: string, originalName: string, prefix: string) => {
   const ext = path.extname(originalName);
   const baseName = path.basename(originalName, ext) || prefix;
   const fileName = `${baseName}_${jobId}${ext}`;
-  const absolutePath = path.resolve(dataDir, 'uploads', fileName);
   return {
-    absolutePath,
+    objectKey: ['uploads', fileName].join('/'),
     originalName: path.basename(originalName) || fileName,
   };
-};
-
-const writeBufferAtomic = async (absolutePath: string, buffer: Buffer) => {
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-  const tempPath = `${absolutePath}.tmp`;
-  await fs.writeFile(tempPath, buffer);
-  await fs.rename(tempPath, absolutePath);
-};
-
-const copyFileAtomic = async (sourcePath: string, targetPath: string) => {
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  const tempPath = `${targetPath}.tmp`;
-  await fs.copyFile(sourcePath, tempPath);
-  await fs.rename(tempPath, targetPath);
 };
 
 const createEmptyReviewRecord = (
@@ -196,6 +181,34 @@ const mapJobStatus = (row: {
   gradingScope: row.gradingScope,
 });
 
+const toRuntimeStoredAssetRecord = (
+  asset:
+    | {
+        path: string;
+        storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+        logicalBucket: string;
+        mimeType: string | null;
+        originalName: string | null;
+        assetKey: string | null;
+        sizeBytes: number | null;
+        metadata: unknown | null;
+      }
+    | null
+    | undefined
+): RuntimeStoredAssetRecord | null =>
+  asset
+    ? {
+        path: asset.path,
+        storageKind: asset.storageKind,
+        logicalBucket: asset.logicalBucket,
+        mimeType: asset.mimeType ?? null,
+        originalName: asset.originalName ?? null,
+        assetKey: asset.assetKey ?? null,
+        sizeBytes: asset.sizeBytes ?? null,
+        metadata: asset.metadata ?? null,
+      }
+    : null;
+
 const mapClaimedJob = (row: {
   domainId: string;
   jobKind: GradingJobKind;
@@ -215,11 +228,56 @@ const mapClaimedJob = (row: {
   course: { domainId: string } | null;
   exam: { domainId: string } | null;
   assignment: { domainId: string } | null;
-  examSnapshotAsset: { path: string } | null;
-  promptAsset: { path: string } | null;
-  referenceSolutionAsset: { path: string } | null;
-  submissionAsset: { path: string; mimeType: string | null };
-  questionAsset: { path: string } | null;
+  examSnapshotAsset: {
+    path: string;
+    storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+    logicalBucket: string;
+    mimeType: string | null;
+    originalName: string | null;
+    assetKey: string | null;
+    sizeBytes: number | null;
+    metadata: unknown | null;
+  } | null;
+  promptAsset: {
+    path: string;
+    storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+    logicalBucket: string;
+    mimeType: string | null;
+    originalName: string | null;
+    assetKey: string | null;
+    sizeBytes: number | null;
+    metadata: unknown | null;
+  } | null;
+  referenceSolutionAsset: {
+    path: string;
+    storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+    logicalBucket: string;
+    mimeType: string | null;
+    originalName: string | null;
+    assetKey: string | null;
+    sizeBytes: number | null;
+    metadata: unknown | null;
+  } | null;
+  submissionAsset: {
+    path: string;
+    storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+    logicalBucket: string;
+    mimeType: string | null;
+    originalName: string | null;
+    assetKey: string | null;
+    sizeBytes: number | null;
+    metadata: unknown | null;
+  };
+  questionAsset: {
+    path: string;
+    storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+    logicalBucket: string;
+    mimeType: string | null;
+    originalName: string | null;
+    assetKey: string | null;
+    sizeBytes: number | null;
+    metadata: unknown | null;
+  } | null;
 }): RuntimeJobClaimRecord => ({
   ...mapJobStatus({
     domainId: row.domainId,
@@ -235,6 +293,11 @@ const mapClaimedJob = (row: {
   examId: row.exam?.domainId ?? null,
   assignmentId: row.assignment?.domainId ?? null,
   questionId: row.questionId ?? null,
+  examAsset: toRuntimeStoredAssetRecord(row.examSnapshotAsset),
+  promptAsset: toRuntimeStoredAssetRecord(row.promptAsset),
+  referenceSolutionAsset: toRuntimeStoredAssetRecord(row.referenceSolutionAsset),
+  submissionAsset: toRuntimeStoredAssetRecord(row.submissionAsset)!,
+  questionAsset: toRuntimeStoredAssetRecord(row.questionAsset),
   examFilePath: row.examSnapshotAsset?.path ?? null,
   promptFilePath: row.promptAsset?.path ?? null,
   referenceSolutionFilePath: row.referenceSolutionAsset?.path ?? null,
@@ -262,7 +325,13 @@ const selectRuntimeReviewInclude = {
   submissionAsset: {
     select: {
       path: true,
+      storageKind: true,
+      logicalBucket: true,
       mimeType: true,
+      originalName: true,
+      assetKey: true,
+      sizeBytes: true,
+      metadata: true,
     },
   },
   submission: {
@@ -326,8 +395,13 @@ export class PrismaJobStore {
               select: {
                 id: true,
                 path: true,
+                storageKind: true,
+                logicalBucket: true,
                 mimeType: true,
                 originalName: true,
+                assetKey: true,
+                sizeBytes: true,
+                metadata: true,
               },
             },
           },
@@ -409,48 +483,95 @@ export class PrismaJobStore {
   async createJob(args: CreateRuntimeJobArgs): Promise<{ jobId: string }> {
     const jobId = createJobId();
     const now = new Date();
-    const resolvedDataDir = path.resolve(args.dataDir);
+    const storage = getRuntimeAssetStorage({
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
     const course = await this.ensureCourse(args.courseId);
     const exam = await this.prisma.exam.findUnique({
       where: { domainId: args.examId },
-      select: { id: true },
+      select: {
+        id: true,
+        asset: {
+          select: {
+            path: true,
+            storageKind: true,
+            logicalBucket: true,
+            mimeType: true,
+            originalName: true,
+            assetKey: true,
+            sizeBytes: true,
+            metadata: true,
+          },
+        },
+      },
     });
 
     if (!exam) {
       throw new Error(`Exam not found: ${args.examId}`);
     }
 
+    if (!exam.asset) {
+      throw new Error(`Exam asset not found: ${args.examId}`);
+    }
+
     const examSnapshot = createUploadPath(
-      resolvedDataDir,
       jobId,
-      path.basename(args.examSourcePath),
+      exam.asset.originalName ?? path.basename(exam.asset.path),
       'exam'
     );
     const submissionUpload = createUploadPath(
-      resolvedDataDir,
       jobId,
       args.submission.originalName,
       'submission'
     );
     const questionUpload = args.question
-      ? createUploadPath(resolvedDataDir, jobId, args.question.originalName, 'question')
+      ? createUploadPath(jobId, args.question.originalName, 'question')
       : null;
-
-    await copyFileAtomic(args.examSourcePath, examSnapshot.absolutePath);
-    await writeBufferAtomic(submissionUpload.absolutePath, args.submission.buffer);
-    if (questionUpload && args.question) {
-      await writeBufferAtomic(questionUpload.absolutePath, args.question.buffer);
-    }
+    const examSnapshotSource = toRuntimeStoredAssetRecord(exam.asset)!;
+    const examSnapshotAssetRecord = await storage.putObject({
+      assetKey: `job-exam-snapshot:${jobId}`,
+      logicalBucket: 'job_exam_snapshots',
+      objectKey: examSnapshot.objectKey,
+      bytes: await storage.getObjectBytes(examSnapshotSource),
+      mimeType: exam.asset.mimeType ?? null,
+      originalName: examSnapshot.originalName,
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
+    const submissionAssetRecord = await storage.putObject({
+      assetKey: getSubmissionAssetKey(jobId),
+      logicalBucket: 'job_submissions',
+      objectKey: submissionUpload.objectKey,
+      bytes: args.submission.buffer,
+      mimeType: args.submission.mimeType ?? null,
+      originalName: submissionUpload.originalName,
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
+    const questionAssetRecord =
+      questionUpload && args.question
+        ? await storage.putObject({
+            assetKey: `job-question:${jobId}`,
+            logicalBucket: 'job_questions',
+            objectKey: questionUpload.objectKey,
+            bytes: args.question.buffer,
+            mimeType: args.question.mimeType ?? null,
+            originalName: questionUpload.originalName,
+            dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+          })
+        : null;
 
     try {
       await this.prisma.$transaction(async (tx: any) => {
         const examSnapshotAsset = await tx.storedAsset.create({
           data: {
             assetKey: `job-exam-snapshot:${jobId}`,
-            storageKind: StoredAssetStorageKind.LOCAL_FILE,
-            logicalBucket: 'job_exam_snapshots',
-            path: examSnapshot.absolutePath,
-            originalName: examSnapshot.originalName,
+            storageKind:
+              examSnapshotAssetRecord.storageKind as StoredAssetStorageKind,
+            logicalBucket: examSnapshotAssetRecord.logicalBucket,
+            path: examSnapshotAssetRecord.path,
+            mimeType: examSnapshotAssetRecord.mimeType || undefined,
+            sizeBytes: examSnapshotAssetRecord.sizeBytes ?? undefined,
+            originalName: examSnapshotAssetRecord.originalName ?? undefined,
+            metadata: examSnapshotAssetRecord.metadata as never,
           },
           select: { id: true },
         });
@@ -458,27 +579,31 @@ export class PrismaJobStore {
         const submissionAsset = await tx.storedAsset.create({
           data: {
             assetKey: getSubmissionAssetKey(jobId),
-            storageKind: StoredAssetStorageKind.LOCAL_FILE,
-            logicalBucket: 'job_submissions',
-            path: submissionUpload.absolutePath,
-            mimeType: args.submission.mimeType || undefined,
-            sizeBytes: args.submission.buffer.byteLength,
-            originalName: submissionUpload.originalName,
+            storageKind:
+              submissionAssetRecord.storageKind as StoredAssetStorageKind,
+            logicalBucket: submissionAssetRecord.logicalBucket,
+            path: submissionAssetRecord.path,
+            mimeType: submissionAssetRecord.mimeType || undefined,
+            sizeBytes: submissionAssetRecord.sizeBytes ?? undefined,
+            originalName: submissionAssetRecord.originalName ?? undefined,
+            metadata: submissionAssetRecord.metadata as never,
           },
           select: { id: true },
         });
 
         const questionAsset =
-          questionUpload && args.question
+          questionAssetRecord
             ? await tx.storedAsset.create({
                 data: {
                   assetKey: `job-question:${jobId}`,
-                  storageKind: StoredAssetStorageKind.LOCAL_FILE,
-                  logicalBucket: 'job_questions',
-                  path: questionUpload.absolutePath,
-                  mimeType: args.question.mimeType || undefined,
-                  sizeBytes: args.question.buffer.byteLength,
-                  originalName: questionUpload.originalName,
+                  storageKind:
+                    questionAssetRecord.storageKind as StoredAssetStorageKind,
+                  logicalBucket: questionAssetRecord.logicalBucket,
+                  path: questionAssetRecord.path,
+                  mimeType: questionAssetRecord.mimeType || undefined,
+                  sizeBytes: questionAssetRecord.sizeBytes ?? undefined,
+                  originalName: questionAssetRecord.originalName ?? undefined,
+                  metadata: questionAssetRecord.metadata as never,
                 },
                 select: { id: true },
               })
@@ -555,9 +680,9 @@ export class PrismaJobStore {
       return { jobId };
     } catch (error) {
       await Promise.all([
-        fs.rm(examSnapshot.absolutePath, { force: true }),
-        fs.rm(submissionUpload.absolutePath, { force: true }),
-        questionUpload ? fs.rm(questionUpload.absolutePath, { force: true }) : Promise.resolve(),
+        storage.deleteObject(examSnapshotAssetRecord),
+        storage.deleteObject(submissionAssetRecord),
+        questionAssetRecord ? storage.deleteObject(questionAssetRecord) : Promise.resolve(),
       ]);
       throw error;
     }
@@ -568,7 +693,9 @@ export class PrismaJobStore {
   ): Promise<{ jobId: string }> {
     const jobId = createJobId();
     const now = new Date();
-    const resolvedDataDir = path.resolve(args.dataDir);
+    const storage = getRuntimeAssetStorage({
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
     const context = await this.getAssignmentRuntimeContext(args.assignmentId);
     const assignmentState = context.assignment.state;
 
@@ -589,30 +716,47 @@ export class PrismaJobStore {
     }
 
     const examSnapshot = createUploadPath(
-      resolvedDataDir,
       jobId,
-      path.basename(context.exam.asset.path),
+      context.exam.asset.originalName ?? path.basename(context.exam.asset.path),
       'exam'
     );
     const submissionUpload = createUploadPath(
-      resolvedDataDir,
       jobId,
       args.submission.originalName,
       'assignment-submission'
     );
-
-    await copyFileAtomic(context.exam.asset.path, examSnapshot.absolutePath);
-    await writeBufferAtomic(submissionUpload.absolutePath, args.submission.buffer);
+    const examSnapshotAssetRecord = await storage.putObject({
+      assetKey: `job-exam-snapshot:${jobId}`,
+      logicalBucket: 'job_exam_snapshots',
+      objectKey: examSnapshot.objectKey,
+      bytes: await storage.getObjectBytes(toRuntimeStoredAssetRecord(context.exam.asset)!),
+      mimeType: context.exam.asset.mimeType ?? null,
+      originalName: examSnapshot.originalName,
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
+    const submissionAssetRecord = await storage.putObject({
+      assetKey: getSubmissionAssetKey(jobId),
+      logicalBucket: 'job_submissions',
+      objectKey: submissionUpload.objectKey,
+      bytes: args.submission.buffer,
+      mimeType: args.submission.mimeType ?? null,
+      originalName: submissionUpload.originalName,
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
 
     try {
       await this.prisma.$transaction(async (tx: any) => {
         const examSnapshotAsset = await tx.storedAsset.create({
           data: {
             assetKey: `job-exam-snapshot:${jobId}`,
-            storageKind: StoredAssetStorageKind.LOCAL_FILE,
-            logicalBucket: 'job_exam_snapshots',
-            path: examSnapshot.absolutePath,
-            originalName: examSnapshot.originalName,
+            storageKind:
+              examSnapshotAssetRecord.storageKind as StoredAssetStorageKind,
+            logicalBucket: examSnapshotAssetRecord.logicalBucket,
+            path: examSnapshotAssetRecord.path,
+            mimeType: examSnapshotAssetRecord.mimeType || undefined,
+            sizeBytes: examSnapshotAssetRecord.sizeBytes ?? undefined,
+            originalName: examSnapshotAssetRecord.originalName ?? undefined,
+            metadata: examSnapshotAssetRecord.metadata as never,
           },
           select: { id: true },
         });
@@ -620,12 +764,14 @@ export class PrismaJobStore {
         const submissionAsset = await tx.storedAsset.create({
           data: {
             assetKey: getSubmissionAssetKey(jobId),
-            storageKind: StoredAssetStorageKind.LOCAL_FILE,
-            logicalBucket: 'job_submissions',
-            path: submissionUpload.absolutePath,
-            mimeType: args.submission.mimeType || undefined,
-            sizeBytes: args.submission.buffer.byteLength,
-            originalName: submissionUpload.originalName,
+            storageKind:
+              submissionAssetRecord.storageKind as StoredAssetStorageKind,
+            logicalBucket: submissionAssetRecord.logicalBucket,
+            path: submissionAssetRecord.path,
+            mimeType: submissionAssetRecord.mimeType || undefined,
+            sizeBytes: submissionAssetRecord.sizeBytes ?? undefined,
+            originalName: submissionAssetRecord.originalName ?? undefined,
+            metadata: submissionAssetRecord.metadata as never,
           },
           select: { id: true },
         });
@@ -721,8 +867,8 @@ export class PrismaJobStore {
       return { jobId };
     } catch (error) {
       await Promise.all([
-        fs.rm(examSnapshot.absolutePath, { force: true }),
-        fs.rm(submissionUpload.absolutePath, { force: true }),
+        storage.deleteObject(examSnapshotAssetRecord),
+        storage.deleteObject(submissionAssetRecord),
       ]);
       throw error;
     }
@@ -752,7 +898,13 @@ export class PrismaJobStore {
         submissionAsset: {
           select: {
             path: true,
+            storageKind: true,
+            logicalBucket: true,
             mimeType: true,
+            originalName: true,
+            assetKey: true,
+            sizeBytes: true,
+            metadata: true,
           },
         },
       },
@@ -764,7 +916,13 @@ export class PrismaJobStore {
 
     return {
       path: row.submissionAsset.path,
+      storageKind: row.submissionAsset.storageKind,
+      logicalBucket: row.submissionAsset.logicalBucket,
       mimeType: row.submissionAsset.mimeType ?? null,
+      originalName: row.submissionAsset.originalName ?? null,
+      assetKey: row.submissionAsset.assetKey ?? null,
+      sizeBytes: row.submissionAsset.sizeBytes ?? null,
+      metadata: row.submissionAsset.metadata ?? null,
     };
   }
 
@@ -860,27 +1018,61 @@ export class PrismaJobStore {
           examSnapshotAsset: {
             select: {
               path: true,
+              storageKind: true,
+              logicalBucket: true,
+              mimeType: true,
+              originalName: true,
+              assetKey: true,
+              sizeBytes: true,
+              metadata: true,
             },
           },
           promptAsset: {
             select: {
               path: true,
+              storageKind: true,
+              logicalBucket: true,
+              mimeType: true,
+              originalName: true,
+              assetKey: true,
+              sizeBytes: true,
+              metadata: true,
             },
           },
           referenceSolutionAsset: {
             select: {
               path: true,
+              storageKind: true,
+              logicalBucket: true,
+              mimeType: true,
+              originalName: true,
+              assetKey: true,
+              sizeBytes: true,
+              metadata: true,
             },
           },
           submissionAsset: {
             select: {
               path: true,
+              storageKind: true,
+              logicalBucket: true,
               mimeType: true,
+              originalName: true,
+              assetKey: true,
+              sizeBytes: true,
+              metadata: true,
             },
           },
           questionAsset: {
             select: {
               path: true,
+              storageKind: true,
+              logicalBucket: true,
+              mimeType: true,
+              originalName: true,
+              assetKey: true,
+              sizeBytes: true,
+              metadata: true,
             },
           },
         },
@@ -1161,7 +1353,13 @@ export class PrismaJobStore {
       },
       submissionAsset: {
         path: row.submissionAsset.path,
+        storageKind: row.submissionAsset.storageKind,
+        logicalBucket: row.submissionAsset.logicalBucket,
         mimeType: row.submissionAsset.mimeType ?? null,
+        originalName: row.submissionAsset.originalName ?? null,
+        assetKey: row.submissionAsset.assetKey ?? null,
+        sizeBytes: row.submissionAsset.sizeBytes ?? null,
+        metadata: row.submissionAsset.metadata ?? null,
       },
       publication: toPublicationRecord(row.submission.publishedResults[0]),
     };

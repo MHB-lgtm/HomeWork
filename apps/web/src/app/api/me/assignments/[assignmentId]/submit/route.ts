@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isSupabaseObjectStorageEnabled } from '@hg/postgres-store';
 import * as path from 'path';
 import { getServerPersistence } from '@/lib/server/persistence';
 import { requireStudentAssignmentAccess } from '@/lib/server/session';
@@ -27,9 +28,13 @@ export async function POST(
     if (persistence instanceof NextResponse) return persistence;
 
     const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
+    if (!dataDir && !isSupabaseObjectStorageEnabled()) {
       return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+        {
+          ok: false,
+          error: 'HG_DATA_DIR or Supabase object storage configuration is required',
+          code: 'ASSET_STORAGE_MISSING',
+        },
         { status: 500 }
       );
     }
@@ -44,7 +49,7 @@ export async function POST(
     }
 
     const { jobId } = await persistence.jobs.createAssignmentSubmissionJob({
-      dataDir: path.resolve(dataDir),
+      dataDir: dataDir ? path.resolve(dataDir) : undefined,
       assignmentId: params.assignmentId,
       studentUserId: access.access.userId,
       submission: {

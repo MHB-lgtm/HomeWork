@@ -13,12 +13,14 @@
     "prisma:validate": "prisma validate --schema prisma/schema.prisma",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "import:file-backed": "pnpm run build && node dist/scripts/import-file-backed.js",
-    "rollback:export-jobs": "pnpm run build && node dist/scripts/export-runtime-jobs.js"
+    "rollback:export-jobs": "pnpm run build && node dist/scripts/export-runtime-jobs.js",
+    "cutover:supabase": "pnpm run build && node dist/scripts/cutover-supabase-runtime.js"
   },
   "dependencies": {
     "@hg/domain-workflow": "workspace:*",
     "@hg/shared-schemas": "workspace:*",
     "@prisma/client": "^6.6.0",
+    "@supabase/supabase-js": "^2.103.3",
     "zod": "^3.22.0"
   },
   "devDependencies": {

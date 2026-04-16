@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isSupabaseObjectStorageEnabled } from '@hg/postgres-store';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
@@ -111,9 +112,12 @@ export async function POST(request: NextRequest) {
     }
 
     const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
+    if (!dataDir && !isSupabaseObjectStorageEnabled()) {
       return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+        {
+          error: 'HG_DATA_DIR or Supabase object storage configuration is required',
+          code: 'ASSET_STORAGE_MISSING',
+        },
         { status: 500 }
       );
     }
@@ -136,11 +140,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const DATA_DIR = path.resolve(dataDir);
     const examFileBuffer = Buffer.from(await examFile.arrayBuffer());
 
     const createdExam = await persistence.exams.createExam({
-      dataDir: DATA_DIR,
+      dataDir: dataDir ? path.resolve(dataDir) : undefined,
       title: title.trim(),
       originalName: examFile.name,
       buffer: examFileBuffer,

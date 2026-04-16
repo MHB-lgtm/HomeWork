@@ -1,4 +1,3 @@
-import * as fs from 'fs/promises';
 import type {
   ChunkHitV1,
   CourseChunk,
@@ -8,6 +7,7 @@ import type {
 import { CourseChunkSchema, RagManifestSchema } from '@hg/shared-schemas';
 import { CourseRagMethod, LectureSourceType, type PrismaClient } from '@prisma/client';
 import { asJsonValue, toDate, toIsoString } from '../mappers/domain';
+import { readStoredAssetBytes } from '../storage/runtime-asset-storage';
 import {
   buildSnippet,
   scoreChunk,
@@ -43,6 +43,13 @@ type RagLectureRow = {
   externalUrl: string | null;
   asset: {
     path: string;
+    storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+    logicalBucket: string;
+    mimeType: string | null;
+    originalName: string | null;
+    assetKey: string | null;
+    sizeBytes: number | null;
+    metadata: unknown | null;
   };
 };
 
@@ -366,6 +373,13 @@ export class PrismaCourseRagStore {
         asset: {
           select: {
             path: true,
+            storageKind: true,
+            logicalBucket: true,
+            mimeType: true,
+            originalName: true,
+            assetKey: true,
+            sizeBytes: true,
+            metadata: true,
           },
         },
       },
@@ -377,7 +391,18 @@ export class PrismaCourseRagStore {
     const chunks: CourseChunk[] = [];
 
     for (const lecture of lectures) {
-      const content = await fs.readFile(lecture.asset.path, 'utf-8');
+      const content = (
+        await readStoredAssetBytes({
+          path: lecture.asset.path,
+          storageKind: lecture.asset.storageKind,
+          logicalBucket: lecture.asset.logicalBucket,
+          mimeType: lecture.asset.mimeType ?? null,
+          originalName: lecture.asset.originalName ?? null,
+          assetKey: lecture.asset.assetKey ?? null,
+          sizeBytes: lecture.asset.sizeBytes ?? null,
+          metadata: lecture.asset.metadata ?? null,
+        })
+      ).toString('utf-8');
 
       try {
         switch (lecture.sourceType) {

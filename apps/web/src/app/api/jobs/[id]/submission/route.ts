@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+import { readStoredAssetBytes } from '@hg/postgres-store';
 import { getServerPersistence } from '@/lib/server/persistence';
 import { requireStaffApiAccess } from '@/lib/server/session';
 
@@ -36,15 +36,14 @@ export async function GET(
     }
 
     const runtimeSubmission = await persistence.jobs.getJobSubmissionAsset(jobId);
-    const submissionPath: string | null = runtimeSubmission?.path ?? null;
-    if (!submissionPath) {
+    if (!runtimeSubmission) {
       return NextResponse.json(
         { error: 'Job not found' },
         { status: 404 }
       );
     }
 
-    const ext = path.extname(submissionPath).toLowerCase();
+    const ext = path.extname(runtimeSubmission.originalName || runtimeSubmission.path).toLowerCase();
     const supportedExtensions = ['.png', '.jpg', '.jpeg'];
     
     if (!supportedExtensions.includes(ext)) {
@@ -57,19 +56,7 @@ export async function GET(
     // Determine MIME type
     const mimeType = ext === '.png' ? 'image/png' : 'image/jpeg';
 
-    // Read file
-    let fileBuffer: Buffer;
-    try {
-      fileBuffer = await fs.readFile(submissionPath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return NextResponse.json(
-          { error: 'Submission file not found' },
-          { status: 404 }
-        );
-      }
-      throw error;
-    }
+    const fileBuffer = await readStoredAssetBytes(runtimeSubmission);
 
     // Return image with appropriate headers
     return new NextResponse(new Uint8Array(fileBuffer), {

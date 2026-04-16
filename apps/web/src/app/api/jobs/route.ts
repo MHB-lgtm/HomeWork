@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isSupabaseObjectStorageEnabled } from '@hg/postgres-store';
 import * as path from 'path';
 import { getServerPersistence } from '../../../lib/server/persistence';
 import { requireStaffApiAccess } from '@/lib/server/session';
@@ -19,9 +20,9 @@ export async function POST(request: NextRequest) {
     }
 
     const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
+    if (!dataDir && !isSupabaseObjectStorageEnabled()) {
       return NextResponse.json(
-        { error: 'HG_DATA_DIR is not set in environment' },
+        { error: 'HG_DATA_DIR or Supabase object storage configuration is required' },
         { status: 500 }
       );
     }
@@ -77,8 +78,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const DATA_DIR = path.resolve(dataDir);
-
     const exam = await persistence.exams.getExam(examId);
     if (!exam) {
       return NextResponse.json(
@@ -126,10 +125,9 @@ export async function POST(request: NextRequest) {
     }
 
     const { jobId } = await persistence.jobs.createJob({
-      dataDir: DATA_DIR,
+      dataDir,
       courseId,
       examId,
-      examSourcePath: path.resolve(DATA_DIR, exam.examFilePath),
       questionId: questionId || undefined,
       notes: notes || undefined,
       rubric,

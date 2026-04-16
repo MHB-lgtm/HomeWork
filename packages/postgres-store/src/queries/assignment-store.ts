@@ -1,4 +1,3 @@
-import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { Assignment } from '@hg/shared-schemas';
 import { AssignmentSchema } from '@hg/shared-schemas';
@@ -9,6 +8,8 @@ import {
   StoredAssetStorageKind,
   type PrismaClient,
 } from '@prisma/client';
+import type { RuntimeStoredAssetRecord } from '../types';
+import { getRuntimeAssetStorage } from '../storage/runtime-asset-storage';
 import { toIsoString } from '../mappers/domain';
 
 type AssignmentStorePrisma = Pick<
@@ -32,8 +33,13 @@ type BinaryUpload = {
 
 type AssignmentMaterialAssetRecord = {
   path: string;
+  storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+  logicalBucket: string;
   mimeType: string | null;
   originalName: string | null;
+  assetKey: string | null;
+  sizeBytes: number | null;
+  metadata: unknown | null;
 };
 
 const createAssignmentId = (): string =>
@@ -51,9 +57,6 @@ const getAssignmentMaterialDomainId = (
   role === AssignmentMaterialRole.PROMPT
     ? `assignment-material:${assignmentId}:prompt`
     : `assignment-material:${assignmentId}:solution`;
-
-const toRelativeDataPath = (dataDir: string, filePath: string): string =>
-  path.relative(dataDir, filePath).split(path.sep).join('/');
 
 const toStoredAssignmentState = (
   state: Assignment['state']
@@ -185,27 +188,18 @@ const validateSchedule = (openAt: string, deadlineAt: string) => {
   };
 };
 
-const createAssignmentSourceAssetPath = (
-  dataDir: string,
+const createAssignmentSourceObjectKey = (
   examId: string,
   originalName: string
 ) => {
   const ext = path.extname(originalName);
   const baseName = path.basename(originalName, ext) || 'assignment';
   const fileName = `${baseName}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}${ext}`;
-  const absolutePath = path.resolve(dataDir, 'exams', examId, 'assets', fileName);
 
   return {
-    absolutePath,
+    objectKey: ['exams', examId, 'assets', fileName].join('/'),
     originalName: path.basename(originalName) || fileName,
   };
-};
-
-const writeBufferAtomic = async (absolutePath: string, buffer: Buffer) => {
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-  const tempPath = `${absolutePath}.tmp`;
-  await fs.writeFile(tempPath, buffer);
-  await fs.rename(tempPath, absolutePath);
 };
 
 export class AssignmentCourseNotFoundError extends Error {
@@ -241,8 +235,13 @@ export class PrismaAssignmentStore {
                 asset: {
                   select: {
                     path: true,
+                    storageKind: true,
+                    logicalBucket: true,
                     mimeType: true,
                     originalName: true,
+                    assetKey: true,
+                    sizeBytes: true,
+                    metadata: true,
                   },
                 },
               },
@@ -259,8 +258,13 @@ export class PrismaAssignmentStore {
 
     return {
       path: asset.path,
+      storageKind: asset.storageKind,
+      logicalBucket: asset.logicalBucket,
       mimeType: asset.mimeType ?? null,
       originalName: asset.originalName ?? null,
+      assetKey: asset.assetKey ?? null,
+      sizeBytes: asset.sizeBytes ?? null,
+      metadata: asset.metadata ?? null,
     };
   }
 
@@ -361,7 +365,7 @@ export class PrismaAssignmentStore {
   }
 
   async createAssignment(args: {
-    dataDir: string;
+    dataDir?: string;
     courseId: string;
     title: string;
     openAt: string;
@@ -377,7 +381,6 @@ export class PrismaAssignmentStore {
     const schedule = validateSchedule(args.openAt, args.deadlineAt);
     const state = args.state ?? 'draft';
     const assignmentId = createAssignmentId();
-    const resolvedDataDir = path.resolve(args.dataDir);
     const course = await this.prisma.course.findUnique({
       where: { domainId: args.courseId },
       select: {
@@ -393,31 +396,41 @@ export class PrismaAssignmentStore {
     }
 
     const examId = createExamId();
-    const sourceAsset = createAssignmentSourceAssetPath(
-      resolvedDataDir,
+    const storage = getRuntimeAssetStorage({
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
+    const sourceAsset = createAssignmentSourceObjectKey(
       examId,
       args.source.originalName
     );
-
-    await writeBufferAtomic(sourceAsset.absolutePath, args.source.buffer);
+    const uploadedAsset = await storage.putObject({
+      assetKey: `exam-asset:${examId}`,
+      logicalBucket: 'exams',
+      objectKey: sourceAsset.objectKey,
+      bytes: args.source.buffer,
+      mimeType: args.source.mimeType ?? null,
+      originalName: sourceAsset.originalName,
+      metadata: {
+        relativeDataPath: sourceAsset.objectKey,
+        assignmentId,
+      },
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
 
     try {
       const row = await this.prisma.$transaction(async (tx: any) => {
         const week = await this.ensureDefaultWeek(tx, course);
-        const sourceRelativePath = toRelativeDataPath(resolvedDataDir, sourceAsset.absolutePath);
         const sourceStoredAsset = await tx.storedAsset.create({
           data: {
             assetKey: `exam-asset:${examId}`,
-            storageKind: StoredAssetStorageKind.LOCAL_FILE,
-            logicalBucket: 'exams',
-            path: sourceAsset.absolutePath,
-            mimeType: args.source.mimeType || undefined,
-            sizeBytes: args.source.buffer.byteLength,
+            storageKind:
+              uploadedAsset.storageKind as StoredAssetStorageKind,
+            logicalBucket: uploadedAsset.logicalBucket,
+            path: uploadedAsset.path,
+            mimeType: uploadedAsset.mimeType || undefined,
+            sizeBytes: uploadedAsset.sizeBytes ?? undefined,
             originalName: sourceAsset.originalName,
-            metadata: {
-              relativeDataPath: sourceRelativePath,
-              assignmentId,
-            },
+            metadata: uploadedAsset.metadata as never,
           },
           select: { id: true },
         });
@@ -512,7 +525,7 @@ export class PrismaAssignmentStore {
 
       return mapAssignmentRow(row);
     } catch (error) {
-      await fs.rm(sourceAsset.absolutePath, { force: true });
+      await storage.deleteObject(uploadedAsset);
       throw error;
     }
   }
@@ -541,6 +554,13 @@ export class PrismaAssignmentStore {
               select: {
                 id: true,
                 path: true,
+                storageKind: true,
+                logicalBucket: true,
+                mimeType: true,
+                originalName: true,
+                assetKey: true,
+                sizeBytes: true,
+                metadata: true,
               },
             },
           },
@@ -579,18 +599,44 @@ export class PrismaAssignmentStore {
       args.deadlineAt ?? existing.deadlineAt.toISOString()
     );
 
+    const storage = getRuntimeAssetStorage({
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
     const nextSourceAsset =
       args.source && existing.exam?.domainId
-        ? createAssignmentSourceAssetPath(
-            path.resolve(args.dataDir as string),
-            existing.exam.domainId,
-            args.source.originalName
-          )
+        ? createAssignmentSourceObjectKey(existing.exam.domainId, args.source.originalName)
         : null;
 
-    if (nextSourceAsset && args.source) {
-      await writeBufferAtomic(nextSourceAsset.absolutePath, args.source.buffer);
-    }
+    const currentExamAsset: RuntimeStoredAssetRecord | null = existing.exam?.asset
+      ? {
+          path: existing.exam.asset.path,
+          storageKind: existing.exam.asset.storageKind,
+          logicalBucket: existing.exam.asset.logicalBucket,
+          mimeType: existing.exam.asset.mimeType ?? null,
+          originalName: existing.exam.asset.originalName ?? null,
+          assetKey: existing.exam.asset.assetKey ?? null,
+          sizeBytes: existing.exam.asset.sizeBytes ?? null,
+          metadata: existing.exam.asset.metadata ?? null,
+        }
+      : null;
+    const replacedAsset =
+      nextSourceAsset && args.source && currentExamAsset
+        ? await storage.putObject({
+            assetKey:
+              currentExamAsset.assetKey ??
+              `exam-asset:${existing.exam?.domainId ?? args.assignmentId}`,
+            logicalBucket: currentExamAsset.logicalBucket,
+            objectKey: nextSourceAsset.objectKey,
+            bytes: args.source.buffer,
+            mimeType: args.source.mimeType ?? null,
+            originalName: nextSourceAsset.originalName,
+            metadata: {
+              relativeDataPath: nextSourceAsset.objectKey,
+              assignmentId: args.assignmentId,
+            },
+            dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+          })
+        : null;
 
     try {
       const row = await this.prisma.$transaction(async (tx: any) => {
@@ -613,22 +659,17 @@ export class PrismaAssignmentStore {
           });
         }
 
-        if (nextSourceAsset && args.source && existing.exam?.asset?.id) {
-          const sourceRelativePath = toRelativeDataPath(
-            path.resolve(args.dataDir as string),
-            nextSourceAsset.absolutePath
-          );
+        if (replacedAsset && existing.exam?.asset?.id) {
           await tx.storedAsset.update({
             where: { id: existing.exam.asset.id },
             data: {
-              path: nextSourceAsset.absolutePath,
-              mimeType: args.source.mimeType || undefined,
-              sizeBytes: args.source.buffer.byteLength,
-              originalName: nextSourceAsset.originalName,
-              metadata: {
-                relativeDataPath: sourceRelativePath,
-                assignmentId: args.assignmentId,
-              },
+              storageKind: replacedAsset.storageKind as StoredAssetStorageKind,
+              logicalBucket: replacedAsset.logicalBucket,
+              path: replacedAsset.path,
+              mimeType: replacedAsset.mimeType || undefined,
+              sizeBytes: replacedAsset.sizeBytes ?? undefined,
+              originalName: replacedAsset.originalName ?? undefined,
+              metadata: replacedAsset.metadata as never,
             },
           });
         }
@@ -670,14 +711,24 @@ export class PrismaAssignmentStore {
         });
       });
 
-      if (nextSourceAsset && existing.exam?.asset?.path && existing.exam.asset.path !== nextSourceAsset.absolutePath) {
-        await fs.rm(existing.exam.asset.path, { force: true });
+      if (
+        replacedAsset &&
+        currentExamAsset &&
+        (replacedAsset.storageKind !== currentExamAsset.storageKind ||
+          replacedAsset.path !== currentExamAsset.path)
+      ) {
+        await storage.deleteObject(currentExamAsset);
       }
 
       return mapAssignmentRow(row);
     } catch (error) {
-      if (nextSourceAsset) {
-        await fs.rm(nextSourceAsset.absolutePath, { force: true });
+      if (
+        replacedAsset &&
+        (!currentExamAsset ||
+          replacedAsset.storageKind !== currentExamAsset.storageKind ||
+          replacedAsset.path !== currentExamAsset.path)
+      ) {
+        await storage.deleteObject(replacedAsset);
       }
       throw error;
     }
@@ -815,8 +866,13 @@ export class PrismaAssignmentStore {
                 asset: {
                   select: {
                     path: true,
+                    storageKind: true,
+                    logicalBucket: true,
                     mimeType: true,
                     originalName: true,
+                    assetKey: true,
+                    sizeBytes: true,
+                    metadata: true,
                   },
                 },
               },
@@ -833,8 +889,13 @@ export class PrismaAssignmentStore {
 
     return {
       path: asset.path,
+      storageKind: asset.storageKind,
+      logicalBucket: asset.logicalBucket,
       mimeType: asset.mimeType ?? null,
       originalName: asset.originalName ?? null,
+      assetKey: asset.assetKey ?? null,
+      sizeBytes: asset.sizeBytes ?? null,
+      metadata: asset.metadata ?? null,
     };
   }
 

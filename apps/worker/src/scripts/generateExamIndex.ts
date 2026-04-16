@@ -6,6 +6,7 @@ import {
   PrismaExamIndexStore,
   disconnectPrismaClient,
   getPrismaClient,
+  readStoredAssetBytes,
 } from '@hg/postgres-store';
 import { ExamIndexSchema, ExamIndex } from '@hg/shared-schemas';
 
@@ -107,7 +108,16 @@ function hasNonEnglishQuestionText(questions: Array<{
 
 interface ExamRecord {
   title: string;
-  assetPath: string;
+  asset: {
+    path: string;
+    storageKind: 'LOCAL_FILE' | 'OBJECT_STORAGE' | 'UNKNOWN';
+    logicalBucket: string;
+    mimeType: string | null;
+    originalName: string | null;
+    assetKey: string | null;
+    sizeBytes: number | null;
+    metadata: unknown | null;
+  };
 }
 
 async function loadExamMetadata(examId: string): Promise<ExamRecord> {
@@ -119,6 +129,13 @@ async function loadExamMetadata(examId: string): Promise<ExamRecord> {
       asset: {
         select: {
           path: true,
+          storageKind: true,
+          logicalBucket: true,
+          mimeType: true,
+          originalName: true,
+          assetKey: true,
+          sizeBytes: true,
+          metadata: true,
         },
       },
     },
@@ -130,7 +147,16 @@ async function loadExamMetadata(examId: string): Promise<ExamRecord> {
 
   return {
     title: row.title,
-    assetPath: row.asset.path,
+    asset: {
+      path: row.asset.path,
+      storageKind: row.asset.storageKind,
+      logicalBucket: row.asset.logicalBucket,
+      mimeType: row.asset.mimeType ?? null,
+      originalName: row.asset.originalName ?? null,
+      assetKey: row.asset.assetKey ?? null,
+      sizeBytes: row.asset.sizeBytes ?? null,
+      metadata: row.asset.metadata ?? null,
+    },
   };
 }
 
@@ -162,16 +188,10 @@ async function main() {
     }
 
     const examMetadata = await loadExamMetadata(examId);
-    const examFilePath = examMetadata.assetPath;
-
-    try {
-      await fs.access(examFilePath);
-    } catch {
-      throw new Error(`Exam file not found: ${examFilePath}`);
-    }
-
-    const examBuffer = await fs.readFile(examFilePath);
-    const examMimeType = inferMimeType(examFilePath);
+    const examBuffer = await readStoredAssetBytes(examMetadata.asset);
+    const examMimeType =
+      examMetadata.asset.mimeType ||
+      inferMimeType(examMetadata.asset.originalName || examMetadata.asset.path);
     const examBase64 = examBuffer.toString('base64');
 
     const prompt = `You are analyzing a lecturer's exam document to identify all top-level questions.

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   PostgresAssignmentCourseNotFoundError,
   PostgresAssignmentNotFoundError,
+  isSupabaseObjectStorageEnabled,
 } from '@hg/postgres-store';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -141,9 +142,13 @@ export async function PATCH(
 
     if (contentType.includes('multipart/form-data')) {
       const dataDir = process.env.HG_DATA_DIR;
-      if (!dataDir) {
+      if (!dataDir && !isSupabaseObjectStorageEnabled()) {
         return NextResponse.json(
-          { ok: false, error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+          {
+            ok: false,
+            error: 'HG_DATA_DIR or Supabase object storage configuration is required',
+            code: 'ASSET_STORAGE_MISSING',
+          },
           { status: 500 }
         );
       }
@@ -179,7 +184,7 @@ export async function PATCH(
 
       const assignment = await persistence.assignments.updateAssignment({
         assignmentId: params.assignmentId,
-        dataDir: path.resolve(dataDir),
+        dataDir: dataDir ? path.resolve(dataDir) : undefined,
         ...(title !== undefined ? { title } : {}),
         ...(openAt !== undefined ? { openAt } : {}),
         ...(deadlineAt !== undefined ? { deadlineAt } : {}),

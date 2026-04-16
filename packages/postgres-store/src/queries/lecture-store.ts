@@ -1,8 +1,8 @@
-import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { Lecture } from '@hg/shared-schemas';
 import { LectureSchema } from '@hg/shared-schemas';
 import { LectureSourceType, StoredAssetStorageKind, type PrismaClient } from '@prisma/client';
+import { getRuntimeAssetStorage } from '../storage/runtime-asset-storage';
 import { toIsoString } from '../mappers/domain';
 import { getLectureAssetKey, getLectureMaterialDomainId } from '../mappers/import';
 import { assertValidSrt, assertValidVtt } from '../utils/transcript';
@@ -22,9 +22,6 @@ const SRT_CONTENT_TYPES = new Set(['application/x-subrip', 'text/srt']);
 
 const createLectureId = (): string =>
   `lecture-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-
-const toRelativeDataPath = (dataDir: string, filePath: string): string =>
-  path.relative(dataDir, filePath).split(path.sep).join('/');
 
 const toStoredSourceType = (
   sourceType: Lecture['sourceType']
@@ -234,7 +231,7 @@ export class PrismaLectureStore {
   }
 
   async createLecture(args: {
-    dataDir: string;
+    dataDir?: string;
     courseId: string;
     title: string;
     originalName: string;
@@ -263,36 +260,42 @@ export class PrismaLectureStore {
 
     const lectureId = createLectureId();
     const safeFileName = path.basename(args.originalName || `lecture-${lectureId}.txt`);
-    const absoluteAssetPath = path.resolve(
-      args.dataDir,
+    const relativeAssetPath = [
       'courses',
       course.domainId,
       'lectures',
       lectureId,
       'assets',
-      safeFileName
-    );
-    const relativeAssetPath = toRelativeDataPath(args.dataDir, absoluteAssetPath);
-
-    await fs.mkdir(path.dirname(absoluteAssetPath), { recursive: true });
-    const tempAssetPath = `${absoluteAssetPath}.tmp`;
-    await fs.writeFile(tempAssetPath, args.buffer);
-    await fs.rename(tempAssetPath, absoluteAssetPath);
+      safeFileName,
+    ].join('/');
+    const storage = getRuntimeAssetStorage({
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
+    const uploadedAsset = await storage.putObject({
+      assetKey: getLectureAssetKey(course.domainId, lectureId),
+      logicalBucket: 'course_lectures',
+      objectKey: relativeAssetPath,
+      bytes: args.buffer,
+      mimeType: args.contentType || null,
+      originalName: safeFileName,
+      metadata: {
+        relativeDataPath: relativeAssetPath,
+      },
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
 
     try {
       const row = await this.prisma.$transaction(async (tx: any) => {
         const storedAsset = await tx.storedAsset.create({
           data: {
             assetKey: getLectureAssetKey(course.domainId, lectureId),
-            storageKind: StoredAssetStorageKind.LOCAL_FILE,
-            logicalBucket: 'course_lectures',
-            path: absoluteAssetPath,
-            mimeType: args.contentType || undefined,
-            sizeBytes: args.buffer.byteLength,
+            storageKind: uploadedAsset.storageKind as StoredAssetStorageKind,
+            logicalBucket: uploadedAsset.logicalBucket,
+            path: uploadedAsset.path,
+            mimeType: uploadedAsset.mimeType || undefined,
+            sizeBytes: uploadedAsset.sizeBytes ?? undefined,
             originalName: safeFileName,
-            metadata: {
-              relativeDataPath: relativeAssetPath,
-            },
+            metadata: uploadedAsset.metadata as never,
           },
           select: {
             id: true,
@@ -342,10 +345,10 @@ export class PrismaLectureStore {
 
       return {
         lecture: mapLectureRow(row),
-        absoluteAssetPath,
+        absoluteAssetPath: uploadedAsset.path,
       };
     } catch (error) {
-      await fs.rm(absoluteAssetPath, { force: true });
+      await storage.deleteObject(uploadedAsset);
       throw error;
     }
   }

@@ -187,7 +187,13 @@ const getSubmissionWithReview = async (prisma: ReviewStorePrisma, jobId: string)
           asset: {
             select: {
               path: true,
+              storageKind: true,
+              logicalBucket: true,
               mimeType: true,
+              originalName: true,
+              assetKey: true,
+              sizeBytes: true,
+              metadata: true,
             },
           },
         },
@@ -347,7 +353,13 @@ export class PrismaLegacyReviewRecordStore {
     const submissionAsset = submission.material?.asset
       ? ({
           path: submission.material.asset.path,
+          storageKind: submission.material.asset.storageKind,
+          logicalBucket: submission.material.asset.logicalBucket,
           mimeType: submission.material.asset.mimeType ?? null,
+          originalName: submission.material.asset.originalName ?? null,
+          assetKey: submission.material.asset.assetKey ?? null,
+          sizeBytes: submission.material.asset.sizeBytes ?? null,
+          metadata: submission.material.asset.metadata ?? null,
         } satisfies LegacySubmissionAssetRecord)
       : null;
 
@@ -381,7 +393,13 @@ export class PrismaLegacyReviewRecordStore {
             asset: {
               select: {
                 path: true,
+                storageKind: true,
+                logicalBucket: true,
                 mimeType: true,
+                originalName: true,
+                assetKey: true,
+                sizeBytes: true,
+                metadata: true,
               },
             },
           },
@@ -395,7 +413,13 @@ export class PrismaLegacyReviewRecordStore {
 
     return {
       path: submission.material.asset.path,
+      storageKind: submission.material.asset.storageKind,
+      logicalBucket: submission.material.asset.logicalBucket,
       mimeType: submission.material.asset.mimeType ?? null,
+      originalName: submission.material.asset.originalName ?? null,
+      assetKey: submission.material.asset.assetKey ?? null,
+      sizeBytes: submission.material.asset.sizeBytes ?? null,
+      metadata: submission.material.asset.metadata ?? null,
     };
   }
 

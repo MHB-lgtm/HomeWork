@@ -1,7 +1,7 @@
-import * as fs from 'fs/promises';
 import * as path from 'path';
 import type { PrismaClient } from '@prisma/client';
 import { StoredAssetStorageKind } from '@prisma/client';
+import { getRuntimeAssetStorage } from '../storage/runtime-asset-storage';
 import { toIsoString } from '../mappers/domain';
 import type { LegacyExamRecord } from '../types';
 
@@ -20,14 +20,13 @@ const toBucketRelativePath = (logicalBucket: string, filePath: string): string =
 const createExamId = (): string =>
   `exam-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-const createAssetPath = (dataDir: string, examId: string, originalName: string) => {
+const createAssetPath = (examId: string, originalName: string) => {
   const ext = path.extname(originalName);
   const baseName = path.basename(originalName, ext) || 'exam';
   const uniqueName = `${baseName}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}${ext}`;
-  const relativePath = path.join('exams', examId, 'assets', uniqueName);
+  const relativePath = ['exams', examId, 'assets', uniqueName].join('/');
   return {
     relativePath,
-    absolutePath: path.resolve(dataDir, relativePath),
     fileName: uniqueName,
   };
 };
@@ -102,31 +101,42 @@ export class PrismaExamStore {
   }
 
   async createExam(args: {
-    dataDir: string;
+    dataDir?: string;
     title: string;
     originalName: string;
     buffer: Buffer;
     mimeType?: string;
   }): Promise<{ exam: LegacyExamRecord; assetPath: string }> {
     const examId = createExamId();
-    const asset = createAssetPath(args.dataDir, examId, args.originalName);
-
-    await fs.mkdir(path.dirname(asset.absolutePath), { recursive: true });
-    const tempAssetPath = `${asset.absolutePath}.tmp`;
-    await fs.writeFile(tempAssetPath, args.buffer);
-    await fs.rename(tempAssetPath, asset.absolutePath);
+    const asset = createAssetPath(examId, args.originalName);
+    const storage = getRuntimeAssetStorage({
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
+    const uploadedAsset = await storage.putObject({
+      assetKey: `exam-asset:${examId}`,
+      logicalBucket: 'exams',
+      objectKey: asset.relativePath,
+      bytes: args.buffer,
+      mimeType: args.mimeType ?? null,
+      originalName: path.basename(args.originalName),
+      metadata: {
+        relativeDataPath: asset.relativePath,
+      },
+      dataDir: args.dataDir ? path.resolve(args.dataDir) : undefined,
+    });
 
     try {
       const created = await this.prisma.$transaction(async (tx: any) => {
         const storedAsset = await tx.storedAsset.create({
           data: {
             assetKey: `exam-asset:${examId}`,
-            storageKind: StoredAssetStorageKind.LOCAL_FILE,
-            logicalBucket: 'exams',
-            path: asset.absolutePath,
-            mimeType: args.mimeType || undefined,
-            sizeBytes: args.buffer.byteLength,
+            storageKind: uploadedAsset.storageKind as StoredAssetStorageKind,
+            logicalBucket: uploadedAsset.logicalBucket,
+            path: uploadedAsset.path,
+            mimeType: uploadedAsset.mimeType || undefined,
+            sizeBytes: uploadedAsset.sizeBytes ?? undefined,
             originalName: path.basename(args.originalName),
+            metadata: uploadedAsset.metadata as never,
           },
           select: {
             id: true,
@@ -154,10 +164,10 @@ export class PrismaExamStore {
 
       return {
         exam: mapExamRow(created),
-        assetPath: asset.absolutePath,
+        assetPath: uploadedAsset.path,
       };
     } catch (error) {
-      await fs.rm(asset.absolutePath, { force: true });
+      await storage.deleteObject(uploadedAsset);
       throw error;
     }
   }

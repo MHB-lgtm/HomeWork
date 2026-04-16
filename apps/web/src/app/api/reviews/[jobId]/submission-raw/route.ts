@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as fs from 'fs/promises';
 import * as path from 'path';
+import { readStoredAssetBytes } from '@hg/postgres-store';
 import { resolveReviewSubmissionAsset } from '@/lib/server/reviewDetail';
 import { requireStaffApiAccess } from '@/lib/server/session';
 
@@ -55,7 +55,7 @@ export async function GET(
 
     let mimeType: string;
     try {
-      mimeType = asset.mimeType || inferMimeType(asset.path);
+      mimeType = asset.mimeType || inferMimeType(asset.originalName || asset.path);
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : 'Unsupported file type' },
@@ -63,18 +63,7 @@ export async function GET(
       );
     }
 
-    let fileBuffer: Buffer;
-    try {
-      fileBuffer = await fs.readFile(asset.path);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return NextResponse.json(
-          { error: 'Submission file not found' },
-          { status: 404 }
-        );
-      }
-      throw error;
-    }
+    const fileBuffer = await readStoredAssetBytes(asset);
 
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {

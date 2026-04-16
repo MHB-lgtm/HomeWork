@@ -1,4 +1,3 @@
-import * as fs from 'fs/promises';
 import type {
   LegacyReviewContextRecord,
   LegacyReviewPublicationRecord,
@@ -92,20 +91,6 @@ const mergeContext = (
   };
 };
 
-const fileExists = async (filePath: string): Promise<boolean> => {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      return false;
-    }
-
-    throw error;
-  }
-};
-
 export const getResolvedReviewDetail = async (
   jobId: string
 ): Promise<ResolvedReviewDetail | null> => {
@@ -144,7 +129,7 @@ export const resolveReviewSubmissionAsset = async (
   }
 
   const runtimeAsset = await persistence.jobs.getJobSubmissionAsset(jobId);
-  if (runtimeAsset && (await fileExists(runtimeAsset.path))) {
+  if (runtimeAsset) {
     return {
       ...runtimeAsset,
       source: 'postgres',
@@ -152,7 +137,7 @@ export const resolveReviewSubmissionAsset = async (
   }
 
   const dbAsset = await persistence.reviewRecords.getSubmissionAssetByLegacyJobId(jobId);
-  if (dbAsset && (await fileExists(dbAsset.path))) {
+  if (dbAsset) {
     return {
       ...dbAsset,
       source: 'postgres',

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PostgresAssignmentCourseNotFoundError } from '@hg/postgres-store';
+import {
+  PostgresAssignmentCourseNotFoundError,
+  isSupabaseObjectStorageEnabled,
+} from '@hg/postgres-store';
 import * as path from 'path';
 import * as fs from 'fs';
 import { spawn } from 'child_process';
@@ -167,9 +170,13 @@ export async function POST(
 
   try {
     const dataDir = process.env.HG_DATA_DIR;
-    if (!dataDir) {
+    if (!dataDir && !isSupabaseObjectStorageEnabled()) {
       return NextResponse.json(
-        { ok: false, error: 'HG_DATA_DIR is not set in environment', code: 'HG_DATA_DIR_MISSING' },
+        {
+          ok: false,
+          error: 'HG_DATA_DIR or Supabase object storage configuration is required',
+          code: 'ASSET_STORAGE_MISSING',
+        },
         { status: 500 }
       );
     }
@@ -200,7 +207,7 @@ export async function POST(
     }
 
     const assignment = await persistence.assignments.createAssignment({
-      dataDir: path.resolve(dataDir),
+      dataDir: dataDir ? path.resolve(dataDir) : undefined,
       courseId: params.courseId,
       title,
       openAt,
