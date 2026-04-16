@@ -1,5 +1,6 @@
 'use client';
 
+import { createContext, useContext } from 'react';
 import { SessionProvider } from 'next-auth/react';
 import type { Session } from 'next-auth';
 
@@ -9,10 +10,16 @@ type AuthSessionProviderProps = {
   session: Session | null;
 };
 
-export function AuthSessionProvider({ children, enabled, session }: AuthSessionProviderProps) {
-  if (!enabled) {
-    return <>{children}</>;
-  }
+const AuthRuntimeContext = createContext({ enabled: false });
 
-  return <SessionProvider session={session}>{children}</SessionProvider>;
+export function AuthSessionProvider({ children, enabled, session }: AuthSessionProviderProps) {
+  return (
+    <AuthRuntimeContext.Provider value={{ enabled }}>
+      <SessionProvider session={enabled ? session : null}>{children}</SessionProvider>
+    </AuthRuntimeContext.Provider>
+  );
+}
+
+export function useAuthRuntime() {
+  return useContext(AuthRuntimeContext);
 }

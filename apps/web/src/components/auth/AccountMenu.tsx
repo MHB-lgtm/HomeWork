@@ -3,12 +3,22 @@
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import { Button } from '../ui/button';
+import { useAuthRuntime } from './AuthSessionProvider';
 
 type AccountMenuProps = {
   compact?: boolean;
 };
 
 export function AccountMenu({ compact = false }: AccountMenuProps) {
+  const { enabled } = useAuthRuntime();
+  if (!enabled) {
+    return null;
+  }
+
+  return <AuthenticatedAccountMenu compact={compact} />;
+}
+
+function AuthenticatedAccountMenu({ compact = false }: AccountMenuProps) {
   const { data: session, status } = useSession();
 
   if (status !== 'authenticated' || !session?.user) {

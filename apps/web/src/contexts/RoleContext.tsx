@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 
 export type UserRole = 'student' | 'lecturer';
 
@@ -22,7 +22,11 @@ function getStoredRole(): UserRole | null {
 }
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRoleState] = useState<UserRole | null>(() => getStoredRole());
+  const [role, setRoleState] = useState<UserRole | null>(null);
+
+  useEffect(() => {
+    setRoleState(getStoredRole());
+  }, []);
 
   const setRole = useCallback((r: UserRole) => {
     setRoleState(r);
