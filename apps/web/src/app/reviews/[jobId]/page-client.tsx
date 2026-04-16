@@ -514,7 +514,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-9rem)] flex-col overflow-hidden text-slate-900">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden text-slate-900">
       {/* Header - Fixed height */}
       <div className="shrink-0 border-b border-slate-200/80 bg-white/90 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-white/80 md:p-8">
         <div className="max-w-[1600px] mx-auto">
@@ -589,13 +589,13 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       </div>
 
       {/* Main Content - Takes remaining height */}
-      <div className="flex-1 overflow-hidden p-4 md:p-8">
-        <div className="max-w-[1600px] mx-auto h-full">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+      <div className="flex min-h-0 flex-1 overflow-hidden p-4 md:p-8">
+        <div className="mx-auto h-full min-h-0 max-w-[1600px]">
+          <div className="grid h-full min-h-0 grid-cols-1 gap-6 lg:grid-cols-3">
           {/* PDF/Image Area - Left Column with own scrollbar */}
-          <div className="lg:col-span-2 h-full flex flex-col overflow-hidden">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden lg:col-span-2">
             {/* Panel Chrome: PDF Viewer */}
-            <div className="h-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
               {/* Panel Header */}
               <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
                 <h2 className="text-sm font-semibold text-slate-900">
@@ -688,9 +688,9 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
           </div>
 
           {/* Sidebar - Right Column with own scrollbar */}
-          <div className="h-full flex flex-col items-start overflow-hidden">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
             {resultMode === 'GENERAL' ? (
-              <div className="h-[85%] w-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
+              <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
                 {/* Panel Header */}
                 <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
                   <div className="flex items-center justify-between gap-3">
@@ -874,7 +874,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                 </div>
               </div>
             ) : (
-              <div className="h-[85%] w-full flex flex-col rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm overflow-hidden">
+              <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur-sm">
                 {/* Panel Header */}
                 <div className="shrink-0 border-b border-blue-100/80 px-4 py-3 bg-gradient-to-r from-blue-50/80 to-indigo-50/60 review-header-padding">
                   <h2 className="text-sm font-semibold text-slate-900">Annotations</h2>

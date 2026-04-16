@@ -51,7 +51,7 @@ export function WorkspaceShell({ role, children }: WorkspaceShellProps) {
         Skip to content
       </a>
 
-      <div className="min-h-screen lg:flex">
+      <div className="min-h-screen lg:flex lg:h-screen lg:overflow-hidden">
         <aside className="hidden border-r border-slate-200/80 bg-white/85 backdrop-blur lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-72 lg:flex-col">
           <div className="flex h-16 items-center border-b border-slate-200/80 px-5">
             <Link href={role === 'student' ? '/assignments' : '/'} className="space-y-1">
@@ -83,7 +83,7 @@ export function WorkspaceShell({ role, children }: WorkspaceShellProps) {
           </nav>
         </aside>
 
-        <div className="min-w-0 flex flex-1 flex-col">
+        <div className="min-w-0 flex flex-1 flex-col lg:h-screen lg:overflow-hidden">
           <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
             <div className="flex h-16 items-center justify-between gap-3 px-4 md:px-6">
               <div className="flex items-center gap-3">
@@ -112,8 +112,10 @@ export function WorkspaceShell({ role, children }: WorkspaceShellProps) {
             </div>
           </header>
 
-          <main id="app-content" className="min-h-0 flex-1">
-            <div className="flex h-full w-full flex-col px-4 py-6 md:px-6 md:py-8">{children}</div>
+          <main id="app-content" className="min-h-0 flex-1 overflow-hidden">
+            <div className="flex h-full min-h-0 w-full flex-col overflow-auto px-4 py-6 md:px-6 md:py-8">
+              {children}
+            </div>
           </main>
         </div>
       </div>
