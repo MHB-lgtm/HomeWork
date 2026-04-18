@@ -27,6 +27,7 @@ import { StudyPointersPanel } from '../../../components/review/StudyPointersPane
 const MAX_RIGHT_PANEL_TITLE_CHARS = 90;
 const MAX_RIGHT_PANEL_TEXT_CHARS = 180;
 const MAX_RIGHT_PANEL_SUGGESTION_CHARS = 140;
+const HEBREW_CHAR_RE = /[\u0590-\u05FF]/;
 
 function toShortText(value: string, maxChars: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
@@ -34,6 +35,15 @@ function toShortText(value: string, maxChars: number): string {
     return normalized;
   }
   return `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}...`;
+}
+
+function getBidiTextProps(value?: string | null) {
+  const hasHebrew = typeof value === 'string' && HEBREW_CHAR_RE.test(value);
+  return {
+    dir: hasHebrew ? ('rtl' as const) : ('ltr' as const),
+    className: hasHebrew ? 'text-right' : undefined,
+    style: { unicodeBidi: 'plaintext' as const },
+  };
 }
 
 export default function ReviewPage({ params }: { params: Promise<{ jobId: string }> }) {
@@ -55,6 +65,7 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   const [error, setError] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [desktopNavToggleNonce, setDesktopNavToggleNonce] = useState(0);
   const programmaticScrollRef = useRef<{ lockUntilMs: number; targetPageIndex: number | null }>({
     lockUntilMs: 0,
     targetPageIndex: null,
@@ -114,6 +125,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const toggleDesktopNav = () => {
+    window.dispatchEvent(new CustomEvent('workspace:toggle-desktop-nav'));
+    setDesktopNavToggleNonce((value) => value + 1);
+  };
 
   // Get evaluation based on mode
   const resultMode = resultJson?.mode;
@@ -250,6 +266,17 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
       }, 1200);
     } catch {
       setCopiedTechnicalValue(null);
+    }
+  };
+
+  const getSeverityBadgeClassName = (severity: 'critical' | 'major' | 'minor') => {
+    switch (severity) {
+      case 'critical':
+        return 'bg-red-100 text-red-700';
+      case 'major':
+        return 'bg-amber-100 text-amber-700';
+      case 'minor':
+        return undefined;
     }
   };
 
@@ -516,20 +543,33 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden text-slate-900">
       {/* Header - Fixed height */}
-      <div className="shrink-0 border-b border-slate-200/80 bg-white/90 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.08)] backdrop-blur-md supports-[backdrop-filter]:bg-white/80 md:p-8">
+      <div className="shrink-0 border-b border-sky-100/80 bg-gradient-to-r from-sky-50/70 via-white/92 to-blue-50/65 p-4 shadow-[0_12px_30px_rgba(15,23,42,0.06)] backdrop-blur-md supports-[backdrop-filter]:bg-[linear-gradient(90deg,rgba(240,249,255,0.88),rgba(255,255,255,0.92),rgba(239,246,255,0.86))] md:p-8">
         <div className="max-w-[1600px] mx-auto">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="space-y-1">
-              <Link
-                href="/reviews"
-                className="inline-flex items-center text-sm text-slate-600 hover:text-blue-700 transition-colors"
-              >
-                Back to Reviews
-              </Link>
-              <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{reviewTitle}</h1>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {displayStatus ? <StatusBadge status={displayStatus} /> : null}
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={toggleDesktopNav}
+                  className="hidden h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 lg:flex"
+                  aria-label="Toggle navigation"
+                  aria-controls="workspace-desktop-nav"
+                  aria-expanded={desktopNavToggleNonce % 2 === 1}
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M3 4h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    <path d="M3 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                </button>
+                <Link
+                  href="/reviews"
+                  className="inline-flex items-center text-sm text-slate-600 hover:text-blue-700 transition-colors"
+                >
+                  Back to Reviews
+                </Link>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
               {publication?.isPublished ? (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
@@ -541,43 +581,25 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       : 'Published'}
                   </p>
                   {publication.summary ? (
-                    <p className="mt-1 max-w-[240px] text-xs text-emerald-800">
+                    <p
+                      className={cn('mt-1 max-w-[240px] text-xs text-emerald-800', getBidiTextProps(publication.summary).className)}
+                      dir={getBidiTextProps(publication.summary).dir}
+                      style={getBidiTextProps(publication.summary).style}
+                    >
                       {toShortText(publication.summary, 120)}
                     </p>
                   ) : null}
                 </div>
               ) : null}
-              {reviewSource === 'postgres' ? (
-                <Button
-                  onClick={handlePublish}
-                  disabled={isPublishing}
-                  className="min-w-[110px]"
-                >
-                  {isPublishing ? 'Publishing...' : publication?.isPublished ? 'Republish' : 'Publish'}
-                </Button>
-              ) : null}
-              <details className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                <summary className="cursor-pointer font-medium text-slate-700">Technical details</summary>
-                <div className="mt-2 space-y-1 min-w-[240px]">
-                  {jobId && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono">Job ID: {jobId}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => copyTechnicalValue(jobId)}
-                      >
-                        {copiedTechnicalValue === jobId ? 'Copied' : 'Copy'}
-                      </Button>
-                    </div>
-                  )}
-                  {jobStatus ? <p className="font-mono">Raw status: {jobStatus}</p> : null}
-                  {submissionMimeType ? <p className="font-mono">Submission: {submissionMimeType}</p> : null}
-                  {resultMode ? <p className="font-mono">Mode: {resultMode}</p> : null}
-                </div>
-              </details>
             </div>
+            </div>
+            <h1
+              className={cn('w-full text-2xl font-bold tracking-tight text-slate-900', getBidiTextProps(reviewTitle).className)}
+              dir={getBidiTextProps(reviewTitle).dir}
+              style={getBidiTextProps(reviewTitle).style}
+            >
+              {reviewTitle}
+            </h1>
           </div>
           {publishError ? (
             <Alert variant="destructive" className="mt-4">
@@ -719,7 +741,13 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                       {generalEvaluation && 'overallSummary' in generalEvaluation && generalEvaluation.overallSummary && (
                         <Alert variant="default" className="mb-6">
                           <AlertTitle className="text-slate-900">Overall Summary</AlertTitle>
-                          <AlertDescription className="text-slate-700">{generalEvaluation.overallSummary}</AlertDescription>
+                          <AlertDescription
+                            className={cn('text-slate-700', getBidiTextProps(generalEvaluation.overallSummary).className)}
+                            dir={getBidiTextProps(generalEvaluation.overallSummary).dir}
+                            style={getBidiTextProps(generalEvaluation.overallSummary).style}
+                          >
+                            {generalEvaluation.overallSummary}
+                          </AlertDescription>
                         </Alert>
                       )}
                       
@@ -738,7 +766,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             <div className="mb-4 pb-3 border-b border-slate-200/70">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1">
-                                  <h3 className="font-bold text-base text-slate-900 mb-1">
+                                  <h3
+                                    className={cn('font-bold text-base text-slate-900 mb-1', getBidiTextProps(questionTitle).className)}
+                                    dir={getBidiTextProps(questionTitle).dir}
+                                    style={getBidiTextProps(questionTitle).style}
+                                  >
                                     {questionTitle}
                                   </h3>
                                   {qEval.pageIndices && (
@@ -757,7 +789,13 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             {qEval.overallSummary && (
                               <div className="mb-4 p-3 bg-blue-50/70 border border-blue-100 rounded-lg">
                                 <p className="text-xs font-semibold text-blue-900 mb-1">Summary</p>
-                                <p className="text-sm text-slate-700">{qEval.overallSummary}</p>
+                                <p
+                                  className={cn('text-sm text-slate-700', getBidiTextProps(qEval.overallSummary).className)}
+                                  dir={getBidiTextProps(qEval.overallSummary).dir}
+                                  style={getBidiTextProps(qEval.overallSummary).style}
+                                >
+                                  {qEval.overallSummary}
+                                </p>
                               </div>
                             )}
 
@@ -795,17 +833,24 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                     )}
                                   >
                                     <div className="flex items-start justify-between gap-2 mb-1">
-                                      <div className="font-semibold text-sm flex-1">
+                                      <div
+                                        className={cn('font-semibold text-sm flex-1', getBidiTextProps(finding.title).className)}
+                                        dir={getBidiTextProps(finding.title).dir}
+                                        style={getBidiTextProps(finding.title).style}
+                                      >
                                         {toShortText(finding.title, MAX_RIGHT_PANEL_TITLE_CHARS)}
                                       </div>
                                       <div className="flex gap-1 shrink-0">
                                         {isStrength ? (
-                                          <Badge variant="default" className="text-xs bg-green-500">
+                                          <Badge variant="default" className="text-xs bg-emerald-100 text-emerald-700">
                                             Strength
                                           </Badge>
                         ) : (
                           finding.severity && (
-                            <Badge variant={getSeverityVariant(finding.severity)} className="text-xs">
+                            <Badge
+                              variant={getSeverityVariant(finding.severity)}
+                              className={cn('text-xs', getSeverityBadgeClassName(finding.severity))}
+                            >
                               {finding.severity}
                             </Badge>
                           )
@@ -827,13 +872,21 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                                         </Badge>
                                       )}
                                     </div>
-                                    <div className="text-sm text-slate-700 mb-2">
+                                    <div
+                                      className={cn('text-sm text-slate-700 mb-2', getBidiTextProps(finding.description).className)}
+                                      dir={getBidiTextProps(finding.description).dir}
+                                      style={getBidiTextProps(finding.description).style}
+                                    >
                                       {toShortText(finding.description, MAX_RIGHT_PANEL_TEXT_CHARS)}
                                     </div>
                                     {finding.suggestion && (
                                       <div className="mt-2 pt-2 border-t border-slate-200">
                                         <div className="text-xs font-medium text-slate-700 mb-1">Suggestion:</div>
-                                        <div className="text-sm text-slate-600">
+                                        <div
+                                          className={cn('text-sm text-slate-600', getBidiTextProps(finding.suggestion).className)}
+                                          dir={getBidiTextProps(finding.suggestion).dir}
+                                          style={getBidiTextProps(finding.suggestion).style}
+                                        >
                                           {toShortText(finding.suggestion, MAX_RIGHT_PANEL_SUGGESTION_CHARS)}
                                         </div>
                                       </div>
@@ -946,7 +999,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             )}
                           >
                             <div className="flex items-start justify-between gap-2 mb-1">
-                              <div className="font-semibold text-sm flex-1">
+                              <div
+                                className={cn('font-semibold text-sm flex-1', getBidiTextProps(ann.label || getCriterionLabel(ann.criterionId)).className)}
+                                dir={getBidiTextProps(ann.label || getCriterionLabel(ann.criterionId)).dir}
+                                style={getBidiTextProps(ann.label || getCriterionLabel(ann.criterionId)).style}
+                              >
                                 {toShortText(ann.label || getCriterionLabel(ann.criterionId), MAX_RIGHT_PANEL_TITLE_CHARS)}
                               </div>
                               {ann.confidence !== undefined && (
@@ -976,7 +1033,11 @@ export default function ReviewPage({ params }: { params: Promise<{ jobId: string
                             {isSelected && ann.comment && (
                               <div className="mt-3 pt-3 border-t border-slate-200">
                                 <div className="text-xs font-medium text-slate-700 mb-1">Comment:</div>
-                                <div className="text-sm text-slate-600">
+                                <div
+                                  className={cn('text-sm text-slate-600', getBidiTextProps(ann.comment).className)}
+                                  dir={getBidiTextProps(ann.comment).dir}
+                                  style={getBidiTextProps(ann.comment).style}
+                                >
                                   {toShortText(ann.comment, MAX_RIGHT_PANEL_TEXT_CHARS)}
                                 </div>
                               </div>

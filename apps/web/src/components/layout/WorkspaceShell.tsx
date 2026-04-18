@@ -15,11 +15,25 @@ type WorkspaceShellProps = {
 export function WorkspaceShell({ role, children }: WorkspaceShellProps) {
   const pathname = usePathname() || (role === 'student' ? '/assignments' : '/');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isDesktopNavOpen, setIsDesktopNavOpen] = useState(false);
   const navItems = workspaceNavItems[role];
+  const homeHref = role === 'student' ? '/assignments' : '/';
+  const hideTopHeader = role === 'staff' && /^\/reviews\/[^/]+$/.test(pathname);
 
   useEffect(() => {
     setIsMobileNavOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const onToggleDesktopNav = () => {
+      setIsDesktopNavOpen((prev) => !prev);
+    };
+
+    window.addEventListener('workspace:toggle-desktop-nav', onToggleDesktopNav as EventListener);
+    return () => {
+      window.removeEventListener('workspace:toggle-desktop-nav', onToggleDesktopNav as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isMobileNavOpen) {
@@ -52,16 +66,52 @@ export function WorkspaceShell({ role, children }: WorkspaceShellProps) {
       </a>
 
       <div className="min-h-screen lg:flex lg:h-screen lg:overflow-hidden">
-        <aside className="hidden border-r border-slate-200/80 bg-white/85 backdrop-blur lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-72 lg:flex-col">
-          <div className="flex h-16 items-center border-b border-slate-200/80 px-5">
-            <Link href={role === 'student' ? '/assignments' : '/'} className="space-y-1">
-              <p className="font-heading text-sm font-semibold tracking-[0.14em] text-slate-700 uppercase">
-                Homework Grader
-              </p>
-              <p className="text-xs text-slate-500">{workspaceRoleLabel[role]}</p>
+        <aside
+          id="workspace-desktop-nav"
+          className={cn(
+            'hidden overflow-hidden bg-white/78 backdrop-blur transition-[width,border-color] duration-200 ease-out lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col',
+            isDesktopNavOpen ? 'lg:w-60 lg:border-r lg:border-slate-200/70' : 'lg:w-0 lg:border-r-0'
+          )}
+        >
+          <div
+            className={cn(
+              'flex h-16 items-center border-b border-slate-200/70 transition-[padding] duration-200 ease-out',
+              isDesktopNavOpen ? 'justify-between px-4' : 'justify-center px-3'
+            )}
+          >
+            <button
+              type="button"
+              onClick={() => setIsDesktopNavOpen((prev) => !prev)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+              aria-label={isDesktopNavOpen ? 'Collapse navigation' : 'Expand navigation'}
+              aria-expanded={isDesktopNavOpen}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 4h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <path d="M3 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+            <Link
+              href={homeHref}
+              className={cn(
+                'min-w-0 items-center gap-3',
+                isDesktopNavOpen ? 'flex' : 'hidden'
+              )}
+              title="Homework Grader"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-300 text-[10px] font-semibold tracking-[0.18em] text-slate-700">
+                HG
+              </div>
+              <div className="min-w-0 overflow-hidden">
+                <p className="truncate font-heading text-sm font-semibold tracking-[0.14em] text-slate-700 uppercase">
+                  Homework Grader
+                </p>
+                <p className="truncate text-xs text-slate-500">{workspaceRoleLabel[role]}</p>
+              </div>
             </Link>
           </div>
-          <nav className="flex-1 space-y-1 p-3" aria-label={`${workspaceRoleLabel[role]} navigation`}>
+          <nav className="flex-1 space-y-1 px-2 py-3" aria-label={`${workspaceRoleLabel[role]} navigation`}>
             {navItems.map((item) => {
               const isActive = item.matches(pathname);
               return (
@@ -69,14 +119,25 @@ export function WorkspaceShell({ role, children }: WorkspaceShellProps) {
                   key={item.href}
                   href={item.href}
                   aria-current={isActive ? 'page' : undefined}
+                  title={item.label}
                   className={cn(
-                    'block rounded-2xl px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
+                    'flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
                     isActive
-                      ? 'bg-blue-600 text-white shadow-[0_8px_25px_rgba(37,99,235,0.25)]'
+                      ? 'bg-slate-900 text-white'
                       : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                   )}
                 >
-                  {item.label}
+                  <span className="flex w-4 shrink-0 items-center justify-center text-[10px] font-semibold uppercase tracking-[0.18em] text-current">
+                    {item.label.charAt(0)}
+                  </span>
+                  <span
+                    className={cn(
+                      'min-w-0 overflow-hidden whitespace-nowrap transition-opacity duration-150 ease-out',
+                      isDesktopNavOpen ? 'opacity-100' : 'opacity-0'
+                    )}
+                  >
+                    {item.label}
+                  </span>
                 </Link>
               );
             })}
@@ -84,37 +145,54 @@ export function WorkspaceShell({ role, children }: WorkspaceShellProps) {
         </aside>
 
         <div className="min-w-0 flex flex-1 flex-col lg:h-screen lg:overflow-hidden">
-          <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
-            <div className="flex h-16 items-center justify-between gap-3 px-4 md:px-6">
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsMobileNavOpen(true)}
-                  className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 lg:hidden"
-                  aria-label="Open navigation menu"
-                  aria-expanded={isMobileNavOpen}
-                  aria-controls="mobile-nav-drawer"
-                >
-                  Menu
-                </button>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
-                    Homework Grader
-                  </p>
-                  <p className="font-heading text-lg font-semibold tracking-tight text-slate-900">
-                    {workspaceRoleLabel[role]}
-                  </p>
-                </div>
-              </div>
-              <div className="shrink-0">
-                <AccountMenu compact />
-              </div>
-            </div>
-          </header>
+          <main id="app-content" className={cn('min-h-0 flex-1', hideTopHeader ? 'overflow-hidden' : 'overflow-auto')}>
+            <div className={cn('flex flex-col', hideTopHeader ? 'h-full min-h-0' : 'min-h-full')}>
+              {hideTopHeader ? null : (
+                <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+                  <div className="flex h-16 items-center justify-between gap-3 px-4 md:px-6">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsDesktopNavOpen((prev) => !prev)}
+                        className="hidden h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 lg:flex"
+                        aria-label={isDesktopNavOpen ? 'Collapse navigation' : 'Expand navigation'}
+                        aria-expanded={isDesktopNavOpen}
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <path d="M3 4h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                          <path d="M3 8h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                          <path d="M3 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsMobileNavOpen(true)}
+                        className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 lg:hidden"
+                        aria-label="Open navigation menu"
+                        aria-expanded={isMobileNavOpen}
+                        aria-controls="mobile-nav-drawer"
+                      >
+                        Menu
+                      </button>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+                          Homework Grader
+                        </p>
+                        <p className="font-heading text-lg font-semibold tracking-tight text-slate-900">
+                          {workspaceRoleLabel[role]}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="shrink-0">
+                      <AccountMenu compact />
+                    </div>
+                  </div>
+                </header>
+              )}
 
-          <main id="app-content" className="min-h-0 flex-1 overflow-hidden">
-            <div className="flex h-full min-h-0 w-full flex-col overflow-auto px-4 py-6 md:px-6 md:py-8">
-              {children}
+              <div className="flex min-h-0 flex-1 flex-col px-4 py-6 md:px-6 md:py-8">
+                {children}
+              </div>
             </div>
           </main>
         </div>

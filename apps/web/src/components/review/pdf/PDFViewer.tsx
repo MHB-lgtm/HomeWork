@@ -43,7 +43,7 @@ export function PDFViewer({
 }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageDimensions, setPageDimensions] = useState<Map<number, { width: number; height: number }>>(new Map());
-  const [scale, setScale] = useState(1.0);
+  const [scale, setScale] = useState(1.1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pdfFile, setPdfFile] = useState<string | null>(null);
@@ -377,7 +377,7 @@ export function PDFViewer({
           </div>
         }
       >
-        <div className="space-y-6">
+        <div className="flex flex-col items-center gap-6">
           {Array.from({ length: numPages }, (_, index) => {
             const pageNumber = index + 1;
             const pageAnnotations = groupedAnnotations.get(index) || [];
