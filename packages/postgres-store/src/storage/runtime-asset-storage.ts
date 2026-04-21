@@ -1,5 +1,6 @@
 /// <reference lib="dom" />
 
+import { createHash } from 'crypto';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -137,6 +138,77 @@ const normalizeStoredAsset = (
   metadata: asset.metadata ?? null,
 });
 
+const inferMimeType = (...names: Array<string | null | undefined>): string | null => {
+  const name = names.find((candidate) => candidate && path.extname(candidate));
+  const ext = name ? path.extname(name).toLowerCase() : '';
+  switch (ext) {
+    case '.pdf':
+      return 'application/pdf';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.webp':
+      return 'image/webp';
+    case '.json':
+      return 'application/json';
+    case '.txt':
+      return 'text/plain';
+    default:
+      return null;
+  }
+};
+
+const normalizeMimeType = (
+  mimeType: string | null | undefined,
+  objectKey: string,
+  originalName?: string | null
+): string => {
+  const trimmed = mimeType?.trim();
+  if (trimmed && /^[^\s/]+\/[^\s;]+(?:; ?[^\s=]+=[^\s;]+)*$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return inferMimeType(originalName, objectKey) ?? 'application/octet-stream';
+};
+
+const sanitizeObjectKeySegment = (segment: string): string => {
+  const ext = path.posix.extname(segment);
+  const baseName = ext ? segment.slice(0, -ext.length) : segment;
+  const safeBase =
+    baseName
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Za-z0-9._-]+/g, '_')
+      .replace(/^_+|_+$/g, '') || 'asset';
+  const safeExt = ext.replace(/[^A-Za-z0-9.]/g, '');
+  const safeSegment = `${safeBase}${safeExt}`;
+  if (safeSegment === segment) {
+    return segment;
+  }
+
+  const hash = createHash('sha1').update(segment).digest('hex').slice(0, 8);
+  return `${safeBase}-${hash}${safeExt}`;
+};
+
+const normalizeObjectStorageKey = (objectKey: string): string =>
+  objectKey
+    .split(/[\\/]+/)
+    .filter(Boolean)
+    .map(sanitizeObjectKeySegment)
+    .join('/');
+
+const normalizeObjectMetadata = (
+  metadata: unknown,
+  objectKey: string
+): unknown => ({
+  ...(metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata
+    : {}),
+  relativeDataPath: objectKey,
+});
+
 const createObjectStorageBackend = (
   env: RuntimeAssetStorageEnv
 ): RuntimeAssetStorage => ({
@@ -148,16 +220,23 @@ const createObjectStorageBackend = (
     }
 
     const client = getSupabaseStorageClient(env);
+    const objectKey = normalizeObjectStorageKey(args.objectKey);
+    const contentType = normalizeMimeType(
+      args.mimeType,
+      objectKey,
+      args.originalName
+    );
+    const metadata = normalizeObjectMetadata(args.metadata, objectKey);
     const { error } = await client.storage
       .from(env.supabaseStorageBucket)
-      .upload(args.objectKey, args.bytes, {
+      .upload(objectKey, args.bytes, {
         upsert: true,
-        contentType: args.mimeType ?? undefined,
+        contentType,
       });
 
     if (error) {
       throw new Error(
-        `Failed to upload object "${args.objectKey}" to Supabase Storage: ${error.message}`
+        `Failed to upload object "${objectKey}" to Supabase Storage: ${error.message}`
       );
     }
 
@@ -165,11 +244,11 @@ const createObjectStorageBackend = (
       assetKey: args.assetKey,
       storageKind: 'OBJECT_STORAGE',
       logicalBucket: args.logicalBucket,
-      path: args.objectKey,
-      mimeType: args.mimeType ?? null,
+      path: objectKey,
+      mimeType: contentType,
       sizeBytes: args.bytes.byteLength,
       originalName: args.originalName ?? null,
-      metadata: args.metadata ?? null,
+      metadata,
     });
   },
   async getObjectBytes(asset) {
@@ -261,13 +340,18 @@ const createLocalFileBackend = (
       args.objectKey,
       args.localAbsolutePath
     );
+    const mimeType = normalizeMimeType(
+      args.mimeType,
+      args.objectKey,
+      args.originalName
+    );
     await writeBufferAtomic(absolutePath, args.bytes);
     return normalizeStoredAsset({
       assetKey: args.assetKey,
       storageKind: 'LOCAL_FILE',
       logicalBucket: args.logicalBucket,
       path: absolutePath,
-      mimeType: args.mimeType ?? null,
+      mimeType,
       sizeBytes: args.bytes.byteLength,
       originalName: args.originalName ?? null,
       metadata: args.metadata ?? null,

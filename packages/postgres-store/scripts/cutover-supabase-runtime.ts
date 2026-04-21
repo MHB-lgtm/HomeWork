@@ -90,7 +90,8 @@ const runCommand = async (
         ...env,
       },
       stdio: 'inherit',
-      shell: process.platform === 'win32',
+      shell: false,
+      windowsHide: true,
     });
 
     child.on('error', reject);
@@ -100,9 +101,19 @@ const runCommand = async (
         return;
       }
 
-      reject(new Error(`${command} ${args.join(' ')} failed with exit code ${code}`));
+      reject(new Error(`${path.basename(command)} failed with exit code ${code}`));
     });
   });
+};
+
+const resolvePostgresCommand = (command: 'pg_dump' | 'psql'): string => {
+  if (command === 'pg_dump' && process.env.PG_DUMP_BIN) {
+    return process.env.PG_DUMP_BIN;
+  }
+  if (command === 'psql' && process.env.PSQL_BIN) {
+    return process.env.PSQL_BIN;
+  }
+  return command;
 };
 
 const runDatabaseTransfer = async (options: CliOptions): Promise<string> => {
@@ -121,8 +132,23 @@ const runDatabaseTransfer = async (options: CliOptions): Promise<string> => {
         .slice(2, 8)}.sql`
     );
 
-  await runCommand('pg_dump', ['--dbname', options.fromDatabaseUrl, '--file', dumpFile]);
-  await runCommand('psql', [options.toDatabaseUrl, '-f', dumpFile]);
+  await runCommand(resolvePostgresCommand('pg_dump'), [
+    '--dbname',
+    options.fromDatabaseUrl,
+    '--no-owner',
+    '--no-privileges',
+    '--file',
+    dumpFile,
+  ]);
+
+  if (!options.dryRun) {
+    await runCommand(resolvePostgresCommand('psql'), [
+      '--dbname',
+      options.toDatabaseUrl,
+      '--file',
+      dumpFile,
+    ]);
+  }
 
   return dumpFile;
 };
@@ -314,16 +340,21 @@ const main = async () => {
   let prisma: PrismaClient | null = null;
   try {
     if (!options.skipAssetUpload) {
-      if (!options.toDatabaseUrl) {
+      const assetDatabaseUrl =
+        options.dryRun && !options.skipDbTransfer
+          ? options.fromDatabaseUrl
+          : options.toDatabaseUrl;
+
+      if (!assetDatabaseUrl) {
         throw new Error(
-          'A target database URL is required for asset migration unless --skip-asset-upload is used'
+          'A database URL is required for asset migration unless --skip-asset-upload is used'
         );
       }
 
       prisma = new PrismaClient({
         datasources: {
           db: {
-            url: options.toDatabaseUrl,
+            url: assetDatabaseUrl,
           },
         },
       });
