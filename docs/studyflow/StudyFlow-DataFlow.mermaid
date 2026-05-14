@@ -1,0 +1,40 @@
+%% StudyFlow — Document Upload & Analysis Flow
+%% Shows what happens when a student uploads a file and it's auto-classified
+
+sequenceDiagram
+  autonumber
+  actor Student as 👩‍🎓 Student
+  participant Web as 🌐 Web App
+  participant API as ⚙️ Next.js API
+  participant S3 as 🗄️ Object Storage
+  participant PG as 🐘 Postgres
+  participant Queue as 📬 Redis Queue
+  participant Detect as 📄 Detector Worker
+  participant AI as 🤖 Gemini
+
+  Student->>Web: Upload PDF / drag & drop
+  Web->>API: POST /api/files (signed URL request)
+  API->>S3: Request signed upload URL
+  S3-->>API: Signed URL
+  API-->>Web: Signed URL + file_id
+  Web->>S3: PUT file bytes
+  Web->>API: POST /api/files/:id/ingest
+  API->>PG: Insert file (status=uploaded)
+  API->>Queue: Enqueue detect_type job
+  API-->>Web: 202 Accepted (pending)
+
+  Queue->>Detect: Pull detect_type job
+  Detect->>S3: Fetch file
+  Detect->>AI: Classify (lecture/practice/homework) + extract structure
+  AI-->>Detect: { type: "homework", questions: [...] }
+  Detect->>PG: Update file.type + questions
+  Detect->>Queue: Enqueue post-processing per type
+  Note over Queue: homework → analyze_questions<br/>lecture → summarize<br/>practice → extract_exercises
+
+  Detect->>Web: WebSocket: file.analyzed event
+  Web->>Student: Show "Homework detected · 8 questions" UI
+  Student->>Web: Click "Open Homework Workspace"
+  Web->>API: GET /api/files/:id/questions
+  API->>PG: Fetch questions
+  API-->>Web: Questions payload
+  Web->>Student: Render Homework Workspace with navigation

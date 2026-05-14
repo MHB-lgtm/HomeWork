@@ -137,3 +137,7 @@ export {
   QuestionEntrySchema,
   QuestionEntry,
 } from './exam-index/v1/schemas';
+
+// Re-export StudyFlow Smart Notes v1 schemas
+// (new product surface — see /docs/STUDYFLOW_PRD.docx)
+export * from './notes/v1/schemas';

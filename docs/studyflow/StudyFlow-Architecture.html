@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>StudyFlow · Architecture Diagrams</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.0/mermaid.min.js"></script>
+<style>
+  :root {
+    --brand: #2E75B6;
+    --accent: #7C3AED;
+    --dark: #0F172A;
+    --grey: #6B7280;
+    --bg: #F8FAFC;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "SF Pro Display", "Heebo", Segoe UI, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--dark);
+    line-height: 1.55;
+  }
+  header {
+    background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
+    color: white;
+    padding: 48px 32px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(46, 117, 182, 0.25);
+  }
+  header h1 { margin: 0 0 8px; font-size: 42px; letter-spacing: -0.5px; }
+  header p { margin: 0; font-size: 18px; opacity: 0.92; }
+  main { max-width: 1400px; margin: 0 auto; padding: 32px; }
+  section {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    border: 1px solid #e2e8f0;
+  }
+  h2 { color: var(--brand); margin-top: 0; font-size: 28px; }
+  h2 .num {
+    display: inline-block;
+    background: var(--brand);
+    color: white;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 36px;
+    font-size: 18px;
+    margin-left: 12px;
+  }
+  .desc { color: var(--grey); font-size: 15px; margin-bottom: 24px; }
+  .mermaid {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 24px;
+    overflow-x: auto;
+    min-height: 200px;
+    text-align: center;
+  }
+  footer {
+    text-align: center;
+    padding: 32px;
+    color: var(--grey);
+    font-size: 14px;
+  }
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    justify-content: flex-end;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 13px;
+    border: 1px solid #e2e8f0;
+    background: white;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🎓 StudyFlow — Architecture</h1>
+    <p>אפליקציית Notes חכמה לסטודנטים · מסמך ארכיטקטורה טכנית v1.0</p>
+  </header>
+
+  <main>
+    <section>
+      <h2><span class="num">1</span>ארכיטקטורת מערכת (System Architecture)</h2>
+      <p class="desc">
+        מבט-על על כל הרכיבים: קליינטים, edge, שירותי אפליקציה, queues, אחסון נתונים,
+        ספקי AI, והפרויקטים הקיימים (Homework Grader + Summarizer) שמשמשים בסיס.
+      </p>
+      <div class="legend">
+        <span class="chip"><span class="dot" style="background:#2563eb"></span>Clients</span>
+        <span class="chip"><span class="dot" style="background:#7c3aed"></span>Edge</span>
+        <span class="chip"><span class="dot" style="background:#16a34a"></span>App Tier</span>
+        <span class="chip"><span class="dot" style="background:#d97706"></span>Data</span>
+        <span class="chip"><span class="dot" style="background:#db2777"></span>AI</span>
+        <span class="chip"><span class="dot" style="background:#dc2626"></span>Existing</span>
+        <span class="chip"><span class="dot" style="background:#4b5563"></span>3rd Party</span>
+      </div>
+      <div class="mermaid" id="arch"></div>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>זרימת נתונים — העלאת קובץ (Sequence)</h2>
+      <p class="desc">
+        מה קורה מרגע שסטודנט גורר PDF למערכת ועד לפתיחת ה-Homework Workspace עם זיהוי אוטומטי של שאלות.
+      </p>
+      <div class="mermaid" id="flow"></div>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>מודל נתונים (ER Diagram)</h2>
+      <p class="desc">
+        סכמת ה-Postgres המרכזית: משתמשים, Workspaces, קבצים לפי סוג, שאלות ותשובות, סיכומים, מעקב סנכרון ומכסה (quota).
+      </p>
+      <div class="mermaid" id="model"></div>
+    </section>
+  </main>
+
+  <footer>
+    StudyFlow Architecture · Lia Mesika · April 2026
+  </footer>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'default',
+      flowchart: { curve: 'basis', padding: 20 },
+      sequence: { showSequenceNumbers: true },
+      themeVariables: {
+        primaryColor: '#2E75B6',
+        primaryTextColor: '#0f172a',
+        primaryBorderColor: '#2E75B6',
+        lineColor: '#64748b',
+        fontFamily: '"SF Pro Display", -apple-system, Segoe UI, sans-serif'
+      }
+    });
+
+    const diagrams = [
+      { id: 'arch', url: 'StudyFlow-Architecture.mermaid' },
+      { id: 'flow', url: 'StudyFlow-DataFlow.mermaid' },
+      { id: 'model', url: 'StudyFlow-DataModel.mermaid' },
+    ];
+
+    (async () => {
+      for (const d of diagrams) {
+        try {
+          const res = await fetch(d.url);
+          const src = await res.text();
+          const { svg } = await mermaid.render(d.id + '_svg', src);
+          document.getElementById(d.id).innerHTML = svg;
+        } catch (e) {
+          document.getElementById(d.id).innerHTML =
+            '<p style="color:#dc2626">⚠ לא ניתן לטעון: ' + d.url +
+            ' (פתח קובץ .mermaid בכלי Mermaid כמו mermaid.live)</p>';
+        }
+      }
+    })();
+  </script>
+</body>
+</html>

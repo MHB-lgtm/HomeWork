@@ -1,0 +1,121 @@
+%% StudyFlow — Core Data Model (ER diagram)
+%% Postgres schema - simplified
+
+erDiagram
+  USER ||--o{ WORKSPACE : "owns"
+  USER ||--|| SUBSCRIPTION : "has"
+  USER ||--o{ USAGE_EVENT : "logs"
+  USER {
+    uuid id PK
+    string email UK
+    string name
+    string locale
+    timestamp created_at
+  }
+
+  SUBSCRIPTION {
+    uuid id PK
+    uuid user_id FK
+    enum plan "free|basic|pro"
+    string stripe_customer_id
+    string stripe_sub_id
+    int summary_quota_month
+    int homework_quota_month
+    timestamp renews_at
+  }
+
+  USAGE_EVENT {
+    uuid id PK
+    uuid user_id FK
+    enum action "summary|homework_analysis|ocr"
+    int credits_used
+    uuid file_id FK
+    timestamp occurred_at
+  }
+
+  WORKSPACE ||--o{ FILE : "contains"
+  WORKSPACE {
+    uuid id PK
+    uuid user_id FK
+    string name
+    string color
+    string icon
+    enum term "sem_a|sem_b|summer"
+    timestamp created_at
+  }
+
+  FILE ||--o{ QUESTION : "has"
+  FILE ||--o| SUMMARY : "has"
+  FILE ||--o{ FILE_VERSION : "revisions"
+  FILE {
+    uuid id PK
+    uuid workspace_id FK
+    string title
+    enum type "lecture|practice|homework|unknown"
+    enum status "uploaded|analyzing|ready|failed"
+    string storage_path
+    jsonb metadata
+    timestamp created_at
+  }
+
+  FILE_VERSION {
+    uuid id PK
+    uuid file_id FK
+    int version
+    jsonb content "Lexical JSON + strokes"
+    uuid author_id FK
+    timestamp created_at
+  }
+
+  QUESTION ||--o{ ANSWER : "has"
+  QUESTION {
+    uuid id PK
+    uuid file_id FK
+    int number
+    string intro
+    jsonb parts "[{label, text}]"
+    int order
+  }
+
+  ANSWER {
+    uuid id PK
+    uuid question_id FK
+    uuid user_id FK
+    jsonb content "Lexical JSON"
+    jsonb strokes "handwriting"
+    enum status "draft|submitted|graded"
+    jsonb feedback
+    timestamp updated_at
+  }
+
+  SUMMARY {
+    uuid id PK
+    uuid file_id FK
+    enum tier "short|medium|deep"
+    text content_md
+    jsonb key_terms
+    jsonb generated_questions
+    string provider "gemini|openai|claude"
+    int tokens_used
+    timestamp created_at
+  }
+
+  DEVICE ||--o{ SYNC_EVENT : "emits"
+  USER ||--o{ DEVICE : "has"
+  DEVICE {
+    uuid id PK
+    uuid user_id FK
+    string device_name
+    enum platform "web|ios|android|desktop"
+    timestamp last_seen
+  }
+
+  SYNC_EVENT {
+    uuid id PK
+    uuid device_id FK
+    uuid entity_id
+    string entity_type
+    enum action "create|update|delete"
+    jsonb diff
+    timestamp occurred_at
+  }

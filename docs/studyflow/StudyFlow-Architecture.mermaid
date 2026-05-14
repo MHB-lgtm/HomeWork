@@ -1,0 +1,146 @@
+%% StudyFlow — System Architecture
+%% v1.0 · April 2026
+%% High-level diagram: clients, edge, services, data, AI providers
+
+flowchart TB
+  %% ───────────────────────── CLIENTS ─────────────────────────
+  subgraph Clients["👥 Clients"]
+    direction LR
+    Web["🌐 Web App<br/>Next.js 14 PWA<br/>(Chrome/Safari/Firefox)"]
+    IPad["📱 iPad App<br/>React Native + Pencil<br/>(Phase 2)"]
+    Mobile["📲 Mobile App<br/>iOS / Android<br/>(Phase 2)"]
+    Desktop["💻 Desktop<br/>Electron wrapper<br/>(Phase 2)"]
+  end
+
+  %% ───────────────────────── EDGE ────────────────────────────
+  subgraph Edge["🛡️ Edge Layer"]
+    direction LR
+    CDN["Cloudflare CDN<br/>static + cache"]
+    WAF["WAF + Rate Limit<br/>abuse protection"]
+    LB["Load Balancer<br/>multi-region"]
+  end
+
+  %% ───────────────────────── APP TIER ────────────────────────
+  subgraph App["⚙️ Application Tier (Vercel + Fly.io)"]
+    direction TB
+    subgraph NextApi["Next.js API Gateway"]
+      AuthAPI["/api/auth<br/>NextAuth"]
+      WorkspaceAPI["/api/workspaces"]
+      FilesAPI["/api/files"]
+      BillingAPI["/api/billing<br/>Stripe"]
+      SyncAPI["/api/sync<br/>WebSocket"]
+    end
+
+    subgraph Workers["Background Workers"]
+      DetectW["📄 Doc Type Detector<br/>(lecture/practice/homework)"]
+      SummW["📝 Summarizer Worker<br/>(extends existing service)"]
+      HWW["📋 Homework Analyzer<br/>(question detection)"]
+      OCRW["✍️ OCR Worker<br/>handwriting → text"]
+      NotifyW["🔔 Notifications"]
+    end
+  end
+
+  %% ───────────────────────── QUEUES ──────────────────────────
+  subgraph Queue["📬 Queue (Redis + BullMQ)"]
+    direction LR
+    JobQ["Jobs Queue<br/>detect / summarize / analyze"]
+    DeadLetter["DLQ"]
+  end
+
+  %% ───────────────────────── DATA TIER ───────────────────────
+  subgraph Data["💾 Data Tier"]
+    direction LR
+    PG["🐘 PostgreSQL (Neon)<br/>users · workspaces · files<br/>quotas · subscriptions"]
+    Redis["🧠 Redis<br/>cache · sessions · queues"]
+    S3["🗄️ S3 / R2<br/>raw PDFs · images<br/>handwriting strokes · audio"]
+    Vector["🔎 Vector DB (pgvector)<br/>embeddings for RAG"]
+  end
+
+  %% ───────────────────────── AI PROVIDERS ────────────────────
+  subgraph AI["🤖 AI Providers"]
+    direction LR
+    Gemini["Google Gemini<br/>(primary — vision + text)"]
+    OpenAI["OpenAI GPT-4o<br/>(fallback)"]
+    Claude["Claude Sonnet<br/>(premium summaries)"]
+    Whisper["Whisper<br/>(audio transcription)"]
+  end
+
+  %% ───────────────────────── EXISTING PROJECTS ───────────────
+  subgraph Existing["🧩 Existing Building Blocks"]
+    direction LR
+    HWGrader["Homework Grader<br/>(workspace UI · question UI · Lexical · Gemini grading)"]
+    SummSvc["Summarizer Service<br/>(LLM abstraction · PDF extraction)"]
+  end
+
+  %% ───────────────────────── THIRD PARTY ─────────────────────
+  subgraph ThirdParty["🔌 Third-Party"]
+    direction LR
+    Stripe["Stripe<br/>subs + usage billing"]
+    PostHog["PostHog<br/>analytics"]
+    Sentry["Sentry<br/>error tracking"]
+    SendGrid["SendGrid<br/>transactional emails"]
+  end
+
+  %% ───────────────────────── CONNECTIONS ─────────────────────
+  Clients --> CDN
+  CDN --> WAF --> LB --> NextApi
+
+  NextApi --> PG
+  NextApi --> Redis
+  NextApi --> S3
+  NextApi --> JobQ
+
+  JobQ --> DetectW
+  JobQ --> SummW
+  JobQ --> HWW
+  JobQ --> OCRW
+  JobQ --> NotifyW
+  JobQ -. retries .-> DeadLetter
+
+  DetectW --> Gemini
+  SummW --> Gemini
+  SummW --> Claude
+  SummW --> OpenAI
+  HWW --> Gemini
+  OCRW --> Gemini
+  SummW --> Whisper
+
+  DetectW --> PG
+  SummW --> PG
+  SummW --> Vector
+  HWW --> PG
+  OCRW --> S3
+  OCRW --> PG
+
+  SyncAPI <-. WebSocket .-> Web
+  SyncAPI <-. WebSocket .-> IPad
+  SyncAPI <-. WebSocket .-> Mobile
+
+  BillingAPI <--> Stripe
+  AuthAPI --> SendGrid
+  NotifyW --> SendGrid
+
+  %% Existing projects reuse
+  HWGrader -.->|adapted UI + logic| Web
+  HWGrader -.->|reused PG schema| PG
+  SummSvc -.->|extended| SummW
+
+  App -.-> PostHog
+  App -.-> Sentry
+
+  %% ───────────────────────── STYLING ─────────────────────────
+  classDef client fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#0f172a
+  classDef edge fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#0f172a
+  classDef app fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#0f172a
+  classDef data fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#0f172a
+  classDef ai fill:#fce7f3,stroke:#db2777,stroke-width:2px,color:#0f172a
+  classDef existing fill:#fee2e2,stroke:#dc2626,stroke-width:2px,color:#0f172a
+  classDef external fill:#e5e7eb,stroke:#4b5563,stroke-width:2px,color:#0f172a
+
+  class Web,IPad,Mobile,Desktop client
+  class CDN,WAF,LB edge
+  class NextApi,AuthAPI,WorkspaceAPI,FilesAPI,BillingAPI,SyncAPI,Workers,DetectW,SummW,HWW,OCRW,NotifyW,JobQ,DeadLetter app
+  class PG,Redis,S3,Vector data
+  class Gemini,OpenAI,Claude,Whisper ai
+  class HWGrader,SummSvc existing
+  class Stripe,PostHog,Sentry,SendGrid external
